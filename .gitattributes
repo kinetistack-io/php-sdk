@@ -1,0 +1,15 @@
+# Exclude dev, test, CI, and container tooling from Composer dist archives
+/tests                   export-ignore
+/.gitattributes          export-ignore
+/.gitignore              export-ignore
+/.github                 export-ignore
+/.forgejo                export-ignore
+/.php-cs-fixer.dist.php  export-ignore
+/.php-cs-fixer.cache     export-ignore
+/.phpunit.cache          export-ignore
+/phpunit.xml.dist        export-ignore
+/phpstan.neon            export-ignore
+/Dockerfile              export-ignore
+/compose.yaml            export-ignore
+/Makefile                export-ignore
+/composer.lock           export-ignore
