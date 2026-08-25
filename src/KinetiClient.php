@@ -29,6 +29,38 @@ class KinetiClient
     }
 
     /**
+     * Check if the API is alive.
+     *
+     * @return array{status: string, checks?: array<string, string>}
+     * @throws KinetiException
+     */
+    public function healthz(): array
+    {
+        $response = $this->transport->request('GET', '/healthz');
+
+        /** @var array{status: string, checks?: array<string, string>} $data */
+        $data = $response->toArray();
+
+        return $data;
+    }
+
+    /**
+     * Check if the API and its dependencies are ready.
+     *
+     * @return array{status: string, checks?: array<string, string>}
+     * @throws KinetiException
+     */
+    public function readyz(): array
+    {
+        $response = $this->transport->request('GET', '/readyz');
+
+        /** @var array{status: string, checks?: array<string, string>} $data */
+        $data = $response->toArray();
+
+        return $data;
+    }
+
+    /**
      * @param array<string, mixed> $contextHints
      * @param array<string, mixed> $options
      */

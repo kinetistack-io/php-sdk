@@ -13,6 +13,35 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 class KinetiClientTest extends TestCase
 {
+    public function testHealthz(): void
+    {
+        $responseBody = json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR);
+        $mockResponse = new MockResponse($responseBody);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $result = $kineti->healthz();
+        $this->assertSame(['status' => 'ok'], $result);
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/healthz', $mockResponse->getRequestUrl());
+    }
+
+    public function testReadyz(): void
+    {
+        $responseBody = json_encode([
+            'status' => 'ok',
+            'checks' => ['database' => 'ok']
+        ], JSON_THROW_ON_ERROR);
+        $mockResponse = new MockResponse($responseBody);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $result = $kineti->readyz();
+        $this->assertSame(['status' => 'ok', 'checks' => ['database' => 'ok']], $result);
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/readyz', $mockResponse->getRequestUrl());
+    }
+
     public function testAnalyzeImage(): void
     {
         $responseBody = json_encode([
