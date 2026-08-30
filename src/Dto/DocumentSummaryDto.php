@@ -26,6 +26,52 @@ class DocumentSummaryDto
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        $data = [
+            'external_id' => $this->externalId,
+            'title' => $this->title,
+            'locale' => $this->locale,
+        ];
+
+        if ($this->id !== null) {
+            $data['id'] = $this->id;
+        }
+
+        if ($this->permissions !== null) {
+            $data['permissions'] = $this->permissions;
+        }
+
+        if ($this->metadata !== null) {
+            $data['metadata'] = $this->metadata;
+        }
+
+        if ($this->chunkCount !== null) {
+            $data['chunk_count'] = $this->chunkCount;
+        }
+
+        if ($this->chunksGenerated !== null) {
+            $data['chunks_generated'] = $this->chunksGenerated;
+        }
+
+        if ($this->status !== null) {
+            $data['status'] = $this->status;
+        }
+
+        if ($this->createdAt !== null) {
+            $data['created_at'] = $this->createdAt->format(\DateTimeInterface::ATOM);
+        }
+
+        if ($this->updatedAt !== null) {
+            $data['updated_at'] = $this->updatedAt->format(\DateTimeInterface::ATOM);
+        }
+
+        return $data;
+    }
+
+    /**
      * @param array<string, mixed> $data
      */
     public static function fromArray(array $data): self

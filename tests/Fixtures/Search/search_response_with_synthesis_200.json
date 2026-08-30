@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "external_id": "node:101:en",
+      "title": "Solar Panels 101",
+      "content": "Solar panels convert sunlight into electricity using photovoltaic cells.",
+      "chunk_index": 0,
+      "score": 0.94,
+      "metadata": {
+        "bundle": "article",
+        "category": "energy"
+      }
+    },
+    {
+      "external_id": "node:102:en",
+      "title": "Inverters Guide",
+      "content": "Solar inverters convert direct current (DC) into alternating current (AC).",
+      "chunk_index": 1,
+      "score": 0.81,
+      "metadata": {
+        "bundle": "article"
+      }
+    }
+  ],
+  "total": 2,
+  "synthesis": {
+    "answer": "Solar panels produce electricity from sunlight, which inverters then convert for household use.",
+    "citations": [
+      "node:101:en",
+      "node:102:en"
+    ],
+    "successful": true,
+    "fallback_reason": null
+  }
+}
+

@@ -8,10 +8,13 @@ use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\DocumentSummaryDto;
+use KinetiStack\Sdk\Tests\FixtureTrait;
 use PHPUnit\Framework\TestCase;
 
 class DocumentDtoTest extends TestCase
 {
+    use FixtureTrait;
+
     public function testDocumentDtoConstructorValid(): void
     {
         $dto = new DocumentDto(
@@ -89,22 +92,25 @@ class DocumentDtoTest extends TestCase
         new DocumentDto('node:1', 'Title', '');
     }
 
-    public function testDocumentResponseDtoFromArray(): void
+    public function testDocumentResponseDtoFromArrayAndFixture(): void
     {
-        $dto = DocumentResponseDto::fromArray([
-            'document_id' => 'uuid-1234',
-            'external_id' => 'node:1',
-            'chunks_generated' => 5,
-            'status' => 'indexed',
-        ]);
+        $data = $this->loadFixtureArray('Documents/document_created_201.json');
+        /** @var array<string, mixed> $data */
+        $dto = DocumentResponseDto::fromArray($data);
 
-        $this->assertSame('uuid-1234', $dto->documentId);
-        $this->assertSame('node:1', $dto->externalId);
-        $this->assertSame(5, $dto->chunksGenerated);
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $dto->documentId);
+        $this->assertSame('node:42:en', $dto->externalId);
+        $this->assertSame(4, $dto->chunksGenerated);
         $this->assertSame('indexed', $dto->status);
+
+        $array = $dto->toArray();
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $array['document_id']);
+        $this->assertSame('node:42:en', $array['external_id']);
+        $this->assertSame(4, $array['chunks_generated']);
+        $this->assertSame('indexed', $array['status']);
     }
 
-    public function testDocumentSummaryDtoFromArray(): void
+    public function testDocumentSummaryDtoFromArrayAndToArray(): void
     {
         $dto = DocumentSummaryDto::fromArray([
             'id' => 'uuid-5678',
@@ -133,6 +139,12 @@ class DocumentDtoTest extends TestCase
         $this->assertSame('2026-01-01T12:00:00+00:00', $dto->createdAt->format(\DateTimeInterface::ATOM));
         $this->assertInstanceOf(\DateTimeImmutable::class, $dto->updatedAt);
         $this->assertSame('2026-01-02T12:00:00+00:00', $dto->updatedAt->format(\DateTimeInterface::ATOM));
+
+        $array = $dto->toArray();
+        $this->assertSame('uuid-5678', $array['id']);
+        $this->assertSame('node:2:en', $array['external_id']);
+        $this->assertSame('Article Title', $array['title']);
+        $this->assertSame('2026-01-01T12:00:00+00:00', $array['created_at']);
     }
 
     public function testDocumentSummaryDtoFromArrayHandlesNullAndInvalidDates(): void
@@ -156,39 +168,35 @@ class DocumentDtoTest extends TestCase
         $this->assertSame([], $collection->items);
     }
 
-    public function testDocumentCollectionDtoFromHydraArray(): void
+    public function testDocumentCollectionDtoFromHydraFixture(): void
     {
-        $data = [
-            'hydra:member' => [
-                ['external_id' => 'doc:1', 'title' => 'Doc 1'],
-                ['external_id' => 'doc:2', 'title' => 'Doc 2'],
-            ],
-            'hydra:totalItems' => 10,
-        ];
-
+        $data = $this->loadFixtureArray('Documents/document_list_hydra_200.json');
+        /** @var array<string, mixed> $data */
         $collection = DocumentCollectionDto::fromArray($data);
-        $this->assertSame(10, $collection->total);
+
+        $this->assertSame(2, $collection->total);
         $this->assertCount(2, $collection);
-        $this->assertSame('doc:1', $collection->items[0]->externalId);
-        $this->assertSame('doc:2', $collection->items[1]->externalId);
+        $this->assertSame('node:1:en', $collection->items[0]->externalId);
+        $this->assertSame('node:2:en', $collection->items[1]->externalId);
     }
 
-    public function testDocumentCollectionDtoFromPlainList(): void
+    public function testDocumentCollectionDtoFromPlainListFixture(): void
     {
-        $data = [
-            ['external_id' => 'doc:1', 'title' => 'Doc 1'],
-            ['external_id' => 'doc:2', 'title' => 'Doc 2'],
-            ['external_id' => 'doc:3', 'title' => 'Doc 3'],
-        ];
-
+        $data = $this->loadFixtureArray('Documents/document_list_plain_200.json');
+        /** @var list<array<string, mixed>> $data */
         $collection = DocumentCollectionDto::fromArray($data);
-        $this->assertSame(3, $collection->total);
-        $this->assertCount(3, $collection);
+
+        $this->assertSame(2, $collection->total);
+        $this->assertCount(2, $collection);
 
         $titles = [];
         foreach ($collection as $item) {
             $titles[] = $item->title;
         }
-        $this->assertSame(['Doc 1', 'Doc 2', 'Doc 3'], $titles);
+        $this->assertSame(['Article 1', 'Article 2'], $titles);
+
+        $array = $collection->toArray();
+        $this->assertSame(2, $array['total']);
+        $this->assertCount(2, $array['items']);
     }
 }

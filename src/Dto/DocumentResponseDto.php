@@ -15,6 +15,19 @@ class DocumentResponseDto
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'document_id' => $this->documentId,
+            'external_id' => $this->externalId,
+            'chunks_generated' => $this->chunksGenerated,
+            'status' => $this->status,
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $data
      */
     public static function fromArray(array $data): self

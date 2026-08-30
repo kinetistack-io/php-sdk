@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "external_id": "node:101:en",
+      "title": "Solar Panels 101",
+      "content": "Solar panels convert sunlight into electricity.",
+      "chunk_index": 0,
+      "score": 0.89,
+      "metadata": {
+        "bundle": "article",
+        "category": "energy"
+      }
+    },
+    {
+      "external_id": "node:102:en",
+      "title": "Inverters Explained",
+      "content": "Inverters convert DC to AC power.",
+      "chunk_index": 1,
+      "score": 0.75,
+      "metadata": null
+    }
+  ],
+  "total": 2,
+  "synthesis": null
+}
+

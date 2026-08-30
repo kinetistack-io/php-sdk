@@ -1,0 +1,13 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9457",
+  "title": "Validation Failed",
+  "status": 422,
+  "detail": "title: This value should not be blank.",
+  "violations": [
+    {
+      "propertyPath": "title",
+      "message": "This value should not be blank."
+    }
+  ]
+}
+

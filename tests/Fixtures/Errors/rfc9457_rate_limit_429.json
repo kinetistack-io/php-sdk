@@ -1,0 +1,7 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9457",
+  "title": "Too Many Requests",
+  "status": 429,
+  "detail": "Rate limit exceeded. Please retry after the specified duration."
+}
+

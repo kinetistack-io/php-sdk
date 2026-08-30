@@ -1,0 +1,7 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9457",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "Vector indexing service is temporarily undergoing maintenance."
+}
+

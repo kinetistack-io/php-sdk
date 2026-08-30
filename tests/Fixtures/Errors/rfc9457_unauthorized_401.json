@@ -1,0 +1,7 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9457",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Invalid or missing API key."
+}
+

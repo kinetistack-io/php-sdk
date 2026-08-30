@@ -19,6 +19,17 @@ class DocumentCollectionDto implements \Countable, \IteratorAggregate
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'items' => array_map(static fn (DocumentSummaryDto $item): array => $item->toArray(), $this->items),
+            'total' => $this->total,
+        ];
+    }
+
+    /**
      * @param array<string, mixed>|list<array<string, mixed>> $data
      */
     public static function fromArray(array $data): self

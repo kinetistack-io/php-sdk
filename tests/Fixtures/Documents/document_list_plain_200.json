@@ -1,0 +1,29 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "external_id": "node:1:en",
+    "title": "Article 1",
+    "locale": "en",
+    "permissions": ["public"],
+    "metadata": {
+      "bundle": "article"
+    },
+    "chunk_count": 2,
+    "chunks_generated": 2,
+    "status": "indexed",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-02T00:00:00+00:00"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "external_id": "node:2:en",
+    "title": "Article 2",
+    "locale": "en",
+    "permissions": null,
+    "metadata": null,
+    "chunk_count": 3,
+    "chunks_generated": 3,
+    "status": "indexed"
+  }
+]
+
