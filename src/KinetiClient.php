@@ -9,6 +9,8 @@ use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
+use KinetiStack\Sdk\Dto\SearchQueryDto;
+use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
@@ -259,6 +261,27 @@ class KinetiClient
         $data = $response->toArray();
 
         return DocumentCollectionDto::fromArray($data);
+    }
+
+    /**
+     * Execute a semantic vector search and optional RAG synthesis query.
+     *
+     * @throws KinetiException
+     */
+    public function search(SearchQueryDto|string $query): SearchResponseDto
+    {
+        if (is_string($query)) {
+            $query = SearchQueryDto::create($query);
+        }
+
+        $response = $this->transport->request('POST', '/api/v1/search/query', [
+            'json' => $query->toArray(),
+        ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return SearchResponseDto::fromArray($data);
     }
 
     /**

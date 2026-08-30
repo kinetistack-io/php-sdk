@@ -32,7 +32,7 @@ test-all: ## Run PHPUnit tests across all PHP versions (8.1, 8.2, 8.3, 8.4)
 	docker compose run --rm php84 vendor/bin/phpunit
 
 phpstan: ## Run PHPStan static analysis
-	$(DC) vendor/bin/phpstan analyse
+	$(DC) vendor/bin/phpstan analyse --memory-limit=512M
 
 cs-check: ## Check code style with PHP CS Fixer
 	$(DC) vendor/bin/php-cs-fixer fix --dry-run --diff
