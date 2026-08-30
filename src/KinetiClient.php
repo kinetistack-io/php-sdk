@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk;
 
 use KinetiStack\Sdk\Dto\BatchJobDto;
+use KinetiStack\Sdk\Dto\DocumentCollectionDto;
+use KinetiStack\Sdk\Dto\DocumentDto;
+use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
@@ -76,7 +79,7 @@ class KinetiClient
             $payload['options'] = $options;
         }
 
-        $response = $this->transport->request('POST', '/v1/images/analyze', [
+        $response = $this->transport->request('POST', '/api/v1/images/analyze', [
             'json' => $payload,
         ]);
 
@@ -123,7 +126,7 @@ class KinetiClient
 
         [$contentType, $body] = $this->createMultipartPayload($fields);
 
-        $response = $this->transport->request('POST', '/v1/images/analyze', [
+        $response = $this->transport->request('POST', '/api/v1/images/analyze', [
             'headers' => [
                 'Content-Type' => $contentType,
             ],
@@ -153,7 +156,7 @@ class KinetiClient
             $payload['options'] = $options;
         }
 
-        $response = $this->transport->request('POST', '/v1/jobs/batch-images', [
+        $response = $this->transport->request('POST', '/api/v1/jobs/batch-images', [
             'json' => $payload,
         ]);
 
@@ -162,7 +165,7 @@ class KinetiClient
 
     public function getBatchJobStatus(string $jobId): BatchJobDto
     {
-        $response = $this->transport->request('GET', sprintf('/v1/jobs/%s', urlencode($jobId)));
+        $response = $this->transport->request('GET', sprintf('/api/v1/jobs/%s', urlencode($jobId)));
 
         return BatchJobDto::fromArray($response->toArray());
     }
@@ -199,6 +202,63 @@ class KinetiClient
             sprintf('Batch job %s did not complete within %d seconds.', $jobId, $timeoutSeconds),
             $lastDto ?? $this->getBatchJobStatus($jobId)
         );
+    }
+
+    /**
+     * Upsert (create or replace) a document in the index.
+     *
+     * @throws KinetiException
+     */
+    public function upsertDocument(DocumentDto $document): DocumentResponseDto
+    {
+        $response = $this->transport->request('POST', '/api/v1/documents', [
+            'json' => $document->toArray(),
+        ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return DocumentResponseDto::fromArray($data);
+    }
+
+    /**
+     * Delete a document by its external identifier.
+     *
+     * @throws KinetiException
+     */
+    public function deleteDocument(string $externalId): bool
+    {
+        if (trim($externalId) === '') {
+            throw new \InvalidArgumentException('externalId cannot be empty.');
+        }
+
+        $response = $this->transport->request(
+            'DELETE',
+            sprintf('/api/v1/documents/%s', rawurlencode($externalId))
+        );
+
+        return $response->getStatusCode() === 204;
+    }
+
+    /**
+     * List documents with optional filtering, sorting, and pagination.
+     *
+     * @param array<string, mixed> $filters
+     * @throws KinetiException
+     */
+    public function listDocuments(array $filters = []): DocumentCollectionDto
+    {
+        $options = [];
+        if (!empty($filters)) {
+            $options['query'] = $filters;
+        }
+
+        $response = $this->transport->request('GET', '/api/v1/documents', $options);
+
+        /** @var array<string, mixed>|list<array<string, mixed>> $data */
+        $data = $response->toArray();
+
+        return DocumentCollectionDto::fromArray($data);
     }
 
     /**
