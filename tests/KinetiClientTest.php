@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
+use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\KinetiClient;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -87,6 +88,61 @@ class KinetiClientTest extends TestCase
         $this->assertSame('123-abc', $result->jobId);
         $this->assertSame('pending', $result->status);
         $this->assertFalse($result->isCompleted());
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/jobs/batch-images', $mockResponse->getRequestUrl());
+
+        $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertCount(1, $requestBody['images']);
+        $this->assertSame('media:1', $requestBody['images'][0]['external_id']);
+        $this->assertSame('http://example.com/1.jpg', $requestBody['images'][0]['image_url']);
+        $this->assertArrayNotHasKey('image_base64', $requestBody['images'][0]);
+    }
+
+    public function testSubmitBatchJobWithImageBase64(): void
+    {
+        $responseBody = json_encode([
+            'job_id' => 'base64-job-456',
+            'status' => 'pending',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody);
+        $client = new MockHttpClient($mockResponse);
+
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        $result = $kineti->submitBatchJob([
+            new ImageInputDto('media:2', null, ['tag' => 'v1'], $base64Data),
+        ], ['webhook_url' => 'https://example.com/webhook']);
+
+        $this->assertSame('base64-job-456', $result->jobId);
+        $this->assertSame('pending', $result->status);
+
+        $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertCount(1, $requestBody['images']);
+        $this->assertSame('media:2', $requestBody['images'][0]['external_id']);
+        $this->assertSame($base64Data, $requestBody['images'][0]['image_base64']);
+        $this->assertArrayNotHasKey('image_url', $requestBody['images'][0]);
+        $this->assertSame(['tag' => 'v1'], $requestBody['images'][0]['context_hints']);
+        $this->assertSame(['webhook_url' => 'https://example.com/webhook'], $requestBody['options']);
+    }
+
+    public function testSubmitBatchJobPayloadExceedsLimitThrowsPayloadTooLargeException(): void
+    {
+        $mockResponse = new MockResponse('{}');
+        $client = new MockHttpClient($mockResponse);
+
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        // 11MB string exceeds 10MB (10485760 bytes) limit
+        $largeBase64 = str_repeat('a', 11 * 1024 * 1024);
+
+        $this->expectException(PayloadTooLargeException::class);
+        $this->expectExceptionMessage('Batch payload size exceeds the maximum limit of 10MB (10485760 bytes).');
+
+        $kineti->submitBatchJob([
+            new ImageInputDto('media:large', null, [], $largeBase64),
+        ]);
     }
 
     public function testWaitForBatchJobTimeout(): void

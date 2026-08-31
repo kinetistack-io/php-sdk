@@ -14,11 +14,14 @@ use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class KinetiClient
 {
+    public const MAX_BATCH_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB (10485760 bytes)
+
     private HttpTransport $transport;
 
     /**
@@ -141,6 +144,8 @@ class KinetiClient
     /**
      * @param array<int, ImageInputDto|array<string, mixed>> $images
      * @param array<string, mixed> $options
+     * @throws PayloadTooLargeException
+     * @throws KinetiException
      */
     public function submitBatchJob(array $images, array $options = []): BatchJobDto
     {
@@ -158,8 +163,20 @@ class KinetiClient
             $payload['options'] = $options;
         }
 
+        $jsonPayload = json_encode($payload, JSON_THROW_ON_ERROR);
+
+        if (strlen($jsonPayload) > self::MAX_BATCH_PAYLOAD_BYTES) {
+            throw new PayloadTooLargeException(sprintf(
+                'Batch payload size exceeds the maximum limit of 10MB (%d bytes).',
+                self::MAX_BATCH_PAYLOAD_BYTES
+            ));
+        }
+
         $response = $this->transport->request('POST', '/api/v1/jobs/batch-images', [
-            'json' => $payload,
+            'headers' => [
+                'Content-Type' => 'application/json',
+            ],
+            'body' => $jsonPayload,
         ]);
 
         return BatchJobDto::fromArray($response->toArray());

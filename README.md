@@ -42,10 +42,10 @@ $response = $client->analyzeImageContent($binaryData, 'image.jpg');
 ```php
 use KinetiStack\Sdk\Dto\ImageInputDto;
 
-// Submit a batch of images
+// Submit a batch of images (URL or Base64 / Data URI)
 $batch = $client->submitBatchJob([
     new ImageInputDto('media:1', 'https://example.com/1.jpg'),
-    new ImageInputDto('media:2', 'https://example.com/2.jpg'),
+    new ImageInputDto('media:2', imageBase64: 'data:image/jpeg;base64,...'),
 ]);
 
 echo $batch->jobId; // E.g., '123e4567-e89b-12d3-a456-426614174000'
