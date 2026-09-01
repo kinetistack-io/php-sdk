@@ -62,6 +62,25 @@ try {
 }
 ```
 
+### Webhook Verification
+
+Verify incoming HMAC-SHA256 signatures for webhook events (e.g. from the `X-Kineti-Signature` header):
+
+```php
+use KinetiStack\Sdk\WebhookVerifier;
+
+$payload = file_get_contents('php://input');
+$signatureHeader = $_SERVER['HTTP_X_KINETI_SIGNATURE'] ?? '';
+$webhookSecret = 'whsec_your_secret_key';
+
+$isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret);
+
+if (!$isValid) {
+    http_response_code(401);
+    exit('Invalid signature');
+}
+```
+
 ### Error Handling
 
 The SDK maps HTTP error responses to typed exceptions (RFC 9457 compliant):
