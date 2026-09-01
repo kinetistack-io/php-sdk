@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\Dto\ImageInputDto;
+use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\KinetiClient;
@@ -86,7 +87,7 @@ class KinetiClientTest extends TestCase
         ]);
 
         $this->assertSame('123-abc', $result->jobId);
-        $this->assertSame('pending', $result->status);
+        $this->assertSame(JobStatus::Pending, $result->status);
         $this->assertFalse($result->isCompleted());
         $this->assertSame('POST', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/jobs/batch-images', $mockResponse->getRequestUrl());
@@ -116,7 +117,7 @@ class KinetiClientTest extends TestCase
         ], ['webhook_url' => 'https://example.com/webhook']);
 
         $this->assertSame('base64-job-456', $result->jobId);
-        $this->assertSame('pending', $result->status);
+        $this->assertSame(JobStatus::Pending, $result->status);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
         $this->assertCount(1, $requestBody['images']);
