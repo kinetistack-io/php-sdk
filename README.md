@@ -30,7 +30,12 @@ $response = $client->analyzeImage('https://example.com/image.jpg', [
 ]);
 echo $response->altText;
 
-// From a local file
+// From a stream resource (memory-efficient for large files & remote stream wrappers)
+$stream = fopen('/path/to/image.jpg', 'rb');
+$response = $client->analyzeImageStream($stream, 'image.jpg');
+fclose($stream);
+
+// From a local file (uses streams internally)
 $response = $client->analyzeImageBinary('/path/to/image.jpg');
 
 // From binary string content

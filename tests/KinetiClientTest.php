@@ -197,8 +197,17 @@ class KinetiClientTest extends TestCase
             ],
         ], JSON_THROW_ON_ERROR);
 
-        $mockResponse = new MockResponse($responseBody);
-        $client = new MockHttpClient($mockResponse);
+        $capturedBody = '';
+        $capturedHeaders = [];
+
+        $client = new MockHttpClient(function ($method, $url, $options) use (&$capturedBody, &$capturedHeaders, $responseBody) {
+            $capturedHeaders = $options['headers'] ?? [];
+            $bodyClosure = $options['body'];
+            while ('' !== ($chunk = $bodyClosure(8192))) {
+                $capturedBody .= $chunk;
+            }
+            return new MockResponse($responseBody);
+        });
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
         $hints = ContextHintsDto::create()->withCustom('hint', 'val');
@@ -207,13 +216,12 @@ class KinetiClientTest extends TestCase
         $result = $kineti->analyzeImageContent('binary-data', 'test.png', $hints, $options);
 
         $this->assertSame('Binary test image', $result->altText);
-        $optionsReq = $mockResponse->getRequestOptions();
-        $headersStr = is_array($optionsReq['headers']) ? implode("\n", $optionsReq['headers']) : '';
+        $headersStr = is_array($capturedHeaders) ? implode("\n", $capturedHeaders) : '';
         $this->assertStringContainsString('multipart/form-data', $headersStr);
-        $this->assertStringContainsString('filename="test.png"', $optionsReq['body']);
-        $this->assertStringContainsString('binary-data', $optionsReq['body']);
-        $this->assertStringContainsString('"hint":"val"', $optionsReq['body']);
-        $this->assertStringContainsString('"language":"en"', $optionsReq['body']);
+        $this->assertStringContainsString('filename="test.png"', $capturedBody);
+        $this->assertStringContainsString('binary-data', $capturedBody);
+        $this->assertStringContainsString('"hint":"val"', $capturedBody);
+        $this->assertStringContainsString('"language":"en"', $capturedBody);
     }
 
     public function testGetBatchJobStatus(): void
@@ -274,7 +282,7 @@ class KinetiClientTest extends TestCase
         $hints = ContextHintsDto::create()->withCustom('hint', 'stream_val');
         $options = VisionOptionsDto::create()->withLanguage('fr');
 
-        $stream = fopen('php://temp', 'rw+');
+        $stream = fopen('php://temp', 'w+b');
         if (!is_resource($stream)) {
             throw new \RuntimeException('Failed to open temp stream');
         }
@@ -307,12 +315,47 @@ class KinetiClientTest extends TestCase
     public function testAnalyzeImageStreamThrowsIfClosedResource(): void
     {
         $kineti = new KinetiClient('https://api.test', 'key');
-        $stream = fopen('php://temp', 'rw+');
+        $stream = fopen('php://temp', 'w+b');
         if (!is_resource($stream)) {
             throw new \RuntimeException('Failed to open temp stream');
         }
         fclose($stream);
         $this->expectException(\InvalidArgumentException::class);
         $kineti->analyzeImageStream($stream);
+    }
+
+    public function testAnalyzeImageStreamRewindsSeekableStream(): void
+    {
+        $responseBody = json_encode([
+            'data' => [
+                'alt_text' => 'Rewound stream image',
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $capturedBody = '';
+        $client = new MockHttpClient(function ($method, $url, $options) use (&$capturedBody, $responseBody) {
+            $bodyClosure = $options['body'];
+            while ('' !== ($chunk = $bodyClosure(8192))) {
+                $capturedBody .= $chunk;
+            }
+            return new MockResponse($responseBody);
+        });
+
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $stream = fopen('php://temp', 'w+b');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Failed to open temp stream');
+        }
+        fwrite($stream, 'seekable-content');
+        // Intentionally do not rewind before calling analyzeImageStream; pointer is at end.
+        $this->assertSame(strlen('seekable-content'), ftell($stream));
+
+        $result = $kineti->analyzeImageStream($stream, 'rewind.png');
+
+        $this->assertSame('Rewound stream image', $result->altText);
+        $this->assertStringContainsString('seekable-content', $capturedBody);
+
+        fclose($stream);
     }
 }

@@ -133,6 +133,11 @@ class KinetiClient
             throw new \InvalidArgumentException('Provided $stream is not a valid resource.');
         }
 
+        $meta = stream_get_meta_data($stream);
+        if ($meta['seekable']) {
+            rewind($stream);
+        }
+
         $fields = [];
 
         if ($contextHints !== null && !$contextHints->isEmpty()) {
@@ -165,31 +170,22 @@ class KinetiClient
         ?ContextHintsDto $contextHints = null,
         ?VisionOptionsDto $options = null
     ): VisionResponseDto {
-        $fields = [
-            'file' => [
-                'content' => $binaryData,
-                'filename' => $filename,
-            ],
-        ];
-
-        if ($contextHints !== null && !$contextHints->isEmpty()) {
-            $fields['context_hints'] = json_encode($contextHints->toArray(), JSON_THROW_ON_ERROR);
+        $stream = fopen('php://temp', 'w+b');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Failed to open temporary stream for image content.');
         }
 
-        if ($options !== null) {
-            $fields['options'] = json_encode($options->toArray(), JSON_THROW_ON_ERROR);
+        try {
+            $written = fwrite($stream, $binaryData);
+            if ($written === false || $written < strlen($binaryData)) {
+                throw new \RuntimeException('Failed to write complete image data to temporary stream.');
+            }
+            rewind($stream);
+
+            return $this->analyzeImageStream($stream, $filename, $contextHints, $options);
+        } finally {
+            fclose($stream);
         }
-
-        [$contentType, $body] = $this->createMultipartPayload($fields);
-
-        $response = $this->transport->request('POST', '/api/v1/images/analyze', [
-            'headers' => [
-                'Content-Type' => $contentType,
-            ],
-            'body' => $body,
-        ]);
-
-        return VisionResponseDto::fromArray($response->toArray()['data'] ?? []);
     }
 
     /**
@@ -351,33 +347,6 @@ class KinetiClient
         return SearchResponseDto::fromArray($data);
     }
 
-    /**
-     * @param array<string, mixed> $fields
-     * @return array{0: string, 1: string}
-     */
-    private function createMultipartPayload(array $fields): array
-    {
-        $boundary = bin2hex(random_bytes(16));
-        $body = '';
-
-        foreach ($fields as $name => $content) {
-            $body .= "--{$boundary}\r\n";
-            if (is_array($content) && isset($content['content'], $content['filename'])) {
-                $body .= sprintf("Content-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\n", $name, $content['filename']);
-                $body .= "Content-Type: application/octet-stream\r\n\r\n";
-                $body .= $content['content'] . "\r\n";
-            } else {
-                $body .= sprintf("Content-Disposition: form-data; name=\"%s\"\r\n\r\n", $name);
-                $body .= $content . "\r\n";
-            }
-        }
-        $body .= "--{$boundary}--\r\n";
-
-        return [
-            'multipart/form-data; boundary=' . $boundary,
-            $body
-        ];
-    }
 
     /**
      * @param resource $stream
