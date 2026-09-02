@@ -237,14 +237,24 @@ class KinetiClient
     }
 
     /**
+     * @param (callable(BatchJobDto): void)|null $onProgress Optional callback called on each poll with the latest BatchJobDto
+     * @param (callable(int): void)|null $sleeper Optional sleeper callback receiving microseconds, useful for testing without delays
      * @throws BatchJobTimeoutException
      * @throws KinetiException
      */
-    public function waitForBatchJob(string $jobId, int $timeoutSeconds = 60, int $pollIntervalSeconds = 2, ?callable $onProgress = null): BatchJobDto
-    {
+    public function waitForBatchJob(
+        string $jobId,
+        int $timeoutSeconds = 60,
+        int $pollIntervalSeconds = 2,
+        ?callable $onProgress = null,
+        int $maxPollIntervalSeconds = 10,
+        ?callable $sleeper = null
+    ): BatchJobDto {
         $startTime = time();
         $lastDto = null;
         $pollIntervalSeconds = max(1, $pollIntervalSeconds);
+        $maxPollIntervalSeconds = max($pollIntervalSeconds, $maxPollIntervalSeconds);
+        $currentInterval = $pollIntervalSeconds;
 
         if ($timeoutSeconds <= 0) {
             $lastDto = $this->getBatchJobStatus($jobId);
@@ -261,7 +271,16 @@ class KinetiClient
                 return $lastDto;
             }
 
-            sleep($pollIntervalSeconds);
+            $jitterUs = random_int(0, 500_000);
+            $sleepUs = ($currentInterval * 1_000_000) + $jitterUs;
+
+            if ($sleeper !== null) {
+                $sleeper($sleepUs);
+            } else {
+                usleep($sleepUs);
+            }
+
+            $currentInterval = min($maxPollIntervalSeconds, $currentInterval * 2);
         }
 
         throw new BatchJobTimeoutException(

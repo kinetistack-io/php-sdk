@@ -6,7 +6,9 @@ namespace KinetiStack\Sdk\Tests\Transport;
 
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\RateLimitException;
+use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\ValidationException;
+use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -155,5 +157,187 @@ class HttpTransportTest extends TestCase
 
         $this->expectException(\KinetiStack\Sdk\Exception\TransportException::class);
         $transport->request('GET', '/v1/test');
+    }
+
+    public function testRetryOnRateLimitRespectsRetryAfterHeader(): void
+    {
+        $pausedDurations = [];
+        $pauseHandler = function (float $duration) use (&$pausedDurations): void {
+            $pausedDurations[] = $duration;
+        };
+
+        $response1 = new MockResponse('{"title": "Too Many Requests"}', [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '3',
+            ],
+            'pause_handler' => $pauseHandler,
+        ]);
+        $response2 = new MockResponse('{"data": "success_after_retry"}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+            'pause_handler' => $pauseHandler,
+        ]);
+
+        $client = new MockHttpClient([$response1, $response2]);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+            'max_retries' => 3,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['data' => 'success_after_retry'], $response->toArray());
+        $this->assertSame(2, $client->getRequestsCount());
+        $this->assertCount(1, $pausedDurations);
+        $this->assertSame(3.0, $pausedDurations[0]);
+    }
+
+    public function testRetryOnServiceUnavailable503(): void
+    {
+        $pausedDurations = [];
+        $pauseHandler = function (float $duration) use (&$pausedDurations): void {
+            $pausedDurations[] = $duration;
+        };
+
+        $response1 = new MockResponse('{"title": "Service Unavailable"}', [
+            'http_code' => 503,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+            'pause_handler' => $pauseHandler,
+        ]);
+        $response2 = new MockResponse('{"data": "recovered"}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+            'pause_handler' => $pauseHandler,
+        ]);
+
+        $client = new MockHttpClient([$response1, $response2]);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+            'max_retries' => 2,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['data' => 'recovered'], $response->toArray());
+        $this->assertSame(2, $client->getRequestsCount());
+        $this->assertCount(1, $pausedDurations);
+    }
+
+    public function testExhaustedRetriesThrowsServiceUnavailableException(): void
+    {
+        $response1 = new MockResponse('{"title": "Service Unavailable"}', [
+            'http_code' => 503,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+            'pause_handler' => static function (): void {
+            },
+        ]);
+        $response2 = new MockResponse('{"title": "Service Unavailable"}', [
+            'http_code' => 503,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+            'pause_handler' => static function (): void {
+            },
+        ]);
+
+        $client = new MockHttpClient([$response1, $response2]);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+        ]);
+
+        $this->expectException(ServiceUnavailableException::class);
+        $this->expectExceptionMessage('Service Unavailable');
+
+        try {
+            $transport->request('GET', '/v1/test');
+        } finally {
+            $this->assertSame(2, $client->getRequestsCount());
+        }
+    }
+
+    public function testExhaustedRetriesThrowsRateLimitExceptionWithRetryAfter(): void
+    {
+        $response1 = new MockResponse('{"title": "Too Many Requests"}', [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '1',
+            ],
+            'pause_handler' => static function (): void {
+            },
+        ]);
+        $response2 = new MockResponse('{"title": "Too Many Requests"}', [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '5',
+            ],
+            'pause_handler' => static function (): void {
+            },
+        ]);
+
+        $client = new MockHttpClient([$response1, $response2]);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+        ]);
+
+        try {
+            $transport->request('GET', '/v1/test');
+            $this->fail('Expected RateLimitException');
+        } catch (RateLimitException $e) {
+            $this->assertSame('Too Many Requests', $e->getMessage());
+            $this->assertSame(5, $e->retryAfter);
+            $this->assertSame(2, $client->getRequestsCount());
+        }
+    }
+
+    public function testNonTransientErrorsAreNotRetried(): void
+    {
+        $response = new MockResponse('{"title": "Internal Server Error"}', [
+            'http_code' => 500,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+
+        $client = new MockHttpClient([$response]);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+            'max_retries' => 3,
+        ]);
+
+        $this->expectException(\KinetiStack\Sdk\Exception\ServerException::class);
+        $this->expectExceptionMessage('Internal Server Error');
+
+        try {
+            $transport->request('POST', '/v1/test');
+        } finally {
+            $this->assertSame(1, $client->getRequestsCount());
+        }
+    }
+
+    public function testKinetiClientConfiguredWithMaxRetriesRetriesTransparently(): void
+    {
+        $response1 = new MockResponse('{"title": "Too Many Requests"}', [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '1',
+            ],
+            'pause_handler' => static function (): void {
+            },
+        ]);
+        $response2 = new MockResponse('{"status": "ok"}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+            'pause_handler' => static function (): void {
+            },
+        ]);
+
+        $client = new MockHttpClient([$response1, $response2]);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client, [
+            'max_retries' => 2,
+        ]);
+
+        $health = $kineti->healthz();
+        $this->assertSame('ok', $health->status);
+        $this->assertSame(2, $client->getRequestsCount());
     }
 }

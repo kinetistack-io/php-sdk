@@ -358,4 +358,93 @@ class KinetiClientTest extends TestCase
 
         fclose($stream);
     }
+
+    public function testWaitForBatchJobExponentialBackoffProgressionAndJitter(): void
+    {
+        $responses = [
+            new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'completed'], JSON_THROW_ON_ERROR)),
+        ];
+
+        $client = new MockHttpClient($responses);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        /** @var list<int> $sleepCalls */
+        $sleepCalls = [];
+        $result = $kineti->waitForBatchJob(
+            jobId: 'exp-1',
+            timeoutSeconds: 60,
+            pollIntervalSeconds: 1,
+            onProgress: null,
+            maxPollIntervalSeconds: 5,
+            sleeper: function (int $microseconds) use (&$sleepCalls): void {
+                $sleepCalls[] = $microseconds;
+            }
+        );
+
+        $this->assertTrue($result->isCompleted());
+        $this->assertCount(5, $sleepCalls);
+
+        // Expected intervals in seconds before jitter: 1s, 2s, 4s, 5s (capped), 5s (capped)
+        // Jitter is between 0 and 500,000 microseconds (0 - 500ms)
+        $expectedBaseSeconds = [1, 2, 4, 5, 5];
+
+        foreach ($expectedBaseSeconds as $index => $baseSeconds) {
+            $minUs = $baseSeconds * 1_000_000;
+            $maxUs = $minUs + 500_000;
+
+            $this->assertGreaterThanOrEqual(
+                $minUs,
+                $sleepCalls[$index],
+                sprintf('Sleep call %d was %d us, expected >= %d us', $index, $sleepCalls[$index], $minUs)
+            );
+            $this->assertLessThanOrEqual(
+                $maxUs,
+                $sleepCalls[$index],
+                sprintf('Sleep call %d was %d us, expected <= %d us', $index, $sleepCalls[$index], $maxUs)
+            );
+        }
+
+        // Total requests made: 6 polls vs 15+ polls if polling at 1s intervals over 17 seconds
+        $this->assertSame(6, $client->getRequestsCount());
+    }
+
+    public function testWaitForBatchJobDefaultMaxPollIntervalCapsAtTenSeconds(): void
+    {
+        $responses = [
+            new MockResponse(json_encode(['job_id' => 'exp-2', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-2', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-2', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'exp-2', 'status' => 'completed'], JSON_THROW_ON_ERROR)),
+        ];
+
+        $client = new MockHttpClient($responses);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        /** @var list<int> $sleepCalls */
+        $sleepCalls = [];
+        $kineti->waitForBatchJob(
+            jobId: 'exp-2',
+            timeoutSeconds: 60,
+            pollIntervalSeconds: 4, // 4s -> 8s -> 10s (capped at default 10s)
+            sleeper: function (int $microseconds) use (&$sleepCalls): void {
+                $sleepCalls[] = $microseconds;
+            }
+        );
+
+        $this->assertCount(3, $sleepCalls);
+        // Call 0: 4s
+        $this->assertGreaterThanOrEqual(4_000_000, $sleepCalls[0]);
+        $this->assertLessThanOrEqual(4_500_000, $sleepCalls[0]);
+        // Call 1: 8s
+        $this->assertGreaterThanOrEqual(8_000_000, $sleepCalls[1]);
+        $this->assertLessThanOrEqual(8_500_000, $sleepCalls[1]);
+        // Call 2: capped at default 10s (not 16s)
+        $this->assertGreaterThanOrEqual(10_000_000, $sleepCalls[2]);
+        $this->assertLessThanOrEqual(10_500_000, $sleepCalls[2]);
+    }
 }

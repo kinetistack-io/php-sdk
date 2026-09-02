@@ -15,13 +15,16 @@ use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
+use Symfony\Component\HttpClient\Retry\RetryStrategyInterface;
+use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 class HttpTransport
 {
-    private HttpClientInterface $client;
+    private readonly HttpClientInterface $client;
 
     /**
      * @param array<string, mixed> $defaultOptions
@@ -32,7 +35,21 @@ class HttpTransport
         ?HttpClientInterface $client = null,
         private readonly array $defaultOptions = []
     ) {
-        $this->client = $client ?? HttpClient::create();
+        $baseClient = $client ?? HttpClient::create();
+
+        if (isset($defaultOptions['max_retries']) && (int) $defaultOptions['max_retries'] > 0 && !$baseClient instanceof RetryableHttpClient) {
+            /** @var RetryStrategyInterface $strategy */
+            $strategy = $defaultOptions['retry_strategy'] ?? new GenericRetryStrategy(
+                [429, 503],
+                1000,
+                2.0,
+                0,
+                0.1
+            );
+            $baseClient = new RetryableHttpClient($baseClient, $strategy, (int) $defaultOptions['max_retries']);
+        }
+
+        $this->client = $baseClient;
     }
 
     /**
@@ -43,6 +60,10 @@ class HttpTransport
         $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
 
         $mergedOptions = array_merge($this->defaultOptions, $options);
+        unset($mergedOptions['retry_strategy']);
+        if (!$this->client instanceof RetryableHttpClient) {
+            unset($mergedOptions['max_retries']);
+        }
 
         $headers = array_merge(
             ['Accept' => 'application/json'],
