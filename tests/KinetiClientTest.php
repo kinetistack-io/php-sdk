@@ -248,4 +248,71 @@ class KinetiClientTest extends TestCase
         $this->assertTrue($result->isCompleted());
         $this->assertSame(2, $callbackCalls);
     }
+
+    public function testAnalyzeImageStream(): void
+    {
+        $responseBody = json_encode([
+            'data' => [
+                'alt_text' => 'Stream test image',
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $capturedBody = '';
+        $capturedHeaders = [];
+
+        $client = new MockHttpClient(function ($method, $url, $options) use (&$capturedBody, &$capturedHeaders, $responseBody) {
+            $capturedHeaders = $options['headers'] ?? [];
+            $bodyClosure = $options['body'];
+            while ('' !== ($chunk = $bodyClosure(8192))) {
+                $capturedBody .= $chunk;
+            }
+            return new MockResponse($responseBody);
+        });
+
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $hints = ContextHintsDto::create()->withCustom('hint', 'stream_val');
+        $options = VisionOptionsDto::create()->withLanguage('fr');
+
+        $stream = fopen('php://temp', 'rw+');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Failed to open temp stream');
+        }
+        fwrite($stream, 'stream-data-content');
+        rewind($stream);
+
+        $result = $kineti->analyzeImageStream($stream, 'stream.png', $hints, $options);
+
+        $this->assertSame('Stream test image', $result->altText);
+
+        $headersStr = is_array($capturedHeaders) ? implode("\n", $capturedHeaders) : '';
+        $this->assertStringContainsString('multipart/form-data', $headersStr);
+
+        $this->assertStringContainsString('filename="stream.png"', $capturedBody);
+        $this->assertStringContainsString('stream-data-content', $capturedBody);
+        $this->assertStringContainsString('"hint":"stream_val"', $capturedBody);
+        $this->assertStringContainsString('"language":"fr"', $capturedBody);
+
+        fclose($stream);
+    }
+
+    public function testAnalyzeImageStreamThrowsIfInvalidResource(): void
+    {
+        $kineti = new KinetiClient('https://api.test', 'key');
+        $this->expectException(\InvalidArgumentException::class);
+        /** @phpstan-ignore-next-line */
+        $kineti->analyzeImageStream('not-a-resource');
+    }
+
+    public function testAnalyzeImageStreamThrowsIfClosedResource(): void
+    {
+        $kineti = new KinetiClient('https://api.test', 'key');
+        $stream = fopen('php://temp', 'rw+');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Failed to open temp stream');
+        }
+        fclose($stream);
+        $this->expectException(\InvalidArgumentException::class);
+        $kineti->analyzeImageStream($stream);
+    }
 }

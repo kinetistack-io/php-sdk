@@ -103,14 +103,62 @@ class KinetiClient
             throw new \InvalidArgumentException(sprintf('File does not exist: %s', $filePath));
         }
 
-        $content = file_get_contents($filePath);
-        if ($content === false) {
-            throw new \RuntimeException(sprintf('Failed to read file: %s', $filePath));
+        $stream = fopen($filePath, 'rb');
+        if ($stream === false) {
+            throw new \RuntimeException(sprintf('Failed to open file: %s', $filePath));
         }
 
-        return $this->analyzeImageContent($content, basename($filePath), $contextHints, $options);
+        try {
+            return $this->analyzeImageStream($stream, basename($filePath), $contextHints, $options);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
     }
 
+    /**
+     * @param resource $stream
+     * @throws \InvalidArgumentException
+     * @throws \JsonException
+     * @throws KinetiException
+     */
+    public function analyzeImageStream(
+        $stream,
+        string $filename = 'image.jpg',
+        ?ContextHintsDto $contextHints = null,
+        ?VisionOptionsDto $options = null
+    ): VisionResponseDto {
+        if (!is_resource($stream)) {
+            throw new \InvalidArgumentException('Provided $stream is not a valid resource.');
+        }
+
+        $fields = [];
+
+        if ($contextHints !== null && !$contextHints->isEmpty()) {
+            $fields['context_hints'] = json_encode($contextHints->toArray(), JSON_THROW_ON_ERROR);
+        }
+
+        if ($options !== null) {
+            $fields['options'] = json_encode($options->toArray(), JSON_THROW_ON_ERROR);
+        }
+
+        [$contentType, $body] = $this->createMultipartStreamPayload($stream, $filename, $fields);
+
+        $response = $this->transport->request('POST', '/api/v1/images/analyze', [
+            'headers' => [
+                'Content-Type' => $contentType,
+            ],
+            'body' => $body,
+        ]);
+
+        return VisionResponseDto::fromArray($response->toArray()['data'] ?? []);
+    }
+
+    /**
+     * @throws \JsonException
+     * @throws KinetiException
+     */
     public function analyzeImageContent(
         string $binaryData,
         string $filename = 'image.jpg',
@@ -328,6 +376,42 @@ class KinetiClient
         return [
             'multipart/form-data; boundary=' . $boundary,
             $body
+        ];
+    }
+
+    /**
+     * @param resource $stream
+     * @param array<string, mixed> $fields
+     * @return array{0: string, 1: \Generator<int, string>}
+     */
+    private function createMultipartStreamPayload($stream, string $filename, array $fields): array
+    {
+        $boundary = bin2hex(random_bytes(16));
+
+        $generator = function () use ($stream, $filename, $fields, $boundary) {
+            foreach ($fields as $name => $content) {
+                yield "--{$boundary}\r\n";
+                yield sprintf("Content-Disposition: form-data; name=\"%s\"\r\n\r\n", $name);
+                yield $content . "\r\n";
+            }
+
+            yield "--{$boundary}\r\n";
+            yield sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", $filename);
+            yield "Content-Type: application/octet-stream\r\n\r\n";
+
+            while (!feof($stream)) {
+                $chunk = fread($stream, 8192);
+                if ($chunk !== false && $chunk !== '') {
+                    yield $chunk;
+                }
+            }
+
+            yield "\r\n--{$boundary}--\r\n";
+        };
+
+        return [
+            'multipart/form-data; boundary=' . $boundary,
+            $generator()
         ];
     }
 }
