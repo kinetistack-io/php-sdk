@@ -122,13 +122,13 @@ class BatchJobDto
         return $this->status === JobStatus::Failed;
     }
 
-    public function getProgressPercentage(): ?float
+    public function getProgressPercentage(): float
     {
         if ($this->totalImages === null || $this->totalImages <= 0) {
-            return null;
+            return 0.0;
         }
 
-        $processed = $this->processedImages ?? 0;
+        $processed = max(0, $this->processedImages ?? 0);
 
         return round(min(100.0, ($processed / $this->totalImages) * 100.0), 2);
     }

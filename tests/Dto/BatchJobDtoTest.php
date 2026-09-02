@@ -213,10 +213,13 @@ class BatchJobDtoTest extends TestCase
     public function testGetProgressPercentage(): void
     {
         $dtoNoTotal = new BatchJobDto('1', JobStatus::Processing);
-        $this->assertNull($dtoNoTotal->getProgressPercentage());
+        $this->assertSame(0.0, $dtoNoTotal->getProgressPercentage());
 
         $dtoZeroTotal = new BatchJobDto('2', JobStatus::Processing, totalImages: 0);
-        $this->assertNull($dtoZeroTotal->getProgressPercentage());
+        $this->assertSame(0.0, $dtoZeroTotal->getProgressPercentage());
+
+        $dtoNegativeTotal = new BatchJobDto('2b', JobStatus::Processing, totalImages: -5);
+        $this->assertSame(0.0, $dtoNegativeTotal->getProgressPercentage());
 
         $dtoHalf = new BatchJobDto('3', JobStatus::Processing, totalImages: 10, processedImages: 5);
         $this->assertSame(50.0, $dtoHalf->getProgressPercentage());
@@ -229,6 +232,9 @@ class BatchJobDtoTest extends TestCase
 
         $dtoNullProcessed = new BatchJobDto('6', JobStatus::Processing, totalImages: 10, processedImages: null);
         $this->assertSame(0.0, $dtoNullProcessed->getProgressPercentage());
+
+        $dtoNegativeProcessed = new BatchJobDto('7', JobStatus::Processing, totalImages: 10, processedImages: -2);
+        $this->assertSame(0.0, $dtoNegativeProcessed->getProgressPercentage());
     }
 
     public function testBatchJobItemResultDtoToArray(): void
