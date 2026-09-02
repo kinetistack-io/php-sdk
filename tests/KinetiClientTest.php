@@ -447,4 +447,27 @@ class KinetiClientTest extends TestCase
         $this->assertGreaterThanOrEqual(10_000_000, $sleepCalls[2]);
         $this->assertLessThanOrEqual(10_500_000, $sleepCalls[2]);
     }
+
+    public function testDefaultPollingConstants(): void
+    {
+        $this->assertSame(2, KinetiClient::DEFAULT_POLL_INTERVAL_SECONDS);
+        $this->assertSame(10, KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS);
+        $this->assertSame(60, KinetiClient::DEFAULT_TIMEOUT_SECONDS);
+
+        $reflection = new \ReflectionMethod(KinetiClient::class, 'waitForBatchJob');
+        $params = [];
+        foreach ($reflection->getParameters() as $param) {
+            if ($param->isDefaultValueAvailable()) {
+                $params[$param->getName()] = $param->getDefaultValue();
+            }
+        }
+
+        $this->assertArrayHasKey('timeoutSeconds', $params);
+        $this->assertArrayHasKey('pollIntervalSeconds', $params);
+        $this->assertArrayHasKey('maxPollIntervalSeconds', $params);
+
+        $this->assertSame(KinetiClient::DEFAULT_TIMEOUT_SECONDS, $params['timeoutSeconds']);
+        $this->assertSame(KinetiClient::DEFAULT_POLL_INTERVAL_SECONDS, $params['pollIntervalSeconds']);
+        $this->assertSame(KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS, $params['maxPollIntervalSeconds']);
+    }
 }

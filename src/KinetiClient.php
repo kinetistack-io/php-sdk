@@ -25,6 +25,9 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class KinetiClient
 {
     public const MAX_BATCH_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB (10485760 bytes)
+    public const DEFAULT_POLL_INTERVAL_SECONDS = 2;
+    public const DEFAULT_MAX_POLL_INTERVAL_SECONDS = 10;
+    public const DEFAULT_TIMEOUT_SECONDS = 60;
 
     private HttpTransport $transport;
 
@@ -237,17 +240,21 @@ class KinetiClient
     }
 
     /**
+     * @param string $jobId
+     * @param int $timeoutSeconds
+     * @param int $pollIntervalSeconds
      * @param (callable(BatchJobDto): void)|null $onProgress Optional callback called on each poll with the latest BatchJobDto
+     * @param int $maxPollIntervalSeconds
      * @param (callable(int): void)|null $sleeper Optional sleeper callback receiving microseconds, useful for testing without delays
      * @throws BatchJobTimeoutException
      * @throws KinetiException
      */
     public function waitForBatchJob(
         string $jobId,
-        int $timeoutSeconds = 60,
-        int $pollIntervalSeconds = 2,
+        int $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
+        int $pollIntervalSeconds = self::DEFAULT_POLL_INTERVAL_SECONDS,
         ?callable $onProgress = null,
-        int $maxPollIntervalSeconds = 10,
+        int $maxPollIntervalSeconds = self::DEFAULT_MAX_POLL_INTERVAL_SECONDS,
         ?callable $sleeper = null
     ): BatchJobDto {
         $startTime = time();
