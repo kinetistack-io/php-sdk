@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
+use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\DocumentSummaryDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
@@ -325,13 +326,12 @@ class KinetiClientDocumentsTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $filters = [
-            'locale' => 'da',
-            'external_id' => 'node:',
-            'page' => 2,
-            'itemsPerPage' => 15,
-        ];
-        $collection = $kineti->listDocuments($filters);
+        $options = DocumentListOptionsDto::create()
+            ->withLocale('da')
+            ->withExternalId('node:')
+            ->withPage(2)
+            ->withItemsPerPage(15);
+        $collection = $kineti->listDocuments($options);
 
         $this->assertSame(2, $collection->total);
         $requestUrl = $mockResponse->getRequestUrl();

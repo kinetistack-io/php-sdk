@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk;
 
 use KinetiStack\Sdk\Dto\BatchJobDto;
+use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
+use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\DocumentResponseDto;
+use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
+use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
@@ -39,49 +43,48 @@ class KinetiClient
     /**
      * Check if the API is alive.
      *
-     * @return array{status: string, checks?: array<string, string>}
      * @throws KinetiException
      */
-    public function healthz(): array
+    public function healthz(): HealthStatusDto
     {
         $response = $this->transport->request('GET', '/healthz');
 
-        /** @var array{status: string, checks?: array<string, string>} $data */
+        /** @var array<string, mixed> $data */
         $data = $response->toArray();
 
-        return $data;
+        return HealthStatusDto::fromArray($data);
     }
 
     /**
      * Check if the API and its dependencies are ready.
      *
-     * @return array{status: string, checks?: array<string, string>}
      * @throws KinetiException
      */
-    public function readyz(): array
+    public function readyz(): HealthStatusDto
     {
         $response = $this->transport->request('GET', '/readyz');
 
-        /** @var array{status: string, checks?: array<string, string>} $data */
+        /** @var array<string, mixed> $data */
         $data = $response->toArray();
 
-        return $data;
+        return HealthStatusDto::fromArray($data);
     }
 
-    /**
-     * @param array<string, mixed> $contextHints
-     * @param array<string, mixed> $options
-     */
-    public function analyzeImage(string $imageUrl, array $contextHints = [], array $options = []): VisionResponseDto
-    {
+    public function analyzeImage(
+        string $imageUrl,
+        ?ContextHintsDto $contextHints = null,
+        ?VisionOptionsDto $options = null
+    ): VisionResponseDto {
         $payload = [
             'image_url' => $imageUrl,
         ];
-        if (!empty($contextHints)) {
-            $payload['context_hints'] = $contextHints;
+
+        if ($contextHints !== null && !$contextHints->isEmpty()) {
+            $payload['context_hints'] = $contextHints->toArray();
         }
-        if (!empty($options)) {
-            $payload['options'] = $options;
+
+        if ($options !== null) {
+            $payload['options'] = $options->toArray();
         }
 
         $response = $this->transport->request('POST', '/api/v1/images/analyze', [
@@ -91,12 +94,11 @@ class KinetiClient
         return VisionResponseDto::fromArray($response->toArray()['data'] ?? []);
     }
 
-    /**
-     * @param array<string, mixed> $contextHints
-     * @param array<string, mixed> $options
-     */
-    public function analyzeImageBinary(string $filePath, array $contextHints = [], array $options = []): VisionResponseDto
-    {
+    public function analyzeImageBinary(
+        string $filePath,
+        ?ContextHintsDto $contextHints = null,
+        ?VisionOptionsDto $options = null
+    ): VisionResponseDto {
         if (!file_exists($filePath)) {
             throw new \InvalidArgumentException(sprintf('File does not exist: %s', $filePath));
         }
@@ -109,12 +111,12 @@ class KinetiClient
         return $this->analyzeImageContent($content, basename($filePath), $contextHints, $options);
     }
 
-    /**
-     * @param array<string, mixed> $contextHints
-     * @param array<string, mixed> $options
-     */
-    public function analyzeImageContent(string $binaryData, string $filename = 'image.jpg', array $contextHints = [], array $options = []): VisionResponseDto
-    {
+    public function analyzeImageContent(
+        string $binaryData,
+        string $filename = 'image.jpg',
+        ?ContextHintsDto $contextHints = null,
+        ?VisionOptionsDto $options = null
+    ): VisionResponseDto {
         $fields = [
             'file' => [
                 'content' => $binaryData,
@@ -122,11 +124,12 @@ class KinetiClient
             ],
         ];
 
-        if (!empty($contextHints)) {
-            $fields['context_hints'] = json_encode($contextHints, JSON_THROW_ON_ERROR);
+        if ($contextHints !== null && !$contextHints->isEmpty()) {
+            $fields['context_hints'] = json_encode($contextHints->toArray(), JSON_THROW_ON_ERROR);
         }
-        if (!empty($options)) {
-            $fields['options'] = json_encode($options, JSON_THROW_ON_ERROR);
+
+        if ($options !== null) {
+            $fields['options'] = json_encode($options->toArray(), JSON_THROW_ON_ERROR);
         }
 
         [$contentType, $body] = $this->createMultipartPayload($fields);
@@ -143,11 +146,10 @@ class KinetiClient
 
     /**
      * @param array<int, ImageInputDto|array<string, mixed>> $images
-     * @param array<string, mixed> $options
      * @throws PayloadTooLargeException
      * @throws KinetiException
      */
-    public function submitBatchJob(array $images, array $options = []): BatchJobDto
+    public function submitBatchJob(array $images, ?VisionOptionsDto $options = null): BatchJobDto
     {
         $formattedImages = array_map(function ($image) {
             if ($image instanceof ImageInputDto) {
@@ -159,8 +161,9 @@ class KinetiClient
         $payload = [
             'images' => $formattedImages,
         ];
-        if (!empty($options)) {
-            $payload['options'] = $options;
+
+        if ($options !== null) {
+            $payload['options'] = $options->toArray();
         }
 
         $jsonPayload = json_encode($payload, JSON_THROW_ON_ERROR);
@@ -262,17 +265,16 @@ class KinetiClient
     /**
      * List documents with optional filtering, sorting, and pagination.
      *
-     * @param array<string, mixed> $filters
      * @throws KinetiException
      */
-    public function listDocuments(array $filters = []): DocumentCollectionDto
+    public function listDocuments(?DocumentListOptionsDto $options = null): DocumentCollectionDto
     {
-        $options = [];
-        if (!empty($filters)) {
-            $options['query'] = $filters;
+        $requestOptions = [];
+        if ($options !== null && !$options->isEmpty()) {
+            $requestOptions['query'] = $options->toArray();
         }
 
-        $response = $this->transport->request('GET', '/api/v1/documents', $options);
+        $response = $this->transport->request('GET', '/api/v1/documents', $requestOptions);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();

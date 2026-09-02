@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Dto;
 
+use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use PHPUnit\Framework\TestCase;
 
@@ -19,7 +20,8 @@ class ImageInputDtoTest extends TestCase
 
         $this->assertSame('media:1', $dto->externalId);
         $this->assertSame('https://example.com/test.jpg', $dto->imageUrl);
-        $this->assertSame(['page_title' => 'Sample Title'], $dto->contextHints);
+        $this->assertInstanceOf(ContextHintsDto::class, $dto->contextHints);
+        $this->assertSame(['page_title' => 'Sample Title'], $dto->contextHints->toArray());
         $this->assertNull($dto->imageBase64);
 
         $array = $dto->toArray();
@@ -27,6 +29,26 @@ class ImageInputDtoTest extends TestCase
         $this->assertSame('https://example.com/test.jpg', $array['image_url']);
         $this->assertSame(['page_title' => 'Sample Title'], $array['context_hints']);
         $this->assertArrayNotHasKey('image_base64', $array);
+    }
+
+    public function testValidWithContextHintsDto(): void
+    {
+        $hints = ContextHintsDto::create('Sample Title')->withTaxonomy(['Tech']);
+        $dto = new ImageInputDto(
+            externalId: 'media:10',
+            imageUrl: 'https://example.com/test10.jpg',
+            contextHints: $hints
+        );
+
+        $this->assertSame('media:10', $dto->externalId);
+        $this->assertSame('https://example.com/test10.jpg', $dto->imageUrl);
+        $this->assertSame($hints, $dto->contextHints);
+
+        $array = $dto->toArray();
+        $this->assertSame([
+            'page_title' => 'Sample Title',
+            'taxonomy' => ['Tech'],
+        ], $array['context_hints']);
     }
 
     public function testValidWithImageBase64(): void
@@ -42,7 +64,8 @@ class ImageInputDtoTest extends TestCase
         $this->assertSame('media:2', $dto->externalId);
         $this->assertNull($dto->imageUrl);
         $this->assertSame($base64, $dto->imageBase64);
-        $this->assertSame(['category' => 'nature'], $dto->contextHints);
+        $this->assertInstanceOf(ContextHintsDto::class, $dto->contextHints);
+        $this->assertSame(['category' => 'nature'], $dto->contextHints->toArray());
 
         $array = $dto->toArray();
         $this->assertSame('media:2', $array['external_id']);
@@ -64,7 +87,7 @@ class ImageInputDtoTest extends TestCase
         $this->assertSame('media:3', $dto->externalId);
         $this->assertNull($dto->imageUrl);
         $this->assertSame($dataUri, $dto->imageBase64);
-        $this->assertSame([], $dto->contextHints);
+        $this->assertNull($dto->contextHints);
 
         $array = $dto->toArray();
         $this->assertSame('media:3', $array['external_id']);
@@ -144,12 +167,14 @@ class ImageInputDtoTest extends TestCase
 
         $this->assertSame('media:100', $dto->externalId);
         $this->assertSame('https://example.com/100.png', $dto->imageUrl);
-        $this->assertSame(['author' => 'Alice'], $dto->contextHints);
+        $this->assertInstanceOf(ContextHintsDto::class, $dto->contextHints);
+        $this->assertSame(['author' => 'Alice'], $dto->contextHints->toArray());
         $this->assertNull($dto->imageBase64);
 
         $array = $dto->toArray();
         $this->assertSame('media:100', $array['external_id']);
         $this->assertSame('https://example.com/100.png', $array['image_url']);
+        $this->assertSame(['author' => 'Alice'], $array['context_hints']);
         $this->assertArrayNotHasKey('image_base64', $array);
     }
 
@@ -164,11 +189,13 @@ class ImageInputDtoTest extends TestCase
         $this->assertSame('media:200', $dto->externalId);
         $this->assertNull($dto->imageUrl);
         $this->assertSame('base64payload', $dto->imageBase64);
-        $this->assertSame(['author' => 'Bob'], $dto->contextHints);
+        $this->assertInstanceOf(ContextHintsDto::class, $dto->contextHints);
+        $this->assertSame(['author' => 'Bob'], $dto->contextHints->toArray());
 
         $array = $dto->toArray();
         $this->assertSame('media:200', $array['external_id']);
         $this->assertSame('base64payload', $array['image_base64']);
+        $this->assertSame(['author' => 'Bob'], $array['context_hints']);
         $this->assertArrayNotHasKey('image_url', $array);
     }
 
@@ -183,6 +210,7 @@ class ImageInputDtoTest extends TestCase
         $this->assertSame('media:300', $dto->externalId);
         $this->assertNull($dto->imageUrl);
         $this->assertSame('base64payload300', $dto->imageBase64);
-        $this->assertSame(['tag' => 'v1'], $dto->contextHints);
+        $this->assertInstanceOf(ContextHintsDto::class, $dto->contextHints);
+        $this->assertSame(['tag' => 'v1'], $dto->contextHints->toArray());
     }
 }

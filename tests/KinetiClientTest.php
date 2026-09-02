@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests;
 
+use KinetiStack\Sdk\Dto\ContextHintsDto;
+use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
+use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
@@ -23,7 +26,10 @@ class KinetiClientTest extends TestCase
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
         $result = $kineti->healthz();
-        $this->assertSame(['status' => 'ok'], $result);
+        $this->assertInstanceOf(HealthStatusDto::class, $result);
+        $this->assertSame('ok', $result->status);
+        $this->assertTrue($result->isHealthy());
+        $this->assertTrue($result->isReady());
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/healthz', $mockResponse->getRequestUrl());
     }
@@ -39,7 +45,12 @@ class KinetiClientTest extends TestCase
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
         $result = $kineti->readyz();
-        $this->assertSame(['status' => 'ok', 'checks' => ['database' => 'ok']], $result);
+        $this->assertInstanceOf(HealthStatusDto::class, $result);
+        $this->assertSame('ok', $result->status);
+        $this->assertTrue($result->isHealthy());
+        $this->assertTrue($result->isReady());
+        $this->assertSame(['database' => 'ok'], $result->checks);
+        $this->assertSame(['database' => 'ok'], $result->getChecks());
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/readyz', $mockResponse->getRequestUrl());
     }
@@ -59,7 +70,10 @@ class KinetiClientTest extends TestCase
 
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
-        $result = $kineti->analyzeImage('http://example.com/img.jpg', ['page_title' => 'Test']);
+        $hints = ContextHintsDto::create('Test')->withTaxonomy(['Sample']);
+        $options = VisionOptionsDto::create()->withLanguage('nl')->withMaxLength(120);
+
+        $result = $kineti->analyzeImage('http://example.com/img.jpg', $hints, $options);
 
         $this->assertSame('A test image', $result->altText);
         $this->assertSame(['test', 'image'], $result->tags);
@@ -68,6 +82,9 @@ class KinetiClientTest extends TestCase
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
         $this->assertSame('http://example.com/img.jpg', $requestBody['image_url']);
         $this->assertSame('Test', $requestBody['context_hints']['page_title']);
+        $this->assertSame(['Sample'], $requestBody['context_hints']['taxonomy']);
+        $this->assertSame('nl', $requestBody['options']['language']);
+        $this->assertSame(120, $requestBody['options']['max_length']);
     }
 
     public function testSubmitBatchJob(): void
@@ -112,9 +129,11 @@ class KinetiClientTest extends TestCase
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
         $base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+        $options = VisionOptionsDto::create()->withCustom('webhook_url', 'https://example.com/webhook');
+
         $result = $kineti->submitBatchJob([
             new ImageInputDto('media:2', null, ['tag' => 'v1'], $base64Data),
-        ], ['webhook_url' => 'https://example.com/webhook']);
+        ], $options);
 
         $this->assertSame('base64-job-456', $result->jobId);
         $this->assertSame(JobStatus::Pending, $result->status);
@@ -125,7 +144,7 @@ class KinetiClientTest extends TestCase
         $this->assertSame($base64Data, $requestBody['images'][0]['image_base64']);
         $this->assertArrayNotHasKey('image_url', $requestBody['images'][0]);
         $this->assertSame(['tag' => 'v1'], $requestBody['images'][0]['context_hints']);
-        $this->assertSame(['webhook_url' => 'https://example.com/webhook'], $requestBody['options']);
+        $this->assertSame('https://example.com/webhook', $requestBody['options']['webhook_url']);
     }
 
     public function testSubmitBatchJobPayloadExceedsLimitThrowsPayloadTooLargeException(): void
@@ -182,15 +201,19 @@ class KinetiClientTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
-        $result = $kineti->analyzeImageContent('binary-data', 'test.png', ['hint' => 'val']);
+        $hints = ContextHintsDto::create()->withCustom('hint', 'val');
+        $options = VisionOptionsDto::create()->withLanguage('en');
+
+        $result = $kineti->analyzeImageContent('binary-data', 'test.png', $hints, $options);
 
         $this->assertSame('Binary test image', $result->altText);
-        $options = $mockResponse->getRequestOptions();
-        $headersStr = is_array($options['headers']) ? implode("\n", $options['headers']) : '';
+        $optionsReq = $mockResponse->getRequestOptions();
+        $headersStr = is_array($optionsReq['headers']) ? implode("\n", $optionsReq['headers']) : '';
         $this->assertStringContainsString('multipart/form-data', $headersStr);
-        $this->assertStringContainsString('filename="test.png"', $options['body']);
-        $this->assertStringContainsString('binary-data', $options['body']);
-        $this->assertStringContainsString('"hint":"val"', $options['body']);
+        $this->assertStringContainsString('filename="test.png"', $optionsReq['body']);
+        $this->assertStringContainsString('binary-data', $optionsReq['body']);
+        $this->assertStringContainsString('"hint":"val"', $optionsReq['body']);
+        $this->assertStringContainsString('"language":"en"', $optionsReq['body']);
     }
 
     public function testGetBatchJobStatus(): void
