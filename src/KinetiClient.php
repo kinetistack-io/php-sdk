@@ -20,6 +20,8 @@ use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Transport\HttpTransport;
+use KinetiStack\Sdk\Transport\TransportInterface;
+use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class KinetiClient
@@ -29,18 +31,26 @@ class KinetiClient
     public const DEFAULT_MAX_POLL_INTERVAL_SECONDS = 10;
     public const DEFAULT_TIMEOUT_SECONDS = 60;
 
-    private HttpTransport $transport;
+    private TransportInterface $transport;
 
     /**
+     * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
      * @param array<string, mixed> $options Default HTTP options (e.g., timeout, headers)
      */
     public function __construct(
         string $apiHost,
         string $apiKey,
-        ?HttpClientInterface $httpClient = null,
+        HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         array $options = []
     ) {
-        $this->transport = new HttpTransport($apiHost, $apiKey, $httpClient, $options);
+        $this->transport = $httpClient instanceof TransportInterface
+            ? $httpClient
+            : new HttpTransport($apiHost, $apiKey, $httpClient, $options);
+    }
+
+    public function getTransport(): TransportInterface
+    {
+        return $this->transport;
     }
 
     /**

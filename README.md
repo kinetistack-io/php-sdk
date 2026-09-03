@@ -25,7 +25,7 @@ $client = new KinetiClient(
 $client = new KinetiClient(
     apiHost: 'https://api.kinetistack.io',
     apiKey: 'sk_test_12345',
-    httpClient: null,             // Optional custom HttpClientInterface
+    httpClient: null,             // Optional: PSR-18 ClientInterface (e.g. Guzzle), Symfony HttpClientInterface, or auto-discovered
     options: [
         'timeout' => 30.0,        // Request timeout in seconds
         'max_retries' => 3,       // Automatically retry transient HTTP 429 and 503 errors
@@ -33,9 +33,16 @@ $client = new KinetiClient(
 );
 ```
 
+#### HTTP Client Flexibility (PSR-18 & Symfony)
+
+The SDK is strictly framework-agnostic. It does not force a concrete HTTP client implementation:
+- **Auto-Discovery**: If `httpClient` is omitted or `null`, `php-http/discovery` automatically discovers any installed PSR-18 client (such as Guzzle) or Symfony's HTTP Client.
+- **PSR-18 (Guzzle, etc.)**: Inject any `Psr\Http\Client\ClientInterface` instance directly (e.g. `new KinetiClient($host, $key, $guzzleClient)`).
+- **Symfony HTTP Client**: Existing Symfony projects can inject `Symfony\Contracts\HttpClient\HttpClientInterface` for full backward compatibility.
+
 #### Transient Error Retries & Backoff
 
-When `max_retries` is configured in `$options`, the SDK automatically retries transient HTTP errors using Symfony's `RetryableHttpClient`:
+When `max_retries` is configured in `$options`, the SDK automatically retries transient HTTP errors:
 - **HTTP 429 (Too Many Requests)**: Automatically delays subsequent retries by respecting the server's `Retry-After` response header (or falls back to exponential backoff).
 - **HTTP 503 (Service Unavailable)**: Automatically retries using exponential backoff.
 - **Non-transient errors** (such as HTTP 400, 401, 403, 404, 422, or 500) fail immediately without retrying.
