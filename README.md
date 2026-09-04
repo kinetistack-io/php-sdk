@@ -1,6 +1,13 @@
 # KinetiStack PHP SDK
 
+[![Latest Stable Version](https://img.shields.io/packagist/v/kinetistack-io/php-sdk.svg?style=flat-square)](https://packagist.org/packages/kinetistack-io/php-sdk)
+[![Total Downloads](https://img.shields.io/packagist/dt/kinetistack-io/php-sdk.svg?style=flat-square)](https://packagist.org/packages/kinetistack-io/php-sdk)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/kinetistack-io/php-sdk/php.svg?style=flat-square)](composer.json)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![CI Status](https://github.com/kinetistack-io/php-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/kinetistack-io/php-sdk/actions/workflows/ci.yml)
+
 Framework-Agnostic PHP Client Library for KinetiStack API.
+
 
 ## Installation
 
@@ -207,3 +214,41 @@ make composer cmd="require symfony/yaml"
 # Open container shell
 make shell
 ```
+
+## CI/CD & Release Workflow
+
+The SDK uses automated CI/CD workflows for testing, static analysis, and releases:
+
+- **CI Pipeline (`.github/workflows/ci.yml`)**: Runs on pushes and pull requests targeting `main`. Executes test matrices across PHP 8.1, 8.2, 8.3, and 8.4, followed by PHP CS Fixer and PHPStan static analysis.
+- **Release Pipeline (`.github/workflows/release.yml`)**: Triggered automatically when a version tag matching `v*.*.*` (e.g., `v1.0.0`) is pushed to the repository.
+  1. **Validation (`validate`)**: Checks platform requirements via `composer check-platform-reqs` and runs PHPUnit across PHP 8.1, 8.2, 8.3, and 8.4.
+  2. **Quality Checks (`quality-checks`)**: Ensures code conforms to PSR-12 and passes PHPStan Level 8 static analysis.
+  3. **Release (`release`)**: Requires both `validate` and `quality-checks` to pass. Publishes a GitHub Release (with auto-generated release notes and automatic pre-release detection) and triggers a synchronization webhook to the Packagist API via authenticated cURL.
+
+### Required Repository Secrets
+
+The release workflow requires the following repository secrets to be configured in GitHub / Forgejo:
+
+| Secret Name | Description | Required By |
+|:---|:---|:---|
+| `PACKAGIST_USER` | Packagist account username authorized to manage `kinetistack-io/php-sdk` | Packagist API update hook |
+| `PACKAGIST_TOKEN` | Packagist API token with package update permissions | Packagist API update hook |
+
+The workflow also requires GitHub Actions default `GITHUB_TOKEN` with `contents: write` permissions (configured automatically in `release.yml`) to publish releases. Fork runs automatically skip the release job if secrets are not configured.
+
+## Contributing
+
+Contributions are welcome! Please ensure that:
+
+1. Code adheres to **PSR-12** standards (`make cs-check` / `make cs-fix`).
+2. Static analysis passes at **PHPStan Level 8** (`make phpstan`).
+3. Unit tests pass across all supported PHP versions (`make test-all`).
+4. All checks pass locally via `make check` before opening a pull request.
+
+## Security
+
+If you discover a security vulnerability within this SDK, please send an email to [security@kinetistack.io](mailto:security@kinetistack.io) or use GitHub Private Vulnerability Reporting. All security vulnerabilities will be promptly addressed.
+
+## License
+
+The KinetiStack PHP SDK is open-sourced software licensed under the [MIT license](LICENSE).
