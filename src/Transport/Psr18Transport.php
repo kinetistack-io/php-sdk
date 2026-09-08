@@ -18,21 +18,48 @@ class Psr18Transport implements TransportInterface
     private readonly ClientInterface $client;
     private readonly RequestFactoryInterface $requestFactory;
     private readonly StreamFactoryInterface $streamFactory;
+    private readonly string $authHeaderName;
+    private readonly string $authHeaderValue;
+    /** @var array<string, mixed> */
+    private readonly array $defaultOptions;
 
     /**
-     * @param array<string, mixed> $defaultOptions
+     * @param ClientInterface|array<string, mixed>|null $clientOrDefaultOptions
+     * @param array<string, mixed>|RequestFactoryInterface|null $defaultOptionsOrRequestFactory
      */
     public function __construct(
         private readonly string $apiHost,
-        private readonly string $apiKey,
-        ?ClientInterface $client = null,
-        private readonly array $defaultOptions = [],
+        string $authHeaderName,
+        string|ClientInterface|null $authHeaderValueOrClient = null,
+        ClientInterface|array|null $clientOrDefaultOptions = null,
+        array|RequestFactoryInterface|null $defaultOptionsOrRequestFactory = [],
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null
     ) {
-        $this->client = $client ?? Psr18ClientDiscovery::find();
-        $this->requestFactory = $requestFactory ?? Psr17FactoryDiscovery::findRequestFactory();
-        $this->streamFactory = $streamFactory ?? Psr17FactoryDiscovery::findStreamFactory();
+        if (is_string($authHeaderValueOrClient)) {
+            $this->authHeaderName = $authHeaderName;
+            $this->authHeaderValue = $authHeaderValueOrClient;
+            /** @var ClientInterface|null $actualClient */
+            $actualClient = $clientOrDefaultOptions instanceof ClientInterface ? $clientOrDefaultOptions : null;
+            $this->defaultOptions = is_array($clientOrDefaultOptions)
+                ? $clientOrDefaultOptions
+                : (is_array($defaultOptionsOrRequestFactory) ? $defaultOptionsOrRequestFactory : []);
+            $actualReqFactory = $requestFactory ?? ($defaultOptionsOrRequestFactory instanceof RequestFactoryInterface ? $defaultOptionsOrRequestFactory : null);
+            $actualStreamFactory = $streamFactory;
+        } else {
+            // Legacy signature: ($apiHost, $apiKey, $client, $defaultOptions, $requestFactory, $streamFactory)
+            $this->authHeaderName = 'X-Kineti-Key';
+            $this->authHeaderValue = $authHeaderName;
+            /** @var ClientInterface|null $actualClient */
+            $actualClient = $authHeaderValueOrClient;
+            $this->defaultOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : [];
+            $actualReqFactory = $defaultOptionsOrRequestFactory instanceof RequestFactoryInterface ? $defaultOptionsOrRequestFactory : $requestFactory;
+            $actualStreamFactory = $streamFactory ?? ($requestFactory instanceof StreamFactoryInterface ? $requestFactory : null);
+        }
+
+        $this->client = $actualClient ?? Psr18ClientDiscovery::find();
+        $this->requestFactory = $actualReqFactory ?? Psr17FactoryDiscovery::findRequestFactory();
+        $this->streamFactory = $actualStreamFactory ?? Psr17FactoryDiscovery::findStreamFactory();
     }
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface
@@ -53,14 +80,16 @@ class Psr18Transport implements TransportInterface
         );
 
         $hasAuth = false;
+        $targetHeaderLower = strtolower($this->authHeaderName);
         foreach (array_keys($headers) as $key) {
-            if (strtolower((string) $key) === 'authorization' || strtolower((string) $key) === 'x-kineti-key') {
+            $keyLower = strtolower((string) $key);
+            if ($keyLower === $targetHeaderLower || $keyLower === 'authorization' || $keyLower === 'x-kineti-key') {
                 $hasAuth = true;
                 break;
             }
         }
-        if (!$hasAuth && $this->apiKey !== '') {
-            $headers['X-Kineti-Key'] = $this->apiKey;
+        if (!$hasAuth && $this->authHeaderValue !== '' && $this->authHeaderName !== '') {
+            $headers[$this->authHeaderName] = $this->authHeaderValue;
         }
 
         $stream = null;
@@ -167,8 +196,41 @@ class Psr18Transport implements TransportInterface
         }
     }
 
+    public function withAuthHeaderValue(string $authHeaderValue): self
+    {
+        return new self(
+            $this->apiHost,
+            $this->authHeaderName,
+            $authHeaderValue,
+            $this->client,
+            $this->defaultOptions,
+            $this->requestFactory,
+            $this->streamFactory
+        );
+    }
+
+    public function getApiHost(): string
+    {
+        return $this->apiHost;
+    }
+
     public function getClient(): ClientInterface
     {
         return $this->client;
+    }
+
+    public function getAuthHeaderName(): string
+    {
+        return $this->authHeaderName;
+    }
+
+    public function getAuthHeaderValue(): string
+    {
+        return $this->authHeaderValue;
+    }
+
+    public function getApiKey(): string
+    {
+        return $this->authHeaderValue;
     }
 }

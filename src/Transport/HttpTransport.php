@@ -13,24 +13,47 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class HttpTransport implements TransportInterface
 {
     private readonly TransportInterface $delegate;
+    private readonly string $authHeaderName;
+    private readonly string $authHeaderValue;
 
     /**
+     * @param HttpClientInterface|ClientInterface|TransportInterface|array<string, mixed>|null $clientOrDefaultOptions
      * @param array<string, mixed> $defaultOptions
      */
     public function __construct(
-        string $apiHost,
-        string $apiKey,
-        HttpClientInterface|ClientInterface|TransportInterface|null $client = null,
+        private readonly string $apiHost,
+        string $authHeaderName,
+        string|HttpClientInterface|ClientInterface|TransportInterface|null $authHeaderValueOrClient = null,
+        HttpClientInterface|ClientInterface|TransportInterface|array|null $clientOrDefaultOptions = null,
         array $defaultOptions = []
     ) {
-        if ($client instanceof TransportInterface) {
-            $this->delegate = $client;
-        } elseif ($client instanceof HttpClientInterface) {
-            $this->delegate = new SymfonyTransport($apiHost, $apiKey, $client, $defaultOptions);
-        } elseif ($client instanceof ClientInterface) {
-            $this->delegate = new Psr18Transport($apiHost, $apiKey, $client, $defaultOptions);
+        if (is_string($authHeaderValueOrClient)) {
+            $this->authHeaderName = $authHeaderName;
+            $this->authHeaderValue = $authHeaderValueOrClient;
+            /** @var HttpClientInterface|ClientInterface|TransportInterface|null $actualClient */
+            $actualClient = ($clientOrDefaultOptions instanceof HttpClientInterface
+                || $clientOrDefaultOptions instanceof ClientInterface
+                || $clientOrDefaultOptions instanceof TransportInterface)
+                ? $clientOrDefaultOptions
+                : null;
+            $actualOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
         } else {
-            $this->delegate = self::createDiscoveredTransport($apiHost, $apiKey, $defaultOptions);
+            // Legacy signature: ($apiHost, $apiKey, $client, $defaultOptions)
+            $this->authHeaderName = 'X-Kineti-Key';
+            $this->authHeaderValue = $authHeaderName;
+            /** @var HttpClientInterface|ClientInterface|TransportInterface|null $actualClient */
+            $actualClient = $authHeaderValueOrClient;
+            $actualOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
+        }
+
+        if ($actualClient instanceof TransportInterface) {
+            $this->delegate = $actualClient;
+        } elseif ($actualClient instanceof HttpClientInterface) {
+            $this->delegate = new SymfonyTransport($apiHost, $this->authHeaderName, $this->authHeaderValue, $actualClient, $actualOptions);
+        } elseif ($actualClient instanceof ClientInterface) {
+            $this->delegate = new Psr18Transport($apiHost, $this->authHeaderName, $this->authHeaderValue, $actualClient, $actualOptions);
+        } else {
+            $this->delegate = self::createDiscoveredTransport($apiHost, $this->authHeaderName, $this->authHeaderValue, $actualOptions);
         }
     }
 
@@ -39,9 +62,39 @@ class HttpTransport implements TransportInterface
         return $this->delegate->request($method, $path, $options);
     }
 
+    public function withAuthHeaderValue(string $authHeaderValue): self
+    {
+        return new self(
+            $this->apiHost,
+            $this->authHeaderName,
+            $authHeaderValue,
+            $this->delegate->withAuthHeaderValue($authHeaderValue)
+        );
+    }
+
+    public function getApiHost(): string
+    {
+        return $this->apiHost;
+    }
+
     public function getDelegate(): TransportInterface
     {
         return $this->delegate;
+    }
+
+    public function getAuthHeaderName(): string
+    {
+        return $this->authHeaderName;
+    }
+
+    public function getAuthHeaderValue(): string
+    {
+        return $this->authHeaderValue;
+    }
+
+    public function getApiKey(): string
+    {
+        return $this->authHeaderValue;
     }
 
     /**
@@ -49,15 +102,16 @@ class HttpTransport implements TransportInterface
      */
     private static function createDiscoveredTransport(
         string $apiHost,
-        string $apiKey,
+        string $authHeaderName,
+        string $authHeaderValue,
         array $defaultOptions = []
     ): TransportInterface {
         try {
             $psr18Client = Psr18ClientDiscovery::find();
-            return new Psr18Transport($apiHost, $apiKey, $psr18Client, $defaultOptions);
+            return new Psr18Transport($apiHost, $authHeaderName, $authHeaderValue, $psr18Client, $defaultOptions);
         } catch (\Throwable) {
             if (class_exists(HttpClient::class)) {
-                return new SymfonyTransport($apiHost, $apiKey, null, $defaultOptions);
+                return new SymfonyTransport($apiHost, $authHeaderName, $authHeaderValue, null, $defaultOptions);
             }
 
             throw new TransportException(

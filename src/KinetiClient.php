@@ -45,7 +45,7 @@ class KinetiClient
     ) {
         $this->transport = $httpClient instanceof TransportInterface
             ? $httpClient
-            : new HttpTransport($apiHost, $apiKey, $httpClient, $options);
+            : new HttpTransport($apiHost, 'X-Kineti-Key', $apiKey, $httpClient, $options);
     }
 
     public function getTransport(): TransportInterface

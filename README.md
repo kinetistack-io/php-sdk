@@ -177,6 +177,76 @@ try {
 
 > **Note on Transient Errors**: When `max_retries` is specified in client options (e.g., `['max_retries' => 3]`), transient HTTP errors (`429 Too Many Requests` respecting `Retry-After` header, and `503 Service Unavailable`) are automatically retried with exponential backoff before throwing `RateLimitException` or `ServiceUnavailableException`.
 
+### Admin API (`AdminClient`)
+
+The SDK provides `AdminClient` as a dedicated sibling client for administrative operations under `/api/v1/admin/*`, authenticated via LexikJWT Bearer tokens (`Authorization: Bearer <jwt>`).
+
+#### Initialization & Authentication
+
+```php
+use KinetiStack\Sdk\AdminClient;
+
+// 1. Initial login without token
+$admin = new AdminClient('https://api.kinetistack.io');
+$auth = $admin->login('admin@agency.com', 'SuperSecret123!');
+
+// 2. Obtain an immutable client instance with the JWT token
+$authenticatedAdmin = $admin->withToken($auth->token);
+
+// Or initialize directly if you already hold a valid token
+$admin = new AdminClient('https://api.kinetistack.io', $jwtToken);
+```
+
+#### Organizations & Projects
+
+```php
+// Organizations
+$org = $admin->createOrganization('Acme Agency', 'standard');
+$orgList = $admin->listOrganizations();
+$currentOrg = $admin->getOrganization($org->id);
+$updatedOrg = $admin->updateOrganization($org->id, ['name' => 'Acme Global Agency']);
+
+// Projects
+$project = $admin->createProject('Client Portal', 'portal.example.com', 'https://webhook.example.com/events');
+$projects = $admin->listProjects();
+$projectDetails = $admin->getProject($project->id);
+$admin->updateProject($project->id, ['settings' => ['theme' => 'dark']]);
+$admin->deleteProject($project->id); // Soft-delete and revokes associated API keys
+```
+
+#### API Key Management
+
+```php
+// Create API key (returns ApiKeyCreatedDto with plaintext token)
+$newKey = $admin->createApiKey($project->id, 'Production Drupal Key', 'all', rateLimitPerMinute: 120);
+echo $newKey->token; // Secret plaintext token — save this now!
+echo $newKey->tokenSuffix; // e.g. '1234'
+
+// List API keys (returns ApiKeyDto[] without plaintext token)
+$keys = $admin->listApiKeys($project->id);
+
+// Rotate API key (old key continues working during grace period)
+$rotated = $admin->rotateApiKey($project->id, $newKey->id);
+echo $rotated->token; // New secret token
+
+// Revoke API key
+$admin->revokeApiKey($project->id, $newKey->id);
+```
+
+#### Usage & Analytics
+
+```php
+// Summary report across services
+$usage = $admin->getUsage(from: '2026-09-01', to: '2026-09-05', projectId: $project->id);
+foreach ($usage as $summary) {
+    echo "{$summary->projectName} - {$summary->service}: {$summary->totalTokens} tokens ({$summary->requestCount} requests)\n";
+}
+
+// Time-bucketed analytics
+$analytics = $admin->getAnalytics(groupByOrOptions: 'day', from: '2026-09-01', to: '2026-09-07');
+print_r($analytics->data);
+```
+
 ## Development
 
 No local PHP or Composer installation is required. Everything runs in one-off Docker containers via `docker compose` and `make`.
