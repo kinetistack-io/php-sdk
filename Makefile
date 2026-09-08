@@ -44,3 +44,50 @@ check: cs-check phpstan test ## Run all verification checks (cs-check, phpstan, 
 
 shell: ## Open an interactive bash shell in the container
 	$(DC) bash
+
+release: ## Prepare and push a new release (e.g. make release VERSION=1.2.4)
+	@if [ -z "$(VERSION)" ]; then \
+		printf "\033[31mError: VERSION is required. Example: make release VERSION=1.2.4\033[0m\n"; \
+		exit 1; \
+	fi; \
+	CLEAN_VERSION=$$(echo "$(VERSION)" | sed -e 's/^v//'); \
+	if ! echo "$$CLEAN_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$$'; then \
+		printf "\033[31mError: Invalid VERSION '$$CLEAN_VERSION'. Must follow SemVer (e.g. 1.2.4 or 1.2.4-rc.1)\033[0m\n"; \
+		exit 1; \
+	fi; \
+	TAG="v$$CLEAN_VERSION"; \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		printf "\033[31mError: Working directory has uncommitted changes. Stash or commit before releasing.\033[0m\n"; \
+		exit 1; \
+	fi; \
+	CURRENT_BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ "$$CURRENT_BRANCH" != "main" ] && [ "$(ALLOW_BRANCH)" != "1" ]; then \
+		printf "\033[31mError: Releases must be cut from 'main' (current branch: $$CURRENT_BRANCH). Use ALLOW_BRANCH=1 to override.\033[0m\n"; \
+		exit 1; \
+	fi; \
+	if git rev-parse "$$TAG" >/dev/null 2>&1; then \
+		printf "\033[31mError: Tag $$TAG already exists locally.\033[0m\n"; \
+		exit 1; \
+	fi; \
+	printf "\033[34m==>\033[0m Running verification checks (make check)...\n"; \
+	$(MAKE) check || { printf "\033[31mError: Verification checks failed. Aborting release without changes.\033[0m\n"; exit 1; }; \
+	printf "\033[34m==>\033[0m Bumping composer.json version to %s...\n" "$$CLEAN_VERSION"; \
+	$(DC) composer config version "$$CLEAN_VERSION" || exit 1; \
+	$(DC) composer update --lock || exit 1; \
+	$(DC) composer validate --no-check-version || exit 1; \
+	printf "\033[34m==>\033[0m Committing release %s...\n" "$$TAG"; \
+	git add composer.json composer.lock || exit 1; \
+	git commit -m "Release $$TAG" || exit 1; \
+	printf "\033[34m==>\033[0m Creating annotated tag %s...\n" "$$TAG"; \
+	git tag -a "$$TAG" -m "Release $$TAG" || exit 1; \
+	if [ "$(DRY_RUN)" = "1" ]; then \
+		printf "\033[33m[DRY RUN] Skipping push to origin. Created local commit and tag %s.\033[0m\n" "$$TAG"; \
+	else \
+		printf "\033[34m==>\033[0m Pushing commit and tag %s to origin...\n" "$$TAG"; \
+		git push origin "$$CURRENT_BRANCH" || exit 1; \
+		git push origin "$$TAG" || exit 1; \
+		printf "\033[32mSuccessfully released and pushed %s!\033[0m\n" "$$TAG"; \
+	fi
+
+.PHONY: help build build-all install update composer test test-all phpstan cs-check cs-fix check shell release
+

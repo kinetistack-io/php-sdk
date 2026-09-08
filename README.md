@@ -281,6 +281,9 @@ make check
 # Run arbitrary composer command
 make composer cmd="require symfony/yaml"
 
+# Prepare and publish a release (bumps composer.json, runs checks, commits, tags, pushes)
+make release VERSION=1.2.4
+
 # Open container shell
 make shell
 ```
@@ -308,7 +311,9 @@ The workflow also requires GitHub Actions default `GITHUB_TOKEN` with `contents:
 
 ## Contributing
 
-Contributions are welcome! Please ensure that:
+Contributions are welcome! Please refer to **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed local development, testing, and release guidelines.
+
+Before opening a pull request, ensure that:
 
 1. Code adheres to **PSR-12** standards (`make cs-check` / `make cs-fix`).
 2. Static analysis passes at **PHPStan Level 8** (`make phpstan`).
