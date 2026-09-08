@@ -81,15 +81,15 @@ make check
 
 ## 3. Git & Branching Workflow
 
-1. **Sub-Repository Independence**:
-   `php-sdk/` is an independent Git repository pushed to Forgejo (`KinetiStack/php-sdk`). Never commit changes that span across other sub-repository boundaries.
+1. **Repository Scope**:
+   All development takes place within this repository. Never commit changes or artifacts intended for other projects.
 2. **Branch Naming**:
    Create branches branching from `main`:
    - Features: `feature/<short-description>` (e.g. `feature/PHPSDK-17-local-release-automation`)
    - Bug fixes: `fix/<short-description>`
 3. **Pull Requests**:
    - Never push directly to `main` without a pull request.
-   - Forgejo Actions CI automatically runs `.github/workflows/ci.yml` across PHP 8.1, 8.2, 8.3, and 8.4, validating tests, code style, and static analysis.
+   - GitHub Actions CI automatically runs `.github/workflows/ci.yml` across PHP 8.1, 8.2, 8.3, and 8.4, validating tests, code style, and static analysis.
    - Ensure all CI checks pass before requesting review and merging.
 
 ---
@@ -98,7 +98,7 @@ make check
 
 The release lifecycle consists of two halves:
 1. **Local Release Automation (`make release`)**: Safely validates code, bumps `composer.json`, tags the release, and pushes to origin.
-2. **Server-side CI Pipeline (`.github/workflows/release.yml`)**: Triggered by the pushed tag (`v*.*.*`), running matrix validation, generating GitHub/Forgejo release notes, and notifying Packagist.
+2. **Server-side CI Pipeline (`.github/workflows/release.yml`)**: Triggered by the pushed tag (`v*.*.*`), running matrix validation, generating GitHub release notes, and notifying Packagist.
 
 ### Cutting a New Release
 

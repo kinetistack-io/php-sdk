@@ -7,25 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-08
+
 ### Added
-- **`AdminClient` (`src/AdminClient.php`)**: Dedicated sibling client for administrative operations against `/api/v1/admin/*` using JWT Bearer authentication (`Authorization: Bearer <jwt>`).
+- **Core Client (`src/KinetiClient.php`)**: Framework-agnostic client for KinetiStack inference, document management, and semantic search.
+  - Vision analysis: `analyzeImage()`, `analyzeImageStream()`, `analyzeImageBinary()`, and `analyzeImageContent()` supporting local file paths, streams, raw binary buffers, and Base64 data URIs.
+  - Stream-based multipart uploads for efficient memory usage with large media payloads.
+  - Connection health and readiness probes: `healthz()` and `readyz()`.
+  - Batch job lifecycle management: `submitBatchJob()`, `getBatchJob()`, and `waitForBatchJob()` with exponential backoff and jitter.
+  - Document ingestion and management: `ingestDocument()`, `getDocument()`, `listDocuments()`, and `deleteDocument()`.
+  - Semantic vector search and RAG querying: `searchDocuments()` and `ragQuery()`.
+- **Administrative Client (`src/AdminClient.php`)**: Dedicated sibling client for administrative operations against `/api/v1/admin/*` using JWT Bearer authentication (`Authorization: Bearer <jwt>`).
   - `login(string $email, string $password): AuthTokenDto`
   - `withToken(string $jwtToken): static` for immutable token swapping
-  - `createOrganization(...)` and `listOrganizations(...)`
-  - `getOrganization(...)` and `updateOrganization(...)`
-  - `createProject(...)`, `listProjects(...)`, `getProject(...)`, `updateProject(...)`, `deleteProject(...)`
-  - `createApiKey(...)` returning `ApiKeyCreatedDto` with plaintext `token`
-  - `listApiKeys(...)` returning `ApiKeyDto[]` without `token`
-  - `revokeApiKey(...)` and `rotateApiKey(...)`
-  - `getUsage(...)` returning `UsageSummaryDto[]`
-  - `getAnalytics(...)` returning `AnalyticsDto`
-- **Admin DTOs (`src/Dto/`)**:
-  - `AuthTokenDto`: Admin login response token
-  - `OrganizationDto`: Organization entity data
-  - `ProjectDto`: Project entity data
-  - `ApiKeyDto`: API key metadata without plaintext token
-  - `ApiKeyCreatedDto`: API key metadata including plaintext token
-  - `UsageSummaryDto`: Token and request usage aggregations
-  - `AnalyticsDto`: Multi-service time-bucketed metrics
-- **Transport Generalization (`src/Transport/`)**:
-  - Generalize `SymfonyTransport`, `Psr18Transport`, and `HttpTransport` to support arbitrary authentication header names (`$authHeaderName`) and values (`$authHeaderValue`) with backward compatibility for legacy signatures.
+  - Organization management: `createOrganization()`, `listOrganizations()`, `getOrganization()`, `updateOrganization()`
+  - Project management: `createProject()`, `listProjects()`, `getProject()`, `updateProject()`, `deleteProject()`
+  - API Key lifecycle: `createApiKey()` (returning `ApiKeyCreatedDto` with plaintext token), `listApiKeys()`, `revokeApiKey()`, and `rotateApiKey()`
+  - Usage and analytics: `getUsage()` returning `UsageSummaryDto[]` and `getAnalytics()` returning `AnalyticsDto`
+- **Transport Architecture (`src/Transport/`)**:
+  - `SymfonyTransport`: Default production HTTP client using Symfony HttpClient contracts with streaming support.
+  - `Psr18Transport`: Full PSR-18 HTTP Client support via `php-http/discovery` auto-discovery (Guzzle, Buzz, etc.).
+  - Generalized HTTP transport supporting custom authentication header names and values.
+  - Transient error retry policy with exponential backoff for HTTP 429 and 503 responses.
+- **DTOs & Enums (`src/Dto/`, `src/Enum/`)**:
+  - `ImageInputDto`, `BatchJobDto`, `VisionResponseDto`, `DocumentDto`, `DocumentListDto`, `SearchQueryDto`, `SearchResultDto`, `RagQueryDto`, `RagResponseDto`
+  - Admin DTOs: `AuthTokenDto`, `OrganizationDto`, `ProjectDto`, `ApiKeyDto`, `ApiKeyCreatedDto`, `UsageSummaryDto`, `AnalyticsDto`
+  - Enums: `JobStatus`, `WebhookStatus`
+- **Webhook Security (`src/WebhookVerifier.php`)**:
+  - HMAC-SHA256 signature verification with tolerance against clock drift and timing attack prevention.
+- **Release & CI Tooling**:
+  - Local release automation via `make release VERSION=x.y.z`.
+  - Automated CI matrix pipeline testing against PHP 8.1, 8.2, 8.3, and 8.4 with PHPStan Level 8 and PHP CS Fixer.
+  - Tag release workflow (`release.yml`) for GitHub Releases and Packagist synchronization.

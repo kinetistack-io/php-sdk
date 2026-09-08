@@ -300,7 +300,7 @@ The SDK uses automated CI/CD workflows for testing, static analysis, and release
 
 ### Required Repository Secrets
 
-The release workflow requires the following repository secrets to be configured in GitHub / Forgejo:
+The release workflow requires the following repository secrets to be configured in GitHub:
 
 | Secret Name | Description | Required By |
 |:---|:---|:---|

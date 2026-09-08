@@ -75,16 +75,23 @@ release: ## Prepare and push a new release (e.g. make release VERSION=1.2.4)
 	$(DC) composer config version "$$CLEAN_VERSION" || exit 1; \
 	$(DC) composer update --lock || exit 1; \
 	$(DC) composer validate --no-check-version || exit 1; \
-	printf "\033[34m==>\033[0m Committing release %s...\n" "$$TAG"; \
-	git add composer.json composer.lock || exit 1; \
-	git commit -m "Release $$TAG" || exit 1; \
+	if git diff --quiet composer.json composer.lock; then \
+		printf "\033[34m==>\033[0m composer.json is already at version %s, skipping commit...\n" "$$CLEAN_VERSION"; \
+	else \
+		printf "\033[34m==>\033[0m Committing release %s...\n" "$$TAG"; \
+		git add composer.json composer.lock || exit 1; \
+		git commit -m "Release $$TAG" || exit 1; \
+	fi; \
 	printf "\033[34m==>\033[0m Creating annotated tag %s...\n" "$$TAG"; \
 	git tag -a "$$TAG" -m "Release $$TAG" || exit 1; \
 	if [ "$(DRY_RUN)" = "1" ]; then \
 		printf "\033[33m[DRY RUN] Skipping push to origin. Created local commit and tag %s.\033[0m\n" "$$TAG"; \
 	else \
-		printf "\033[34m==>\033[0m Pushing commit and tag %s to origin...\n" "$$TAG"; \
-		git push origin "$$CURRENT_BRANCH" || exit 1; \
+		if [ -n "$$(git log origin/$$CURRENT_BRANCH..$$CURRENT_BRANCH 2>/dev/null)" ]; then \
+			printf "\033[34m==>\033[0m Pushing commit to origin...\n"; \
+			git push origin "$$CURRENT_BRANCH" || exit 1; \
+		fi; \
+		printf "\033[34m==>\033[0m Pushing tag %s to origin...\n" "$$TAG"; \
 		git push origin "$$TAG" || exit 1; \
 		printf "\033[32mSuccessfully released and pushed %s!\033[0m\n" "$$TAG"; \
 	fi
