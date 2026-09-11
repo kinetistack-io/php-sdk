@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Tests\Transport;
 
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\RateLimitException;
+use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\KinetiClient;
@@ -50,6 +51,34 @@ class HttpTransportTest extends TestCase
         $this->expectExceptionMessage('Unauthorized');
 
         $transport->request('GET', '/v1/test');
+    }
+
+    public function testServiceModuleDisabledException(): void
+    {
+        $errorBody = json_encode([
+            'type' => 'https://kinetistack.io/errors/module-disabled',
+            'title' => 'Service Module Disabled',
+            'status' => 403,
+            'detail' => "Service module 'rag' is not enabled for your organization.",
+            'module' => 'rag',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($errorBody, [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+
+        try {
+            $transport->request('GET', '/v1/test');
+            $this->fail('Expected ServiceModuleDisabledException');
+        } catch (ServiceModuleDisabledException $e) {
+            $this->assertSame("Service module 'rag' is not enabled for your organization.", $e->getMessage());
+            $this->assertSame('rag', $e->moduleIdentifier);
+            $this->assertSame('rag', $e->getModuleIdentifier());
+            $this->assertSame(403, $e->getCode());
+        }
     }
 
     public function testValidationException(): void

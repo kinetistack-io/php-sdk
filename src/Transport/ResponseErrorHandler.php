@@ -11,6 +11,7 @@ use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServerException;
+use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\ValidationException;
 
@@ -50,9 +51,15 @@ final class ResponseErrorHandler
 
         $retryAfter = self::parseRetryAfter($headers);
 
+        $module = isset($content['module']) && is_string($content['module']) && trim($content['module']) !== ''
+            ? trim($content['module'])
+            : null;
+
         throw match ($statusCode) {
             401 => new AuthenticationException($message),
-            403 => new AuthorizationException($message),
+            403 => $module !== null
+                ? new ServiceModuleDisabledException($message, $module)
+                : new AuthorizationException($message),
             404 => new NotFoundException($message),
             413 => new PayloadTooLargeException($message),
             422 => new ValidationException($message, $violations),
