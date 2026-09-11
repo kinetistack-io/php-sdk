@@ -32,6 +32,7 @@ class KinetiClient
     public const DEFAULT_TIMEOUT_SECONDS = 60;
 
     private TransportInterface $transport;
+    private ?ModuleClient $moduleClient = null;
 
     /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
@@ -51,6 +52,11 @@ class KinetiClient
     public function getTransport(): TransportInterface
     {
         return $this->transport;
+    }
+
+    public function modules(): ModuleClient
+    {
+        return $this->moduleClient ??= new ModuleClient($this->transport);
     }
 
     /**

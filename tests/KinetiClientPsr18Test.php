@@ -161,4 +161,26 @@ class KinetiClientPsr18Test extends TestCase
         $health = $kineti->healthz();
         $this->assertSame('ok', $health->status);
     }
+
+    /**
+     * Scenario 4: ModuleClient with Guzzle (PSR-18).
+     */
+    public function testScenario4ModuleClientWithGuzzlePsr18(): void
+    {
+        $mock = new MockHandler([
+            new Response(
+                200,
+                ['Content-Type' => 'application/json'],
+                '{"modules": [{"identifier": "vision", "label": "Vision", "status": "enabled", "accessible": true}]}'
+            ),
+        ]);
+
+        $guzzleClient = new Client(['handler' => HandlerStack::create($mock)]);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $guzzleClient);
+
+        $modules = $kineti->modules()->list();
+        $this->assertCount(1, $modules);
+        $this->assertSame('vision', $modules[0]->identifier);
+        $this->assertTrue($modules[0]->isEnabled());
+    }
 }
