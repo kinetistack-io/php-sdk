@@ -11,7 +11,9 @@ use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Enum\RegistrationMode;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\NotFoundException;
@@ -578,5 +580,26 @@ class AdminClientTest extends TestCase
             $this->assertCount(1, $e->getViolations());
             $this->assertSame('domain', $e->getViolations()[0]['propertyPath']);
         }
+    }
+
+    public function testGetRegistrationStatus(): void
+    {
+        $mockResponse = new MockResponse(json_encode(['mode' => 'whitelist'], JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $status = $admin->getRegistrationStatus();
+
+        $this->assertInstanceOf(RegistrationStatusDto::class, $status);
+        $this->assertSame(RegistrationMode::Whitelist, $status->mode);
+        $this->assertTrue($status->isWhitelist());
+        $this->assertFalse($status->isOpen());
+        $this->assertFalse($status->isClosed());
+
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertSame('https://api.test/api/v1/admin/registration-status', $mockResponse->getRequestUrl());
     }
 }

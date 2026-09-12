@@ -14,6 +14,8 @@ use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RegistrationStatusDto;
+use KinetiStack\Sdk\Enum\RegistrationMode;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\Psr18Transport;
 use PHPUnit\Framework\TestCase;
@@ -89,5 +91,20 @@ class AdminClientPsr18Test extends TestCase
         $createOrgRequest = $container[1]['request'];
         $this->assertTrue($createOrgRequest->hasHeader('Authorization'));
         $this->assertSame('Bearer jwt-psr18-token', $createOrgRequest->getHeaderLine('Authorization'));
+    }
+
+    public function testGetRegistrationStatusWithPsr18(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], '{"mode": "open"}'),
+        ]);
+        $stack = HandlerStack::create($mock);
+        $guzzleClient = new Client(['handler' => $stack]);
+        $admin = new AdminClient('https://api.test', 'jwt-psr18-token', $guzzleClient);
+
+        $status = $admin->getRegistrationStatus();
+        $this->assertInstanceOf(RegistrationStatusDto::class, $status);
+        $this->assertSame(RegistrationMode::Open, $status->mode);
+        $this->assertTrue($status->isOpen());
     }
 }

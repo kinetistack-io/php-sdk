@@ -10,6 +10,7 @@ use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Transport\HttpTransport;
@@ -95,6 +96,21 @@ class AdminClient
         $data = $response->toArray();
 
         return AuthTokenDto::fromArray($data);
+    }
+
+    /**
+     * Get the current registration status (mode) of the backend.
+     *
+     * @throws KinetiException
+     */
+    public function getRegistrationStatus(): RegistrationStatusDto
+    {
+        $response = $this->transport->request('GET', '/api/v1/admin/registration-status');
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return RegistrationStatusDto::fromArray($data);
     }
 
     /**
