@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Transport;
 
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
+use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
@@ -61,6 +62,7 @@ final class ResponseErrorHandler
                 ? new ServiceModuleDisabledException($message, $module)
                 : new AuthorizationException($message),
             404 => new NotFoundException($message),
+            409 => new ConflictException($message),
             413 => new PayloadTooLargeException($message),
             422 => new ValidationException($message, $violations),
             429 => new RateLimitException($message, $retryAfter),

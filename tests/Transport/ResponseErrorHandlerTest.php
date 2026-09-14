@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests\Transport;
 
 use KinetiStack\Sdk\Exception\AuthorizationException;
+use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Transport\ResponseErrorHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -69,5 +70,20 @@ final class ResponseErrorHandlerTest extends TestCase
         $this->expectExceptionMessage('Forbidden');
 
         ResponseErrorHandler::handleError(403, ['Content-Type' => ['application/problem+json']], $body);
+    }
+
+    public function testHandleErrorThrowsConflictExceptionOn409(): void
+    {
+        $body = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Conflict',
+            'status' => 409,
+            'detail' => 'An account with email admin@acme.com already exists.',
+        ], JSON_THROW_ON_ERROR);
+
+        $this->expectException(ConflictException::class);
+        $this->expectExceptionMessage('An account with email admin@acme.com already exists.');
+
+        ResponseErrorHandler::handleError(409, ['Content-Type' => ['application/problem+json']], $body);
     }
 }

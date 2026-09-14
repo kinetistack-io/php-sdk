@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `AdminClient::register()` method for self-service agency onboarding (`POST /api/v1/admin/register`)
+- `RegisterDto` request DTO and `RegisterResponseDto` response DTO
+- `ConflictException` for HTTP 409 responses
+
 ## [1.0.1] - 2026-09-13
 
 ### Added

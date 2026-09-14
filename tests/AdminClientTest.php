@@ -11,11 +11,14 @@ use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RegisterDto;
+use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
 use KinetiStack\Sdk\Enum\RegistrationMode;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
+use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ValidationException;
@@ -129,6 +132,210 @@ class AdminClientTest extends TestCase
         $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('admin@agency.com', $sentBody['email']);
         $this->assertSame('SuperSecret123!', $sentBody['password']);
+    }
+
+    public function testRegisterSuccess(): void
+    {
+        $responseBody = json_encode([
+            'organization' => [
+                'id' => 'org-uuid-1',
+                'name' => 'Acme Agency',
+                'billing_tier' => 'free',
+            ],
+            'user' => [
+                'id' => 'user-uuid-1',
+                'email' => 'admin@acme.com',
+                'roles' => ['ROLE_ADMIN'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $result = $admin->register('Acme Agency', 'admin@acme.com', 'SecurePass1!');
+
+        $this->assertInstanceOf(RegisterResponseDto::class, $result);
+        $this->assertSame('org-uuid-1', $result->getOrganizationId());
+        $this->assertSame('Acme Agency', $result->getOrganizationName());
+        $this->assertSame('free', $result->getBillingTier());
+        $this->assertSame('user-uuid-1', $result->getUserId());
+        $this->assertSame('admin@acme.com', $result->getUserEmail());
+        $this->assertSame(['ROLE_ADMIN'], $result->getUserRoles());
+
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/register', $mockResponse->getRequestUrl());
+
+        // Must be unauthenticated (no Authorization header)
+        $headers = $mockResponse->getRequestOptions()['headers'] ?? [];
+        foreach ($headers as $h) {
+            $this->assertStringStartsNotWith('authorization:', strtolower((string) $h));
+        }
+
+        /** @var array<string, mixed> $sentBody */
+        $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('Acme Agency', $sentBody['org_name']);
+        $this->assertSame('admin@acme.com', $sentBody['email']);
+        $this->assertSame('SecurePass1!', $sentBody['password']);
+    }
+
+    public function testRegisterWithArrayPayload(): void
+    {
+        $responseBody = json_encode([
+            'organization' => [
+                'id' => 'org-uuid-2',
+                'name' => 'Acme',
+                'billing_tier' => 'free',
+            ],
+            'user' => [
+                'id' => 'user-uuid-2',
+                'email' => 'a@b.com',
+                'roles' => ['ROLE_ADMIN'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $result = $admin->register(['org_name' => 'Acme', 'email' => 'a@b.com', 'password' => 'x']);
+
+        $this->assertInstanceOf(RegisterResponseDto::class, $result);
+        $this->assertSame('Acme', $result->getOrganizationName());
+        $this->assertSame('a@b.com', $result->getUserEmail());
+
+        /** @var array<string, mixed> $sentBody */
+        $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(['org_name' => 'Acme', 'email' => 'a@b.com', 'password' => 'x'], $sentBody);
+    }
+
+    public function testRegisterWithDto(): void
+    {
+        $responseBody = json_encode([
+            'organization' => [
+                'id' => 'org-uuid-3',
+                'name' => 'Acme DTO',
+                'billing_tier' => 'free',
+            ],
+            'user' => [
+                'id' => 'user-uuid-3',
+                'email' => 'dto@acme.com',
+                'roles' => ['ROLE_ADMIN'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $dto = new RegisterDto('Acme DTO', 'dto@acme.com', 'dto-secret');
+        $result = $admin->register($dto);
+
+        $this->assertInstanceOf(RegisterResponseDto::class, $result);
+        $this->assertSame('Acme DTO', $result->getOrganizationName());
+        $this->assertSame('dto@acme.com', $result->getUserEmail());
+
+        /** @var array<string, mixed> $sentBody */
+        $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('Acme DTO', $sentBody['org_name']);
+        $this->assertSame('dto@acme.com', $sentBody['email']);
+        $this->assertSame('dto-secret', $sentBody['password']);
+    }
+
+    public function testRegisterConflict(): void
+    {
+        $errorBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Conflict',
+            'status' => 409,
+            'detail' => 'An account with email admin@acme.com already exists.',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($errorBody, [
+            'http_code' => 409,
+            'response_headers' => ['content-type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(ConflictException::class);
+        $this->expectExceptionMessage('An account with email admin@acme.com already exists.');
+
+        $admin->register('Acme Agency', 'admin@acme.com', 'SecurePass1!');
+    }
+
+    public function testRegisterValidationError(): void
+    {
+        $errorBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Unprocessable Entity',
+            'status' => 422,
+            'detail' => 'Missing or invalid required fields (org_name, email, password).',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($errorBody, [
+            'http_code' => 422,
+            'response_headers' => ['content-type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Missing or invalid required fields (org_name, email, password).');
+
+        $admin->register(['email' => 'admin@acme.com', 'password' => 'SecurePass1!']);
+    }
+
+    public function testRegisterForbidden(): void
+    {
+        $errorBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Forbidden',
+            'status' => 403,
+            'detail' => 'Self-registration is closed.',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($errorBody, [
+            'http_code' => 403,
+            'response_headers' => ['content-type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(AuthorizationException::class);
+        $this->expectExceptionMessage('Self-registration is closed.');
+
+        $admin->register('Acme Agency', 'admin@acme.com', 'SecurePass1!');
+    }
+
+    public function testRegisterWithEmptyScalarOrgNameThrowsException(): void
+    {
+        $admin = new AdminClient('https://api.test', '');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('org_name cannot be empty.');
+
+        $admin->register('   ', 'admin@acme.com', 'SecurePass1!');
+    }
+
+    public function testRegisterWithEmptyScalarEmailThrowsException(): void
+    {
+        $admin = new AdminClient('https://api.test', '');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('email cannot be empty.');
+
+        $admin->register('Acme Agency', '   ', 'SecurePass1!');
+    }
+
+    public function testRegisterWithEmptyScalarPasswordThrowsException(): void
+    {
+        $admin = new AdminClient('https://api.test', '');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('password cannot be empty.');
+
+        $admin->register('Acme Agency', 'admin@acme.com', '');
     }
 
     /**

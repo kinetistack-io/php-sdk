@@ -10,9 +10,14 @@ use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RegisterDto;
+use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Exception\AuthorizationException;
+use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
@@ -96,6 +101,47 @@ class AdminClient
         $data = $response->toArray();
 
         return AuthTokenDto::fromArray($data);
+    }
+
+    /**
+     * Register a new organization and initial administrator user.
+     *
+     * Note: This endpoint is unauthenticated and must be called on an AdminClient
+     * initialized without a JWT token (similar to login()).
+     *
+     * @param RegisterDto|array<string, mixed>|string $orgNameOrData Organization name, RegisterDto, or associative payload array containing 'org_name', 'email', and 'password'.
+     * @param string|null $email Admin user email (required when $orgNameOrData is a string).
+     * @param string|null $password Admin user password (required when $orgNameOrData is a string).
+     *                              @sensitive $password
+     * @return RegisterResponseDto
+     * @throws \InvalidArgumentException When scalar arguments are empty.
+     * @throws ConflictException When the email address is already registered (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws AuthorizationException When registration is closed or not allowed (HTTP 403).
+     * @throws KinetiException
+     */
+    public function register(
+        RegisterDto|array|string $orgNameOrData,
+        ?string $email = null,
+        ?string $password = null,
+    ): RegisterResponseDto {
+        if ($orgNameOrData instanceof RegisterDto) {
+            $payload = $orgNameOrData->toArray();
+        } elseif (is_array($orgNameOrData)) {
+            $payload = $orgNameOrData;
+        } else {
+            $dto = new RegisterDto($orgNameOrData, (string) $email, (string) $password);
+            $payload = $dto->toArray();
+        }
+
+        $response = $this->transport->request('POST', '/api/v1/admin/register', [
+            'json' => $payload,
+        ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return RegisterResponseDto::fromArray($data);
     }
 
     /**
