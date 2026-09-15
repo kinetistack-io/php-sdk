@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-15
+
 ### Added
 - `AdminClient::refreshToken()` method for renewing administrative JWT session tokens (`POST /api/v1/admin/token/refresh`)
 
