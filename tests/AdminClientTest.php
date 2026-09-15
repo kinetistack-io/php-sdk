@@ -134,6 +134,49 @@ class AdminClientTest extends TestCase
         $this->assertSame('SuperSecret123!', $sentBody['password']);
     }
 
+    public function testRefreshToken(): void
+    {
+        $responseBody = json_encode([
+            'token' => 'refreshed-admin-jwt',
+            'refresh_token' => null,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'valid-admin-jwt', $httpClient);
+
+        $auth = $admin->refreshToken();
+
+        $this->assertInstanceOf(AuthTokenDto::class, $auth);
+        $this->assertSame('refreshed-admin-jwt', $auth->token);
+        $this->assertNull($auth->refreshToken);
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/token/refresh', $mockResponse->getRequestUrl());
+        $this->assertContains('Authorization: Bearer valid-admin-jwt', $mockResponse->getRequestOptions()['headers']);
+    }
+
+    public function testRefreshTokenUnauthorizedThrowsAuthenticationException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:unauthorized',
+            'title' => 'Unauthorized',
+            'status' => 401,
+            'detail' => 'Invalid or expired JWT token',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 401,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'expired-jwt', $httpClient);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid or expired JWT token');
+
+        $admin->refreshToken();
+    }
+
     public function testRegisterSuccess(): void
     {
         $responseBody = json_encode([

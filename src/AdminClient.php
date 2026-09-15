@@ -14,6 +14,7 @@ use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
@@ -96,6 +97,22 @@ class AdminClient
                 'password' => $password,
             ],
         ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return AuthTokenDto::fromArray($data);
+    }
+
+    /**
+     * Refresh the admin JWT token using the currently active session.
+     *
+     * @throws AuthenticationException When the existing JWT token is expired, invalid, or unauthenticated (HTTP 401).
+     * @throws KinetiException
+     */
+    public function refreshToken(): AuthTokenDto
+    {
+        $response = $this->transport->request('POST', '/api/v1/admin/token/refresh');
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();

@@ -12,10 +12,12 @@ use GuzzleHttp\Psr7\Response;
 use KinetiStack\Sdk\AdminClient;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
+use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Enum\RegistrationMode;
+use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\Psr18Transport;
 use PHPUnit\Framework\TestCase;
@@ -106,5 +108,59 @@ class AdminClientPsr18Test extends TestCase
         $this->assertInstanceOf(RegistrationStatusDto::class, $status);
         $this->assertSame(RegistrationMode::Open, $status->mode);
         $this->assertTrue($status->isOpen());
+    }
+
+    public function testRefreshTokenWithPsr18(): void
+    {
+        /** @var list<array{request: RequestInterface, response: Response}> $container */
+        $container = [];
+        $history = Middleware::history($container);
+
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], '{"token": "refreshed-psr18-jwt", "refresh_token": null}'),
+        ]);
+
+        $stack = HandlerStack::create($mock);
+        $stack->push($history);
+
+        $guzzleClient = new Client(['handler' => $stack]);
+        $admin = new AdminClient('https://api.test', 'initial-psr18-jwt', $guzzleClient);
+
+        $auth = $admin->refreshToken();
+
+        $this->assertInstanceOf(AuthTokenDto::class, $auth);
+        $this->assertSame('refreshed-psr18-jwt', $auth->token);
+        $this->assertNull($auth->refreshToken);
+
+        assert(is_array($container));
+        $this->assertCount(1, $container);
+        $request = $container[0]['request'];
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertSame('/api/v1/admin/token/refresh', $request->getUri()->getPath());
+        $this->assertTrue($request->hasHeader('Authorization'));
+        $this->assertSame('Bearer initial-psr18-jwt', $request->getHeaderLine('Authorization'));
+    }
+
+    public function testRefreshTokenUnauthorizedWithPsr18(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:unauthorized',
+            'title' => 'Unauthorized',
+            'status' => 401,
+            'detail' => 'Expired JWT Token',
+        ], JSON_THROW_ON_ERROR);
+
+        $mock = new MockHandler([
+            new Response(401, ['Content-Type' => 'application/problem+json'], $problemJson),
+        ]);
+
+        $stack = HandlerStack::create($mock);
+        $guzzleClient = new Client(['handler' => $stack]);
+        $admin = new AdminClient('https://api.test', 'expired-psr18-jwt', $guzzleClient);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Expired JWT Token');
+
+        $admin->refreshToken();
     }
 }
