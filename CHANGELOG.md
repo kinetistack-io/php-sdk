@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-16
+
+### Added
+- `AdminClient::listProjectJobs()` method for fetching paginated batch jobs for a project (`GET /api/v1/admin/projects/{projectId}/jobs`)
+- `AdminClient::retryJob()` method for resetting and re-dispatching failed batch jobs (`POST /api/v1/admin/jobs/{jobId}/retry`)
+- `AdminClientInterface` (`KinetiStack\Sdk\AdminClientInterface` extending `KinetiStack\Sdk\Client\AdminClientInterface`) defining the contract for all `AdminClient` methods to support dependency injection and test mocking
+
 ## [1.0.3] - 2026-09-15
 
 ### Added
