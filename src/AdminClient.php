@@ -8,6 +8,7 @@ use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
+use KinetiStack\Sdk\Dto\BatchJobDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
@@ -24,7 +25,7 @@ use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class AdminClient
+class AdminClient implements AdminClientInterface
 {
     private TransportInterface $transport;
 
@@ -568,6 +569,42 @@ class AdminClient
         $data = $response->toArray();
 
         return AnalyticsDto::fromArray($data);
+    }
+
+    /**
+     * List batch image jobs for a project.
+     *
+     * @param array<string, mixed> $options
+     * @return list<BatchJobDto>
+     * @throws KinetiException
+     */
+    public function listProjectJobs(string $projectId, int $page = 1, array $options = []): array
+    {
+        $path = sprintf('/api/v1/admin/projects/%s/jobs', urlencode($projectId));
+        $query = array_merge(['page' => $page], $options);
+        $response = $this->transport->request('GET', $path, ['query' => $query]);
+
+        /** @var array<string, mixed>|list<array<string, mixed>> $data */
+        $data = $response->toArray();
+        $items = $this->extractCollection($data);
+
+        return array_map(static fn (array $item): BatchJobDto => BatchJobDto::fromArray($item), $items);
+    }
+
+    /**
+     * Retry a failed batch image job.
+     *
+     * @throws KinetiException
+     */
+    public function retryJob(string $jobId): BatchJobDto
+    {
+        $path = sprintf('/api/v1/admin/jobs/%s/retry', urlencode($jobId));
+        $response = $this->transport->request('POST', $path);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return BatchJobDto::fromArray($data);
     }
 
     /**

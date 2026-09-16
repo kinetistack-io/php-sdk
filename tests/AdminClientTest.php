@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\AdminClient;
+use KinetiStack\Sdk\AdminClientInterface;
+use KinetiStack\Sdk\Client\AdminClientInterface as BaseAdminClientInterface;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
@@ -35,6 +37,13 @@ class AdminClientTest extends TestCase
         $this->assertSame('https://api.test', $client->getApiHost());
         $this->assertSame('initial-jwt', $client->getJwtToken());
         $this->assertInstanceOf(\KinetiStack\Sdk\Transport\TransportInterface::class, $client->getTransport());
+    }
+
+    public function testImplementsInterfaces(): void
+    {
+        $client = new AdminClient('https://api.test', 'initial-jwt');
+        $this->assertInstanceOf(AdminClientInterface::class, $client);
+        $this->assertInstanceOf(BaseAdminClientInterface::class, $client);
     }
 
     /**
@@ -851,5 +860,80 @@ class AdminClientTest extends TestCase
 
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertSame('https://api.test/api/v1/admin/registration-status', $mockResponse->getRequestUrl());
+    }
+
+    public function testListProjectJobs(): void
+    {
+        $payload = [
+            'hydra:member' => [
+                [
+                    'job_id' => '00000000-0000-0000-0000-000000000001',
+                    'status' => 'completed',
+                    'total_images' => 5,
+                    'processed_images' => 5,
+                    'results' => [
+                        [
+                            'external_id' => 'img1',
+                            'alt_text' => 'Sample alt text',
+                            'tags' => ['nature', 'forest'],
+                            'confidence_score' => 0.95,
+                        ],
+                    ],
+                    'created_at' => '2026-09-01T10:00:00+00:00',
+                    'completed_at' => '2026-09-01T10:01:00+00:00',
+                ],
+            ],
+        ];
+
+        $mockResponse = new MockResponse(json_encode($payload, JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'test-jwt', $httpClient);
+
+        $jobs = $admin->listProjectJobs('proj-123', 2);
+
+        $this->assertCount(1, $jobs);
+        $this->assertSame('00000000-0000-0000-0000-000000000001', $jobs[0]->jobId);
+        $this->assertSame(\KinetiStack\Sdk\Enum\JobStatus::Completed, $jobs[0]->status);
+        $this->assertSame(5, $jobs[0]->totalImages);
+        $this->assertSame(5, $jobs[0]->processedImages);
+        $this->assertNotNull($jobs[0]->results);
+        $this->assertCount(1, $jobs[0]->results);
+        $this->assertSame('Sample alt text', $jobs[0]->results[0]->altText);
+
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertSame('https://api.test/api/v1/admin/projects/proj-123/jobs?page=2', $mockResponse->getRequestUrl());
+    }
+
+    public function testRetryJob(): void
+    {
+        $payload = [
+            'job_id' => '00000000-0000-0000-0000-000000000002',
+            'status' => 'pending',
+            'total_images' => 3,
+            'processed_images' => 0,
+            'results' => null,
+            'created_at' => '2026-09-02T10:00:00+00:00',
+        ];
+
+        $mockResponse = new MockResponse(json_encode($payload, JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'test-jwt', $httpClient);
+
+        $job = $admin->retryJob('00000000-0000-0000-0000-000000000002');
+
+        $this->assertSame('00000000-0000-0000-0000-000000000002', $job->jobId);
+        $this->assertSame(\KinetiStack\Sdk\Enum\JobStatus::Pending, $job->status);
+        $this->assertSame(3, $job->totalImages);
+        $this->assertSame(0, $job->processedImages);
+        $this->assertNull($job->results);
+
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('https://api.test/api/v1/admin/jobs/00000000-0000-0000-0000-000000000002/retry', $mockResponse->getRequestUrl());
     }
 }
