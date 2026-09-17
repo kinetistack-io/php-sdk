@@ -175,4 +175,9 @@ interface AdminClientInterface
      * @throws KinetiException
      */
     public function retryJob(string $jobId): BatchJobDto;
+
+    /**
+     * @throws KinetiException
+     */
+    public function getJob(string $jobId): BatchJobDto;
 }

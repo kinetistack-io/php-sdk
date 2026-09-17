@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-09-17
+
+### Added
+- `AdminClient::getJob()` method for retrieving individual batch image job details (`GET /api/v1/admin/jobs/{jobId}`)
+
 ## [1.0.4] - 2026-09-16
 
 ### Added

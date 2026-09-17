@@ -608,6 +608,22 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Get a single batch image job by ID.
+     *
+     * @throws KinetiException
+     */
+    public function getJob(string $jobId): BatchJobDto
+    {
+        $path = sprintf('/api/v1/admin/jobs/%s', urlencode($jobId));
+        $response = $this->transport->request('GET', $path);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return BatchJobDto::fromArray($data);
+    }
+
+    /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
      * @param array<string, mixed> $options
      */
