@@ -785,6 +785,37 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Request a password reset or invitation email.
+     *
+     * @throws ValidationException When email is invalid or unprocessable (HTTP 422).
+     * @throws KinetiException
+     */
+    public function requestPasswordReset(string $email): void
+    {
+        $this->transport->request('POST', '/api/v1/admin/password-reset-requests', [
+            'json' => [
+                'email' => $email,
+            ],
+        ]);
+    }
+
+    /**
+     * Reset a user's password using a reset or invitation token.
+     *
+     * @throws ValidationException When token is invalid/expired or password does not satisfy validation rules (HTTP 422).
+     * @throws KinetiException
+     */
+    public function resetPassword(string $token, #[\SensitiveParameter] string $newPassword): void
+    {
+        $this->transport->request('POST', '/api/v1/admin/password-resets', [
+            'json' => [
+                'token' => $token,
+                'password' => $newPassword,
+            ],
+        ]);
+    }
+
+    /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
      * @param array<string, mixed> $options
      */

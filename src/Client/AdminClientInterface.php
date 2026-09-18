@@ -252,4 +252,20 @@ interface AdminClientInterface
      * @throws KinetiException
      */
     public function removeProjectMember(string $projectId, string $userId): void;
+
+    /**
+     * Request a password reset or invitation email.
+     *
+     * @throws ValidationException When email is invalid or unprocessable (HTTP 422).
+     * @throws KinetiException
+     */
+    public function requestPasswordReset(string $email): void;
+
+    /**
+     * Reset a user's password using a reset or invitation token.
+     *
+     * @throws ValidationException When token is invalid/expired or password does not satisfy validation rules (HTTP 422).
+     * @throws KinetiException
+     */
+    public function resetPassword(string $token, #[\SensitiveParameter] string $newPassword): void;
 }

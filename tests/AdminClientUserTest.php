@@ -137,8 +137,44 @@ class AdminClientUserTest extends TestCase
 
         /** @var string $body */
         $body = $mockResponse->getRequestOptions()['body'];
-        $payload = json_decode($body, true);
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($payload);
         $this->assertSame('new@example.com', $payload['email']);
+    }
+
+    public function testCreateUserWithoutPasswordTriggersInviteFlow(): void
+    {
+        $createdData = [
+            'id' => 'invited-user-id',
+            'email' => 'invited@example.com',
+            'role' => 'member',
+            'must_change_password' => true,
+            'created_at' => '2026-09-18T09:20:00+00:00',
+        ];
+
+        $mockResponse = new MockResponse(json_encode($createdData, JSON_THROW_ON_ERROR), [
+            'http_code' => 201,
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', 'mock-jwt-token', $httpClient);
+
+        $user = $client->createUser([
+            'email' => 'invited@example.com',
+            'role' => 'member',
+        ]);
+
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('https://api.test/api/v1/admin/users', $mockResponse->getRequestUrl());
+        $this->assertSame('invited-user-id', $user->id);
+        $this->assertSame('invited@example.com', $user->email);
+        $this->assertTrue($user->mustChangePassword);
+
+        /** @var string $body */
+        $body = $mockResponse->getRequestOptions()['body'];
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($payload);
+        $this->assertSame('invited@example.com', $payload['email']);
+        $this->assertArrayNotHasKey('password', $payload);
     }
 
     public function testCreateUserConflictThrowsConflictException(): void
