@@ -268,4 +268,32 @@ interface AdminClientInterface
      * @throws KinetiException
      */
     public function resetPassword(string $token, #[\SensitiveParameter] string $newPassword): void;
+
+    /**
+     * Get the currently authenticated user's profile.
+     *
+     * @throws KinetiException
+     */
+    public function getMe(): UserDto;
+
+    /**
+     * Update the currently authenticated user's profile.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ConflictException When email already exists (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws KinetiException
+     */
+    public function updateMe(array $payload): UserDto;
+
+    /**
+     * Update the currently authenticated user's password.
+     *
+     * @throws ValidationException When current password is incorrect or new password does not satisfy validation rules (HTTP 422).
+     * @throws KinetiException
+     */
+    public function updateMyPassword(
+        #[\SensitiveParameter] string $currentPassword,
+        #[\SensitiveParameter] string $newPassword
+    ): void;
 }

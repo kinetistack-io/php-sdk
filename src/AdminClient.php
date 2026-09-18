@@ -816,6 +816,73 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Get the currently authenticated user's profile.
+     *
+     * @throws KinetiException
+     */
+    public function getMe(): UserDto
+    {
+        $response = $this->transport->request('GET', '/api/v1/admin/me');
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return UserDto::fromArray($data);
+    }
+
+    /**
+     * Update the currently authenticated user's profile.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ConflictException When email already exists (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws KinetiException
+     */
+    public function updateMe(array $payload): UserDto
+    {
+        $response = $this->transport->request(
+            'PATCH',
+            '/api/v1/admin/me',
+            [
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
+                'json' => $payload,
+            ]
+        );
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return UserDto::fromArray($data);
+    }
+
+    /**
+     * Update the currently authenticated user's password.
+     *
+     * @throws ValidationException When current password is incorrect or new password does not satisfy validation rules (HTTP 422).
+     * @throws KinetiException
+     */
+    public function updateMyPassword(
+        #[\SensitiveParameter] string $currentPassword,
+        #[\SensitiveParameter] string $newPassword
+    ): void {
+        $this->transport->request(
+            'PATCH',
+            '/api/v1/admin/me/password',
+            [
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
+                'json' => [
+                    'currentPassword' => $currentPassword,
+                    'newPassword' => $newPassword,
+                ],
+            ]
+        );
+    }
+
+    /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
      * @param array<string, mixed> $options
      */
