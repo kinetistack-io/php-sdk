@@ -15,7 +15,11 @@ use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Dto\UserDto;
+use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
+use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\TransportInterface;
 
 interface AdminClientInterface
@@ -180,4 +184,72 @@ interface AdminClientInterface
      * @throws KinetiException
      */
     public function getJob(string $jobId): BatchJobDto;
+
+    /**
+     * List users in the organization.
+     *
+     * @param array<string, mixed> $options
+     * @return list<UserDto>
+     * @throws KinetiException
+     */
+    public function listUsers(array $options = []): array;
+
+    /**
+     * Get a user by ID.
+     *
+     * @throws KinetiException
+     */
+    public function getUser(string $id): UserDto;
+
+    /**
+     * Create a new user.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ConflictException When email already exists (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws KinetiException
+     */
+    public function createUser(array $payload): UserDto;
+
+    /**
+     * Update an existing user.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ValidationException When payload fails validation or violates constraints (HTTP 422).
+     * @throws KinetiException
+     */
+    public function updateUser(string $id, array $payload): UserDto;
+
+    /**
+     * Delete a user by ID.
+     *
+     * @throws KinetiException
+     */
+    public function deleteUser(string $id): void;
+
+    /**
+     * List members assigned to a project.
+     *
+     * @param array<string, mixed> $options
+     * @return list<UserProjectAssignmentDto>
+     * @throws KinetiException
+     */
+    public function listProjectMembers(string $projectId, array $options = []): array;
+
+    /**
+     * Assign a user to a project.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ConflictException When assignment already exists (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws KinetiException
+     */
+    public function assignProjectMember(string $projectId, array $payload): UserProjectAssignmentDto;
+
+    /**
+     * Remove a user from a project.
+     *
+     * @throws KinetiException
+     */
+    public function removeProjectMember(string $projectId, string $userId): void;
 }

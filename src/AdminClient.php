@@ -15,6 +15,8 @@ use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Dto\UserDto;
+use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
@@ -621,6 +623,165 @@ class AdminClient implements AdminClientInterface
         $data = $response->toArray();
 
         return BatchJobDto::fromArray($data);
+    }
+
+    /**
+     * List users in the organization.
+     *
+     * @param array<string, mixed> $options
+     * @return list<UserDto>
+     * @throws KinetiException
+     */
+    public function listUsers(array $options = []): array
+    {
+        $requestOptions = [];
+        if (!empty($options)) {
+            $requestOptions['query'] = $options;
+        }
+
+        $response = $this->transport->request('GET', '/api/v1/admin/users', $requestOptions);
+
+        /** @var array<string, mixed>|list<array<string, mixed>> $data */
+        $data = $response->toArray();
+        $items = $this->extractCollection($data);
+
+        return array_map(static fn (array $item): UserDto => UserDto::fromArray($item), $items);
+    }
+
+    /**
+     * Get a user by ID.
+     *
+     * @throws KinetiException
+     */
+    public function getUser(string $id): UserDto
+    {
+        $response = $this->transport->request('GET', sprintf('/api/v1/admin/users/%s', urlencode($id)));
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return UserDto::fromArray($data);
+    }
+
+    /**
+     * Create a new user.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ConflictException When email already exists (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws KinetiException
+     */
+    public function createUser(array $payload): UserDto
+    {
+        $response = $this->transport->request('POST', '/api/v1/admin/users', [
+            'json' => $payload,
+        ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return UserDto::fromArray($data);
+    }
+
+    /**
+     * Update an existing user.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ValidationException When payload fails validation or violates constraints (HTTP 422).
+     * @throws KinetiException
+     */
+    public function updateUser(string $id, array $payload): UserDto
+    {
+        $response = $this->transport->request(
+            'PATCH',
+            sprintf('/api/v1/admin/users/%s', urlencode($id)),
+            [
+                'headers' => [
+                    'Content-Type' => 'application/merge-patch+json',
+                ],
+                'json' => $payload,
+            ]
+        );
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return UserDto::fromArray($data);
+    }
+
+    /**
+     * Delete a user by ID.
+     *
+     * @throws KinetiException
+     */
+    public function deleteUser(string $id): void
+    {
+        $this->transport->request('DELETE', sprintf('/api/v1/admin/users/%s', urlencode($id)));
+    }
+
+    /**
+     * List members assigned to a project.
+     *
+     * @param array<string, mixed> $options
+     * @return list<UserProjectAssignmentDto>
+     * @throws KinetiException
+     */
+    public function listProjectMembers(string $projectId, array $options = []): array
+    {
+        $path = sprintf('/api/v1/admin/projects/%s/members', urlencode($projectId));
+        $requestOptions = [];
+        if (!empty($options)) {
+            $requestOptions['query'] = $options;
+        }
+
+        $response = $this->transport->request('GET', $path, $requestOptions);
+
+        /** @var array<string, mixed>|list<array<string, mixed>> $data */
+        $data = $response->toArray();
+        $items = $this->extractCollection($data);
+
+        return array_map(
+            static fn (array $item): UserProjectAssignmentDto => UserProjectAssignmentDto::fromArray($item, $projectId),
+            $items
+        );
+    }
+
+    /**
+     * Assign a user to a project.
+     *
+     * @param array<string, mixed> $payload
+     * @throws ConflictException When assignment already exists (HTTP 409).
+     * @throws ValidationException When payload fails validation (HTTP 422).
+     * @throws KinetiException
+     */
+    public function assignProjectMember(string $projectId, array $payload): UserProjectAssignmentDto
+    {
+        $path = sprintf('/api/v1/admin/projects/%s/members', urlencode($projectId));
+
+        if (isset($payload['userId']) && !isset($payload['user_id'])) {
+            $payload['user_id'] = $payload['userId'];
+            unset($payload['userId']);
+        }
+
+        $response = $this->transport->request('POST', $path, [
+            'json' => $payload,
+        ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return UserProjectAssignmentDto::fromArray($data, $projectId);
+    }
+
+    /**
+     * Remove a user from a project.
+     *
+     * @throws KinetiException
+     */
+    public function removeProjectMember(string $projectId, string $userId): void
+    {
+        $path = sprintf('/api/v1/admin/projects/%s/members/%s', urlencode($projectId), urlencode($userId));
+        $this->transport->request('DELETE', $path);
     }
 
     /**
