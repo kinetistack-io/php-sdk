@@ -44,7 +44,7 @@ class KinetiClientPsr18Test extends TestCase
             new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-vis-2", "status": "pending", "poll_url": "/api/v1/jobs/job-vis-2"}'),
             // 5. submitBatchJob
             new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-123", "status": "pending"}'),
-            // 6. getBatchJobStatus
+            // 6. getJob
             new Response(200, ['Content-Type' => 'application/json'], '{"job_id": "job-123", "status": "completed", "total_images": 1, "processed_images": 1}'),
             // 7. upsertDocument
             new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-doc-1", "document_id": "doc-uuid-1", "external_id": "doc-1", "chunks_generated": 0, "status": "pending", "poll_url": "/api/v1/jobs/job-doc-1"}'),
@@ -96,8 +96,8 @@ class KinetiClientPsr18Test extends TestCase
         $this->assertInstanceOf(JobDto::class, $batchJob);
         $this->assertSame('job-123', $batchJob->jobId);
 
-        // 6. getBatchJobStatus
-        $jobStatus = $kineti->getBatchJobStatus('job-123');
+        // 6. getJob
+        $jobStatus = $kineti->getJob('job-123');
         $this->assertInstanceOf(JobDto::class, $jobStatus);
         $this->assertTrue($jobStatus->isCompleted());
 

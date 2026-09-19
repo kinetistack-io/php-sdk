@@ -237,18 +237,13 @@ class KinetiClientTest extends TestCase
         ], JSON_THROW_ON_ERROR);
 
         $mockResponse1 = new MockResponse($responseBody);
-        $mockResponse2 = new MockResponse($responseBody);
-        $client = new MockHttpClient([$mockResponse1, $mockResponse2]);
+        $client = new MockHttpClient([$mockResponse1]);
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
         $result = $kineti->getJob('abc');
         $this->assertInstanceOf(JobDto::class, $result);
         $this->assertTrue($result->isCompleted());
         $this->assertSame('abc', $result->jobId);
-
-        // Also test backwards-compatible alias getBatchJobStatus
-        $aliasResult = $kineti->getBatchJobStatus('abc');
-        $this->assertSame('abc', $aliasResult->jobId);
     }
 
     public function testWaitForJobSuccessWithCallback(): void
@@ -375,7 +370,7 @@ class KinetiClientTest extends TestCase
         fclose($stream);
     }
 
-    public function testWaitForBatchJobExponentialBackoffProgressionAndJitter(): void
+    public function testWaitForJobExponentialBackoffWithJitter(): void
     {
         $responses = [
             new MockResponse(json_encode(['job_id' => 'exp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
@@ -391,7 +386,7 @@ class KinetiClientTest extends TestCase
 
         /** @var list<int> $sleepCalls */
         $sleepCalls = [];
-        $result = $kineti->waitForBatchJob(
+        $result = $kineti->waitForJob(
             jobId: 'exp-1',
             timeoutSeconds: 60,
             pollIntervalSeconds: 1,
@@ -429,7 +424,7 @@ class KinetiClientTest extends TestCase
         $this->assertSame(6, $client->getRequestsCount());
     }
 
-    public function testWaitForBatchJobDefaultMaxPollIntervalCapsAtTenSeconds(): void
+    public function testWaitForJobDefaultMaxPollIntervalCapsAtTenSeconds(): void
     {
         $responses = [
             new MockResponse(json_encode(['job_id' => 'exp-2', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
@@ -443,7 +438,7 @@ class KinetiClientTest extends TestCase
 
         /** @var list<int> $sleepCalls */
         $sleepCalls = [];
-        $kineti->waitForBatchJob(
+        $kineti->waitForJob(
             jobId: 'exp-2',
             timeoutSeconds: 60,
             pollIntervalSeconds: 4, // 4s -> 8s -> 10s (capped at default 10s)

@@ -265,14 +265,6 @@ class KinetiClient
     }
 
     /**
-     * @deprecated Use getJob() instead.
-     */
-    public function getBatchJobStatus(string $jobId): JobDto
-    {
-        return $this->getJob($jobId);
-    }
-
-    /**
      * Poll an asynchronous job until it completes or times out.
      *
      * @param string $jobId
@@ -329,25 +321,6 @@ class KinetiClient
             sprintf('Job %s did not complete within %d seconds.', $jobId, $timeoutSeconds),
             $lastDto ?? $this->getJob($jobId)
         );
-    }
-
-    /**
-     * @deprecated Use waitForJob() instead.
-     *
-     * @param (callable(JobDto): void)|null $onProgress
-     * @param (callable(int): void)|null $sleeper
-     * @throws JobTimeoutException
-     * @throws KinetiException
-     */
-    public function waitForBatchJob(
-        string $jobId,
-        int $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
-        int $pollIntervalSeconds = self::DEFAULT_POLL_INTERVAL_SECONDS,
-        ?callable $onProgress = null,
-        int $maxPollIntervalSeconds = self::DEFAULT_MAX_POLL_INTERVAL_SECONDS,
-        ?callable $sleeper = null
-    ): JobDto {
-        return $this->waitForJob($jobId, $timeoutSeconds, $pollIntervalSeconds, $onProgress, $maxPollIntervalSeconds, $sleeper);
     }
 
     /**

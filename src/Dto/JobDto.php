@@ -121,7 +121,7 @@ class JobDto
         if ($this->results !== null) {
             $data['results'] = array_map(
                 static function (mixed $item): mixed {
-                    if (is_object($item) && method_exists($item, 'toArray')) {
+                    if ($item instanceof BatchJobItemResultDto) {
                         return $item->toArray();
                     }
                     return $item;

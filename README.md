@@ -80,9 +80,9 @@ $response = $client->analyzeImageContent($binaryData, 'image.jpg');
 ### Batch Processing
 
 ```php
-use KinetiStack\Sdk\Dto\BatchJobDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
-use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
+use KinetiStack\Sdk\Dto\JobDto;
+use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\KinetiClient;
 
 // Submit a batch of images (URL or Base64 / Data URI)
@@ -95,11 +95,11 @@ echo $batch->jobId; // E.g., '123e4567-e89b-12d3-a456-426614174000'
 
 // Poll for completion with exponential backoff & jitter
 try {
-    $completedBatch = $client->waitForBatchJob(
+    $completedBatch = $client->waitForJob(
         jobId: $batch->jobId,
         timeoutSeconds: KinetiClient::DEFAULT_TIMEOUT_SECONDS,                  // Default: 60s
         pollIntervalSeconds: KinetiClient::DEFAULT_POLL_INTERVAL_SECONDS,         // Default: 2s (initial interval)
-        onProgress: function (BatchJobDto $job): void {
+        onProgress: function (JobDto $job): void {
             echo "Current status: {$job->status->value}\n";
         },
         maxPollIntervalSeconds: KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS // Default: 10s (capped interval)
@@ -108,18 +108,18 @@ try {
     foreach ($completedBatch->results as $result) {
         echo $result->externalId . ': ' . $result->altText . "\n";
     }
-} catch (BatchJobTimeoutException $e) {
+} catch (JobTimeoutException $e) {
     echo "Job timed out. Last known status: " . $e->latestJob->status->value;
 }
 ```
 
 #### Exponential Backoff & Polling Constants
 
-`waitForBatchJob()` implements an adaptive polling strategy with jitter:
+`waitForJob()` implements an adaptive polling strategy with jitter:
 - **Exponential progression**: Polling begins at `$pollIntervalSeconds` (default: `2s`) and doubles on each subsequent check (e.g., `2s -> 4s -> 8s -> 10s`).
 - **Interval cap**: The sleep interval between checks never exceeds `$maxPollIntervalSeconds` (default: `10s`).
 - **Randomized jitter**: A randomized jitter between 0 and 500ms is added to every sleep duration to prevent synchronized polling spikes across distributed workers.
-- **Progress monitoring**: The optional `$onProgress` callback receives the updated `BatchJobDto` on each poll check.
+- **Progress monitoring**: The optional `$onProgress` callback receives the updated `JobDto` on each poll check.
 
 Default constants exposed on `KinetiClient`:
 - `KinetiClient::DEFAULT_POLL_INTERVAL_SECONDS` = `2`
