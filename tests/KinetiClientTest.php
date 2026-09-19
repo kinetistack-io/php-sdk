@@ -7,9 +7,10 @@ namespace KinetiStack\Sdk\Tests;
 use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Enum\JobStatus;
-use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
+use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\KinetiClient;
 use PHPUnit\Framework\TestCase;
@@ -58,14 +59,12 @@ class KinetiClientTest extends TestCase
     public function testAnalyzeImage(): void
     {
         $responseBody = json_encode([
-            'data' => [
-                'alt_text' => 'A test image',
-                'tags' => ['test', 'image'],
-                'confidence_score' => 0.95,
-            ],
+            'job_id' => '00000000-0000-0000-0000-000000000001',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/00000000-0000-0000-0000-000000000001',
         ], JSON_THROW_ON_ERROR);
 
-        $mockResponse = new MockResponse($responseBody);
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 202]);
         $client = new MockHttpClient($mockResponse);
 
         $kineti = new KinetiClient('https://api.test', 'key', $client);
@@ -75,9 +74,10 @@ class KinetiClientTest extends TestCase
 
         $result = $kineti->analyzeImage('http://example.com/img.jpg', $hints, $options);
 
-        $this->assertSame('A test image', $result->altText);
-        $this->assertSame(['test', 'image'], $result->tags);
-        $this->assertSame(0.95, $result->confidenceScore);
+        $this->assertInstanceOf(JobDto::class, $result);
+        $this->assertSame('00000000-0000-0000-0000-000000000001', $result->jobId);
+        $this->assertSame(JobStatus::Pending, $result->status);
+        $this->assertSame('/api/v1/jobs/00000000-0000-0000-0000-000000000001', $result->pollUrl);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
         $this->assertSame('http://example.com/img.jpg', $requestBody['image_url']);
@@ -103,6 +103,7 @@ class KinetiClientTest extends TestCase
             new ImageInputDto('media:1', 'http://example.com/1.jpg'),
         ]);
 
+        $this->assertInstanceOf(JobDto::class, $result);
         $this->assertSame('123-abc', $result->jobId);
         $this->assertSame(JobStatus::Pending, $result->status);
         $this->assertFalse($result->isCompleted());
@@ -177,8 +178,8 @@ class KinetiClientTest extends TestCase
 
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
-        $this->expectException(BatchJobTimeoutException::class);
-        $kineti->waitForBatchJob('123', 0, 0);
+        $this->expectException(JobTimeoutException::class);
+        $kineti->waitForJob('123', 0, 0);
     }
 
     public function testAnalyzeImageBinaryThrowsIfFileNotFound(): void
@@ -192,9 +193,9 @@ class KinetiClientTest extends TestCase
     public function testAnalyzeImageContent(): void
     {
         $responseBody = json_encode([
-            'data' => [
-                'alt_text' => 'Binary test image',
-            ],
+            'job_id' => 'content-job-123',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/content-job-123',
         ], JSON_THROW_ON_ERROR);
 
         $capturedBody = '';
@@ -206,7 +207,7 @@ class KinetiClientTest extends TestCase
             while ('' !== ($chunk = $bodyClosure(8192))) {
                 $capturedBody .= $chunk;
             }
-            return new MockResponse($responseBody);
+            return new MockResponse($responseBody, ['http_code' => 202]);
         });
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
@@ -215,7 +216,11 @@ class KinetiClientTest extends TestCase
 
         $result = $kineti->analyzeImageContent('binary-data', 'test.png', $hints, $options);
 
-        $this->assertSame('Binary test image', $result->altText);
+        $this->assertInstanceOf(JobDto::class, $result);
+        $this->assertSame('content-job-123', $result->jobId);
+        $this->assertSame(JobStatus::Pending, $result->status);
+        $this->assertSame('/api/v1/jobs/content-job-123', $result->pollUrl);
+
         $headersStr = is_array($capturedHeaders) ? implode("\n", $capturedHeaders) : '';
         $this->assertStringContainsString('multipart/form-data', $headersStr);
         $this->assertStringContainsString('filename="test.png"', $capturedBody);
@@ -224,23 +229,29 @@ class KinetiClientTest extends TestCase
         $this->assertStringContainsString('"language":"en"', $capturedBody);
     }
 
-    public function testGetBatchJobStatus(): void
+    public function testGetJob(): void
     {
         $responseBody = json_encode([
             'job_id' => 'abc',
             'status' => 'completed',
         ], JSON_THROW_ON_ERROR);
 
-        $mockResponse = new MockResponse($responseBody);
-        $client = new MockHttpClient($mockResponse);
+        $mockResponse1 = new MockResponse($responseBody);
+        $mockResponse2 = new MockResponse($responseBody);
+        $client = new MockHttpClient([$mockResponse1, $mockResponse2]);
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
-        $result = $kineti->getBatchJobStatus('abc');
+        $result = $kineti->getJob('abc');
+        $this->assertInstanceOf(JobDto::class, $result);
         $this->assertTrue($result->isCompleted());
         $this->assertSame('abc', $result->jobId);
+
+        // Also test backwards-compatible alias getBatchJobStatus
+        $aliasResult = $kineti->getBatchJobStatus('abc');
+        $this->assertSame('abc', $aliasResult->jobId);
     }
 
-    public function testWaitForBatchJobSuccessWithCallback(): void
+    public function testWaitForJobSuccessWithCallback(): void
     {
         $response1 = new MockResponse(json_encode(['job_id' => '123', 'status' => 'processing'], JSON_THROW_ON_ERROR));
         $response2 = new MockResponse(json_encode(['job_id' => '123', 'status' => 'completed'], JSON_THROW_ON_ERROR));
@@ -249,10 +260,11 @@ class KinetiClientTest extends TestCase
         $kineti = new KinetiClient('https://api.test', 'key', $client);
 
         $callbackCalls = 0;
-        $result = $kineti->waitForBatchJob('123', 60, 0, function ($dto) use (&$callbackCalls) {
+        $result = $kineti->waitForJob('123', 60, 0, function ($dto) use (&$callbackCalls) {
             $callbackCalls++;
         });
 
+        $this->assertInstanceOf(JobDto::class, $result);
         $this->assertTrue($result->isCompleted());
         $this->assertSame(2, $callbackCalls);
     }
@@ -260,9 +272,9 @@ class KinetiClientTest extends TestCase
     public function testAnalyzeImageStream(): void
     {
         $responseBody = json_encode([
-            'data' => [
-                'alt_text' => 'Stream test image',
-            ],
+            'job_id' => 'stream-job-123',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/stream-job-123',
         ], JSON_THROW_ON_ERROR);
 
         $capturedBody = '';
@@ -274,7 +286,7 @@ class KinetiClientTest extends TestCase
             while ('' !== ($chunk = $bodyClosure(8192))) {
                 $capturedBody .= $chunk;
             }
-            return new MockResponse($responseBody);
+            return new MockResponse($responseBody, ['http_code' => 202]);
         });
 
         $kineti = new KinetiClient('https://api.test', 'key', $client);
@@ -291,7 +303,10 @@ class KinetiClientTest extends TestCase
 
         $result = $kineti->analyzeImageStream($stream, 'stream.png', $hints, $options);
 
-        $this->assertSame('Stream test image', $result->altText);
+        $this->assertInstanceOf(JobDto::class, $result);
+        $this->assertSame('stream-job-123', $result->jobId);
+        $this->assertSame(JobStatus::Pending, $result->status);
+        $this->assertSame('/api/v1/jobs/stream-job-123', $result->pollUrl);
 
         $headersStr = is_array($capturedHeaders) ? implode("\n", $capturedHeaders) : '';
         $this->assertStringContainsString('multipart/form-data', $headersStr);
@@ -327,9 +342,9 @@ class KinetiClientTest extends TestCase
     public function testAnalyzeImageStreamRewindsSeekableStream(): void
     {
         $responseBody = json_encode([
-            'data' => [
-                'alt_text' => 'Rewound stream image',
-            ],
+            'job_id' => 'rewound-job-123',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/rewound-job-123',
         ], JSON_THROW_ON_ERROR);
 
         $capturedBody = '';
@@ -338,7 +353,7 @@ class KinetiClientTest extends TestCase
             while ('' !== ($chunk = $bodyClosure(8192))) {
                 $capturedBody .= $chunk;
             }
-            return new MockResponse($responseBody);
+            return new MockResponse($responseBody, ['http_code' => 202]);
         });
 
         $kineti = new KinetiClient('https://api.test', 'key', $client);
@@ -353,7 +368,8 @@ class KinetiClientTest extends TestCase
 
         $result = $kineti->analyzeImageStream($stream, 'rewind.png');
 
-        $this->assertSame('Rewound stream image', $result->altText);
+        $this->assertInstanceOf(JobDto::class, $result);
+        $this->assertSame('rewound-job-123', $result->jobId);
         $this->assertStringContainsString('seekable-content', $capturedBody);
 
         fclose($stream);
@@ -454,7 +470,7 @@ class KinetiClientTest extends TestCase
         $this->assertSame(10, KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS);
         $this->assertSame(60, KinetiClient::DEFAULT_TIMEOUT_SECONDS);
 
-        $reflection = new \ReflectionMethod(KinetiClient::class, 'waitForBatchJob');
+        $reflection = new \ReflectionMethod(KinetiClient::class, 'waitForJob');
         $params = [];
         foreach ($reflection->getParameters() as $param) {
             if ($param->isDefaultValueAvailable()) {
