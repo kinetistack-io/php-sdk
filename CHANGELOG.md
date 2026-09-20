@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-09-20
+
 ### Changed
 - Refactored asynchronous job polling to use generic `JobDto` and `JobTimeoutException` across all AI endpoints and background processing tasks (PHPSDK-33).
 - Consolidated polling logic into `KinetiClient::waitForJob()` and `KinetiClient::getJob()`.
