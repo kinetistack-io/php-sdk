@@ -8,7 +8,7 @@ use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
-use KinetiStack\Sdk\Dto\BatchJobDto;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
@@ -170,7 +170,7 @@ interface AdminClientInterface
 
     /**
      * @param array<string, mixed> $options
-     * @return list<BatchJobDto>
+     * @return list<JobDto>
      * @throws KinetiException
      */
     public function listProjectJobs(string $projectId, int $page = 1, array $options = []): array;
@@ -178,12 +178,12 @@ interface AdminClientInterface
     /**
      * @throws KinetiException
      */
-    public function retryJob(string $jobId): BatchJobDto;
+    public function retryJob(string $jobId): JobDto;
 
     /**
      * @throws KinetiException
      */
-    public function getJob(string $jobId): BatchJobDto;
+    public function getJob(string $jobId): JobDto;
 
     /**
      * List users in the organization.

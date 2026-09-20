@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Dto;
 
-use KinetiStack\Sdk\Dto\BatchJobDto;
 use KinetiStack\Sdk\Dto\BatchJobItemResultDto;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Enum\WebhookStatus;
 use PHPUnit\Framework\TestCase;
 
-class BatchJobDtoTest extends TestCase
+class JobDtoTest extends TestCase
 {
     public function testConstructor(): void
     {
@@ -23,9 +23,10 @@ class BatchJobDtoTest extends TestCase
             error: null
         );
 
-        $dto = new BatchJobDto(
+        $dto = new JobDto(
             jobId: 'job-123',
             status: JobStatus::Processing,
+            type: 'vision_batch',
             totalImages: 10,
             processedImages: 5,
             webhookStatus: WebhookStatus::Pending,
@@ -37,6 +38,7 @@ class BatchJobDtoTest extends TestCase
 
         $this->assertSame('job-123', $dto->jobId);
         $this->assertSame(JobStatus::Processing, $dto->status);
+        $this->assertSame('vision_batch', $dto->type);
         $this->assertSame(10, $dto->totalImages);
         $this->assertSame(5, $dto->processedImages);
         $this->assertSame(WebhookStatus::Pending, $dto->webhookStatus);
@@ -52,6 +54,7 @@ class BatchJobDtoTest extends TestCase
         $data = [
             'job_id' => 'job-456',
             'status' => 'completed',
+            'type' => 'vision_batch',
             'total_images' => 4,
             'processed_images' => 4,
             'webhook_status' => 'delivered',
@@ -69,10 +72,11 @@ class BatchJobDtoTest extends TestCase
             'poll_url' => 'https://api.test/api/v1/jobs/job-456',
         ];
 
-        $dto = BatchJobDto::fromArray($data);
+        $dto = JobDto::fromArray($data);
 
         $this->assertSame('job-456', $dto->jobId);
         $this->assertSame(JobStatus::Completed, $dto->status);
+        $this->assertSame('vision_batch', $dto->type);
         $this->assertSame(4, $dto->totalImages);
         $this->assertSame(4, $dto->processedImages);
         $this->assertSame(WebhookStatus::Delivered, $dto->webhookStatus);
@@ -102,7 +106,7 @@ class BatchJobDtoTest extends TestCase
             'pollUrl' => 'https://api.test/api/v1/jobs/job-789',
         ];
 
-        $dto = BatchJobDto::fromArray($data);
+        $dto = JobDto::fromArray($data);
 
         $this->assertSame('job-789', $dto->jobId);
         $this->assertSame(JobStatus::Processing, $dto->status);
@@ -122,7 +126,7 @@ class BatchJobDtoTest extends TestCase
             'webhook_status' => 'unknown_webhook_status',
         ];
 
-        $dto = BatchJobDto::fromArray($data);
+        $dto = JobDto::fromArray($data);
 
         $this->assertSame(JobStatus::Pending, $dto->status);
         $this->assertNull($dto->webhookStatus);
@@ -141,7 +145,7 @@ class BatchJobDtoTest extends TestCase
             error: null
         );
 
-        $dto = new BatchJobDto(
+        $dto = new JobDto(
             jobId: 'job-100',
             status: JobStatus::Processing,
             totalImages: 10,
@@ -170,7 +174,7 @@ class BatchJobDtoTest extends TestCase
 
     public function testToArrayOmitsNullOptionalFields(): void
     {
-        $dto = new BatchJobDto(
+        $dto = new JobDto(
             jobId: 'job-minimal',
             status: JobStatus::Pending
         );
@@ -185,25 +189,25 @@ class BatchJobDtoTest extends TestCase
 
     public function testStatusHelpers(): void
     {
-        $pendingDto = new BatchJobDto('1', JobStatus::Pending);
+        $pendingDto = new JobDto('1', JobStatus::Pending);
         $this->assertTrue($pendingDto->isPending());
         $this->assertFalse($pendingDto->isProcessing());
         $this->assertFalse($pendingDto->isCompleted());
         $this->assertFalse($pendingDto->isFailed());
 
-        $processingDto = new BatchJobDto('2', JobStatus::Processing);
+        $processingDto = new JobDto('2', JobStatus::Processing);
         $this->assertFalse($processingDto->isPending());
         $this->assertTrue($processingDto->isProcessing());
         $this->assertFalse($processingDto->isCompleted());
         $this->assertFalse($processingDto->isFailed());
 
-        $completedDto = new BatchJobDto('3', JobStatus::Completed);
+        $completedDto = new JobDto('3', JobStatus::Completed);
         $this->assertFalse($completedDto->isPending());
         $this->assertFalse($completedDto->isProcessing());
         $this->assertTrue($completedDto->isCompleted());
         $this->assertFalse($completedDto->isFailed());
 
-        $failedDto = new BatchJobDto('4', JobStatus::Failed);
+        $failedDto = new JobDto('4', JobStatus::Failed);
         $this->assertFalse($failedDto->isPending());
         $this->assertFalse($failedDto->isProcessing());
         $this->assertTrue($failedDto->isCompleted());
@@ -212,29 +216,127 @@ class BatchJobDtoTest extends TestCase
 
     public function testGetProgressPercentage(): void
     {
-        $dtoNoTotal = new BatchJobDto('1', JobStatus::Processing);
+        $dtoNoTotal = new JobDto('1', JobStatus::Processing);
         $this->assertSame(0.0, $dtoNoTotal->getProgressPercentage());
 
-        $dtoZeroTotal = new BatchJobDto('2', JobStatus::Processing, totalImages: 0);
+        $dtoZeroTotal = new JobDto('2', JobStatus::Processing, totalImages: 0);
         $this->assertSame(0.0, $dtoZeroTotal->getProgressPercentage());
 
-        $dtoNegativeTotal = new BatchJobDto('2b', JobStatus::Processing, totalImages: -5);
+        $dtoNegativeTotal = new JobDto('2b', JobStatus::Processing, totalImages: -5);
         $this->assertSame(0.0, $dtoNegativeTotal->getProgressPercentage());
 
-        $dtoHalf = new BatchJobDto('3', JobStatus::Processing, totalImages: 10, processedImages: 5);
+        $dtoHalf = new JobDto('3', JobStatus::Processing, totalImages: 10, processedImages: 5);
         $this->assertSame(50.0, $dtoHalf->getProgressPercentage());
 
-        $dtoThird = new BatchJobDto('4', JobStatus::Processing, totalImages: 3, processedImages: 1);
+        $dtoThird = new JobDto('4', JobStatus::Processing, totalImages: 3, processedImages: 1);
         $this->assertSame(33.33, $dtoThird->getProgressPercentage());
 
-        $dtoOver = new BatchJobDto('5', JobStatus::Processing, totalImages: 10, processedImages: 12);
+        $dtoOver = new JobDto('5', JobStatus::Processing, totalImages: 10, processedImages: 12);
         $this->assertSame(100.0, $dtoOver->getProgressPercentage());
 
-        $dtoNullProcessed = new BatchJobDto('6', JobStatus::Processing, totalImages: 10, processedImages: null);
+        $dtoNullProcessed = new JobDto('6', JobStatus::Processing, totalImages: 10, processedImages: null);
         $this->assertSame(0.0, $dtoNullProcessed->getProgressPercentage());
 
-        $dtoNegativeProcessed = new BatchJobDto('7', JobStatus::Processing, totalImages: 10, processedImages: -2);
+        $dtoNegativeProcessed = new JobDto('7', JobStatus::Processing, totalImages: 10, processedImages: -2);
         $this->assertSame(0.0, $dtoNegativeProcessed->getProgressPercentage());
+    }
+
+    public function testFromArrayWithVisionSingleJobPayload(): void
+    {
+        $data = [
+            'job_id' => '00000000-0000-0000-0000-000000000001',
+            'type' => 'vision_single',
+            'status' => 'completed',
+            'results' => [
+                'alt_text' => 'A cute sleeping kitten',
+                'caption' => 'A small orange kitten sleeping peacefully on a fluffy white blanket',
+                'confidence_score' => 0.96,
+                'model_used' => 'qwen2-vl:7b',
+                'tags' => ['kitten', 'cat', 'sleeping', 'orange'],
+            ],
+            'created_at' => '2026-09-19T10:00:00+00:00',
+            'completed_at' => '2026-09-19T10:00:03+00:00',
+            'poll_url' => '/api/v1/jobs/00000000-0000-0000-0000-000000000001',
+        ];
+
+        $dto = JobDto::fromArray($data);
+
+        $this->assertSame('00000000-0000-0000-0000-000000000001', $dto->jobId);
+        $this->assertSame('vision_single', $dto->type);
+        $this->assertSame(JobStatus::Completed, $dto->status);
+        $this->assertTrue($dto->isCompleted());
+        $this->assertIsArray($dto->results);
+        $this->assertSame('A cute sleeping kitten', $dto->results['alt_text']);
+        $this->assertSame('qwen2-vl:7b', $dto->results['model_used']);
+        $this->assertSame(['kitten', 'cat', 'sleeping', 'orange'], $dto->results['tags']);
+        $this->assertSame(0.96, $dto->results['confidence_score']);
+
+        $array = $dto->toArray();
+        $this->assertSame('vision_single', $array['type']);
+        $this->assertSame('A cute sleeping kitten', $array['results']['alt_text']);
+    }
+
+    public function testFromArrayWithDocumentIngestJobPayload(): void
+    {
+        $data = [
+            'job_id' => '00000000-0000-0000-0000-000000000002',
+            'type' => 'document_ingest',
+            'status' => 'completed',
+            'document_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'external_id' => 'node:42:en',
+            'chunks_generated' => 4,
+            'results' => [
+                'document_id' => '550e8400-e29b-41d4-a716-446655440000',
+                'external_id' => 'node:42:en',
+                'chunks_generated' => 4,
+                'status' => 'indexed',
+            ],
+            'created_at' => '2026-09-19T10:00:00+00:00',
+            'completed_at' => '2026-09-19T10:00:02+00:00',
+            'poll_url' => '/api/v1/jobs/00000000-0000-0000-0000-000000000002',
+        ];
+
+        $dto = JobDto::fromArray($data);
+
+        $this->assertSame('00000000-0000-0000-0000-000000000002', $dto->jobId);
+        $this->assertSame('document_ingest', $dto->type);
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $dto->documentId);
+        $this->assertSame('node:42:en', $dto->externalId);
+        $this->assertSame(4, $dto->chunksGenerated);
+        $this->assertTrue($dto->isCompleted());
+        $this->assertIsArray($dto->results);
+        $this->assertArrayHasKey('chunks_generated', $dto->results);
+        $this->assertSame(4, $dto->results['chunks_generated']);
+        $this->assertArrayHasKey('status', $dto->results);
+        $this->assertSame('indexed', $dto->results['status']);
+
+        $array = $dto->toArray();
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $array['document_id']);
+        $this->assertSame('node:42:en', $array['external_id']);
+        $this->assertSame(4, $array['chunks_generated']);
+        $this->assertSame('indexed', $array['results']['status']);
+    }
+
+    public function testFromArrayWithDocumentIngestPendingResponse(): void
+    {
+        $data = [
+            'job_id' => 'job-doc-pending',
+            'document_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'external_id' => 'node:42:en',
+            'chunks_generated' => 0,
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/job-doc-pending',
+        ];
+
+        $dto = JobDto::fromArray($data);
+
+        $this->assertSame('job-doc-pending', $dto->jobId);
+        $this->assertSame(JobStatus::Pending, $dto->status);
+        $this->assertTrue($dto->isPending());
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $dto->documentId);
+        $this->assertSame('node:42:en', $dto->externalId);
+        $this->assertSame(0, $dto->chunksGenerated);
+        $this->assertNull($dto->results);
     }
 
     public function testBatchJobItemResultDtoToArray(): void

@@ -8,7 +8,7 @@ use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
-use KinetiStack\Sdk\Dto\BatchJobDto;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
@@ -574,10 +574,10 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
-     * List batch image jobs for a project.
+     * List jobs for a project.
      *
      * @param array<string, mixed> $options
-     * @return list<BatchJobDto>
+     * @return list<JobDto>
      * @throws KinetiException
      */
     public function listProjectJobs(string $projectId, int $page = 1, array $options = []): array
@@ -590,15 +590,15 @@ class AdminClient implements AdminClientInterface
         $data = $response->toArray();
         $items = $this->extractCollection($data);
 
-        return array_map(static fn (array $item): BatchJobDto => BatchJobDto::fromArray($item), $items);
+        return array_map(static fn (array $item): JobDto => JobDto::fromArray($item), $items);
     }
 
     /**
-     * Retry a failed batch image job.
+     * Retry a failed job.
      *
      * @throws KinetiException
      */
-    public function retryJob(string $jobId): BatchJobDto
+    public function retryJob(string $jobId): JobDto
     {
         $path = sprintf('/api/v1/admin/jobs/%s/retry', urlencode($jobId));
         $response = $this->transport->request('POST', $path);
@@ -606,15 +606,15 @@ class AdminClient implements AdminClientInterface
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
 
-        return BatchJobDto::fromArray($data);
+        return JobDto::fromArray($data);
     }
 
     /**
-     * Get a single batch image job by ID.
+     * Get a single job by ID.
      *
      * @throws KinetiException
      */
-    public function getJob(string $jobId): BatchJobDto
+    public function getJob(string $jobId): JobDto
     {
         $path = sprintf('/api/v1/admin/jobs/%s', urlencode($jobId));
         $response = $this->transport->request('GET', $path);
@@ -622,7 +622,7 @@ class AdminClient implements AdminClientInterface
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
 
-        return BatchJobDto::fromArray($data);
+        return JobDto::fromArray($data);
     }
 
     /**

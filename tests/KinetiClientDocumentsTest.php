@@ -9,6 +9,8 @@ use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\DocumentSummaryDto;
+use KinetiStack\Sdk\Dto\JobDto;
+use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\NotFoundException;
@@ -23,11 +25,11 @@ class KinetiClientDocumentsTest extends TestCase
 {
     use FixtureTrait;
 
-    public function testUpsertDocumentCreated201(): void
+    public function testUpsertDocumentAccepted202(): void
     {
-        $fixture = $this->loadFixture('Documents/document_created_201.json');
+        $fixture = $this->loadFixture('Documents/document_upsert_202.json');
         $mockResponse = new MockResponse($fixture, [
-            'http_code' => 201,
+            'http_code' => 202,
             'response_headers' => ['Content-Type' => 'application/json'],
         ]);
         $client = new MockHttpClient($mockResponse);
@@ -44,11 +46,14 @@ class KinetiClientDocumentsTest extends TestCase
 
         $response = $kineti->upsertDocument($doc);
 
-        $this->assertInstanceOf(DocumentResponseDto::class, $response);
+        $this->assertInstanceOf(JobDto::class, $response);
+        $this->assertSame('00000000-0000-0000-0000-000000000001', $response->jobId);
         $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $response->documentId);
         $this->assertSame('node:42:en', $response->externalId);
-        $this->assertSame(4, $response->chunksGenerated);
-        $this->assertSame('indexed', $response->status);
+        $this->assertSame(0, $response->chunksGenerated);
+        $this->assertSame(JobStatus::Pending, $response->status);
+        $this->assertTrue($response->isPending());
+        $this->assertSame('/api/v1/jobs/00000000-0000-0000-0000-000000000001', $response->pollUrl);
 
         $this->assertSame('POST', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/documents', $mockResponse->getRequestUrl());
@@ -67,9 +72,16 @@ class KinetiClientDocumentsTest extends TestCase
 
     public function testUpsertDocumentUpdated200(): void
     {
-        $fixture = $this->loadFixture('Documents/document_updated_200.json');
+        $fixture = json_encode([
+            'job_id' => '00000000-0000-0000-0000-000000000002',
+            'document_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'external_id' => 'node:42:en',
+            'chunks_generated' => 0,
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/00000000-0000-0000-0000-000000000002',
+        ], JSON_THROW_ON_ERROR);
         $mockResponse = new MockResponse($fixture, [
-            'http_code' => 200,
+            'http_code' => 202,
             'response_headers' => ['Content-Type' => 'application/json'],
         ]);
         $client = new MockHttpClient($mockResponse);
@@ -78,9 +90,53 @@ class KinetiClientDocumentsTest extends TestCase
         $doc = new DocumentDto('node:42:en', 'Updated Article', 'New content body');
         $response = $kineti->upsertDocument($doc);
 
-        $this->assertInstanceOf(DocumentResponseDto::class, $response);
-        $this->assertSame(3, $response->chunksGenerated);
-        $this->assertSame('indexed', $response->status);
+        $this->assertInstanceOf(JobDto::class, $response);
+        $this->assertSame('00000000-0000-0000-0000-000000000002', $response->jobId);
+        $this->assertSame(JobStatus::Pending, $response->status);
+    }
+
+    public function testUpsertDocumentAndPollWithWaitForJob(): void
+    {
+        $upsertResponse = new MockResponse(json_encode([
+            'job_id' => 'ingest-job-1',
+            'document_id' => 'doc-1',
+            'external_id' => 'node:100',
+            'chunks_generated' => 0,
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/ingest-job-1',
+        ], JSON_THROW_ON_ERROR), ['http_code' => 202]);
+
+        $pollProcessing = new MockResponse(json_encode([
+            'job_id' => 'ingest-job-1',
+            'status' => 'processing',
+        ], JSON_THROW_ON_ERROR));
+
+        $pollCompleted = new MockResponse(json_encode([
+            'job_id' => 'ingest-job-1',
+            'status' => 'completed',
+            'type' => 'document_ingest',
+            'results' => [
+                'document_id' => 'doc-1',
+                'external_id' => 'node:100',
+                'chunks_generated' => 5,
+                'status' => 'indexed',
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $client = new MockHttpClient([$upsertResponse, $pollProcessing, $pollCompleted]);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client);
+
+        $job = $kineti->upsertDocument(new DocumentDto('node:100', 'Doc', 'Content'));
+        $this->assertSame('ingest-job-1', $job->jobId);
+        $this->assertTrue($job->isPending());
+
+        $completed = $kineti->waitForJob($job->jobId, 10, 0);
+        $this->assertTrue($completed->isCompleted());
+        $this->assertSame('doc-1', $completed->documentId);
+        $this->assertSame(5, $completed->chunksGenerated);
+        $this->assertIsArray($completed->results);
+        $this->assertArrayHasKey('chunks_generated', $completed->results);
+        $this->assertSame(5, $completed->results['chunks_generated']);
     }
 
     public function testUpsertDocumentValidationError422(): void

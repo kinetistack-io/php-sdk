@@ -11,8 +11,10 @@ use GuzzleHttp\Psr7\Response;
 use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
+use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\Psr18Transport;
@@ -37,15 +39,15 @@ class KinetiClientPsr18Test extends TestCase
             // 2. readyz
             new Response(200, ['Content-Type' => 'application/json'], '{"status": "ready", "checks": {"db": "up"}}'),
             // 3. analyzeImage
-            new Response(200, ['Content-Type' => 'application/json'], '{"data": {"alt_text": "An image"}}'),
+            new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-vis-1", "status": "pending", "poll_url": "/api/v1/jobs/job-vis-1"}'),
             // 4. analyzeImageStream
-            new Response(200, ['Content-Type' => 'application/json'], '{"data": {"alt_text": "Streamed image"}}'),
+            new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-vis-2", "status": "pending", "poll_url": "/api/v1/jobs/job-vis-2"}'),
             // 5. submitBatchJob
             new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-123", "status": "pending"}'),
-            // 6. getBatchJobStatus
+            // 6. getJob
             new Response(200, ['Content-Type' => 'application/json'], '{"job_id": "job-123", "status": "completed", "total_images": 1, "processed_images": 1}'),
             // 7. upsertDocument
-            new Response(201, ['Content-Type' => 'application/json'], '{"id": "doc-uuid-1", "externalId": "doc-1", "title": "Doc Title"}'),
+            new Response(202, ['Content-Type' => 'application/json'], '{"job_id": "job-doc-1", "document_id": "doc-uuid-1", "external_id": "doc-1", "chunks_generated": 0, "status": "pending", "poll_url": "/api/v1/jobs/job-doc-1"}'),
             // 8. deleteDocument
             new Response(204, [], ''),
             // 9. listDocuments
@@ -73,7 +75,9 @@ class KinetiClientPsr18Test extends TestCase
 
         // 3. analyzeImage
         $vision = $kineti->analyzeImage('https://example.com/img.jpg');
-        $this->assertSame('An image', $vision->altText);
+        $this->assertInstanceOf(JobDto::class, $vision);
+        $this->assertSame('job-vis-1', $vision->jobId);
+        $this->assertSame(JobStatus::Pending, $vision->status);
 
         // 4. analyzeImageStream
         $stream = fopen('php://temp', 'w+b');
@@ -81,21 +85,26 @@ class KinetiClientPsr18Test extends TestCase
         fwrite($stream, 'dummy-image-bytes');
         rewind($stream);
         $streamVision = $kineti->analyzeImageStream($stream, 'photo.jpg');
-        $this->assertSame('Streamed image', $streamVision->altText);
+        $this->assertInstanceOf(JobDto::class, $streamVision);
+        $this->assertSame('job-vis-2', $streamVision->jobId);
         fclose($stream);
 
         // 5. submitBatchJob
         $batchJob = $kineti->submitBatchJob([
             new ImageInputDto('item-1', 'https://example.com/item.jpg'),
         ]);
+        $this->assertInstanceOf(JobDto::class, $batchJob);
         $this->assertSame('job-123', $batchJob->jobId);
 
-        // 6. getBatchJobStatus
-        $jobStatus = $kineti->getBatchJobStatus('job-123');
+        // 6. getJob
+        $jobStatus = $kineti->getJob('job-123');
+        $this->assertInstanceOf(JobDto::class, $jobStatus);
         $this->assertTrue($jobStatus->isCompleted());
 
         // 7. upsertDocument
         $docResponse = $kineti->upsertDocument(new DocumentDto('doc-1', 'Doc Title', 'Doc content'));
+        $this->assertInstanceOf(JobDto::class, $docResponse);
+        $this->assertSame('job-doc-1', $docResponse->jobId);
         $this->assertSame('doc-1', $docResponse->externalId);
 
         // 8. deleteDocument

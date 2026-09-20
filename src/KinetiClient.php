@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
-use KinetiStack\Sdk\Dto\BatchJobDto;
 use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
@@ -12,11 +11,12 @@ use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
-use KinetiStack\Sdk\Exception\BatchJobTimeoutException;
+use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Transport\HttpTransport;
@@ -93,7 +93,7 @@ class KinetiClient
         string $imageUrl,
         ?ContextHintsDto $contextHints = null,
         ?VisionOptionsDto $options = null
-    ): VisionResponseDto {
+    ): JobDto {
         $payload = [
             'image_url' => $imageUrl,
         ];
@@ -110,14 +110,17 @@ class KinetiClient
             'json' => $payload,
         ]);
 
-        return VisionResponseDto::fromArray($response->toArray()['data'] ?? []);
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return JobDto::fromArray($data);
     }
 
     public function analyzeImageBinary(
         string $filePath,
         ?ContextHintsDto $contextHints = null,
         ?VisionOptionsDto $options = null
-    ): VisionResponseDto {
+    ): JobDto {
         if (!file_exists($filePath)) {
             throw new \InvalidArgumentException(sprintf('File does not exist: %s', $filePath));
         }
@@ -147,7 +150,7 @@ class KinetiClient
         string $filename = 'image.jpg',
         ?ContextHintsDto $contextHints = null,
         ?VisionOptionsDto $options = null
-    ): VisionResponseDto {
+    ): JobDto {
         if (!is_resource($stream)) {
             throw new \InvalidArgumentException('Provided $stream is not a valid resource.');
         }
@@ -176,7 +179,10 @@ class KinetiClient
             'body' => $body,
         ]);
 
-        return VisionResponseDto::fromArray($response->toArray()['data'] ?? []);
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return JobDto::fromArray($data);
     }
 
     /**
@@ -188,7 +194,7 @@ class KinetiClient
         string $filename = 'image.jpg',
         ?ContextHintsDto $contextHints = null,
         ?VisionOptionsDto $options = null
-    ): VisionResponseDto {
+    ): JobDto {
         $stream = fopen('php://temp', 'w+b');
         if (!is_resource($stream)) {
             throw new \RuntimeException('Failed to open temporary stream for image content.');
@@ -212,7 +218,7 @@ class KinetiClient
      * @throws PayloadTooLargeException
      * @throws KinetiException
      */
-    public function submitBatchJob(array $images, ?VisionOptionsDto $options = null): BatchJobDto
+    public function submitBatchJob(array $images, ?VisionOptionsDto $options = null): JobDto
     {
         $formattedImages = array_map(function ($image) {
             if ($image instanceof ImageInputDto) {
@@ -245,34 +251,39 @@ class KinetiClient
             'body' => $jsonPayload,
         ]);
 
-        return BatchJobDto::fromArray($response->toArray());
+        return JobDto::fromArray($response->toArray());
     }
 
-    public function getBatchJobStatus(string $jobId): BatchJobDto
+    public function getJob(string $jobId): JobDto
     {
         $response = $this->transport->request('GET', sprintf('/api/v1/jobs/%s', urlencode($jobId)));
 
-        return BatchJobDto::fromArray($response->toArray());
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return JobDto::fromArray($data);
     }
 
     /**
+     * Poll an asynchronous job until it completes or times out.
+     *
      * @param string $jobId
      * @param int $timeoutSeconds
      * @param int $pollIntervalSeconds
-     * @param (callable(BatchJobDto): void)|null $onProgress Optional callback called on each poll with the latest BatchJobDto
+     * @param (callable(JobDto): void)|null $onProgress Optional callback called on each poll with the latest JobDto
      * @param int $maxPollIntervalSeconds
      * @param (callable(int): void)|null $sleeper Optional sleeper callback receiving microseconds, useful for testing without delays
-     * @throws BatchJobTimeoutException
+     * @throws JobTimeoutException
      * @throws KinetiException
      */
-    public function waitForBatchJob(
+    public function waitForJob(
         string $jobId,
         int $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         int $pollIntervalSeconds = self::DEFAULT_POLL_INTERVAL_SECONDS,
         ?callable $onProgress = null,
         int $maxPollIntervalSeconds = self::DEFAULT_MAX_POLL_INTERVAL_SECONDS,
         ?callable $sleeper = null
-    ): BatchJobDto {
+    ): JobDto {
         $startTime = time();
         $lastDto = null;
         $pollIntervalSeconds = max(1, $pollIntervalSeconds);
@@ -280,11 +291,11 @@ class KinetiClient
         $currentInterval = $pollIntervalSeconds;
 
         if ($timeoutSeconds <= 0) {
-            $lastDto = $this->getBatchJobStatus($jobId);
+            $lastDto = $this->getJob($jobId);
         }
 
         while ((time() - $startTime) < $timeoutSeconds) {
-            $lastDto = $this->getBatchJobStatus($jobId);
+            $lastDto = $this->getJob($jobId);
 
             if ($onProgress) {
                 $onProgress($lastDto);
@@ -306,18 +317,18 @@ class KinetiClient
             $currentInterval = min($maxPollIntervalSeconds, $currentInterval * 2);
         }
 
-        throw new BatchJobTimeoutException(
-            sprintf('Batch job %s did not complete within %d seconds.', $jobId, $timeoutSeconds),
-            $lastDto ?? $this->getBatchJobStatus($jobId)
+        throw new JobTimeoutException(
+            sprintf('Job %s did not complete within %d seconds.', $jobId, $timeoutSeconds),
+            $lastDto ?? $this->getJob($jobId)
         );
     }
 
     /**
-     * Upsert (create or replace) a document in the index.
+     * Upsert (create or replace) a document in the index asynchronously.
      *
      * @throws KinetiException
      */
-    public function upsertDocument(DocumentDto $document): DocumentResponseDto
+    public function upsertDocument(DocumentDto $document): JobDto
     {
         $response = $this->transport->request('POST', '/api/v1/documents', [
             'json' => $document->toArray(),
@@ -326,7 +337,7 @@ class KinetiClient
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
 
-        return DocumentResponseDto::fromArray($data);
+        return JobDto::fromArray($data);
     }
 
     /**
