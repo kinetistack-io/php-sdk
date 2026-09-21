@@ -34,4 +34,12 @@ interface TransportResponseInterface
      * @throws TransportException
      */
     public function getContent(): string;
+
+    /**
+     * Get an iterable stream of raw content chunks from the response body.
+     *
+     * @return iterable<string>
+     * @throws TransportException
+     */
+    public function getStreamIterator(): iterable;
 }

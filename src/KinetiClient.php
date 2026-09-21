@@ -12,6 +12,7 @@ use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\JobDto;
+use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
@@ -20,6 +21,7 @@ use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Transport\HttpTransport;
+use KinetiStack\Sdk\Transport\SseParser;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -398,6 +400,32 @@ class KinetiClient
         $data = $response->toArray();
 
         return SearchResponseDto::fromArray($data);
+    }
+
+    /**
+     * Execute a semantic vector search with streaming RAG synthesis.
+     *
+     * @param SearchQueryDto|string $query Search query or query string
+     * @param string $path Endpoint path (defaults to '/api/v1/search/rag')
+     * @return \Generator<int, RagStreamChunkDto>
+     *
+     * @throws KinetiException
+     */
+    public function searchStream(SearchQueryDto|string $query, string $path = '/api/v1/search/rag'): \Generator
+    {
+        if (is_string($query)) {
+            $query = SearchQueryDto::create($query)->withStream(true);
+        } elseif (!$query->isStreaming()) {
+            $query = $query->withStream(true);
+        }
+
+        $response = $this->transport->requestStream('POST', $path, [
+            'json' => $query->toArray(),
+        ]);
+
+        $parser = new SseParser();
+
+        yield from $parser->parse($response->getStreamIterator());
     }
 
 

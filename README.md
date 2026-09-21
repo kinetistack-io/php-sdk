@@ -126,6 +126,39 @@ Default constants exposed on `KinetiClient`:
 - `KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS` = `10`
 - `KinetiClient::DEFAULT_TIMEOUT_SECONDS` = `60`
 
+### Semantic Search & RAG Streaming
+
+Execute semantic vector searches or consume progressive Server-Sent Events (SSE) streaming responses from the RAG engine:
+
+```php
+use KinetiStack\Sdk\Dto\RagStreamChunkDto;
+use KinetiStack\Sdk\Dto\SearchQueryDto;
+
+// 1. Standard search with optional synthesized answer
+$query = SearchQueryDto::create('How does solar net metering work?')
+    ->withLimit(5)
+    ->withSynthesis(true);
+
+$response = $client->search($query);
+echo "Found {$response->total} results.\n";
+if ($response->hasSynthesis()) {
+    echo "Synthesized Answer: " . $response->synthesis->answer . "\n";
+}
+
+// 2. Streamed RAG synthesis via PHP generator (reduces perceived latency)
+$streamQuery = SearchQueryDto::create('Explain commercial solar financing options')
+    ->withLimit(5)
+    ->withStream(true);
+
+/** @var \Generator<int, RagStreamChunkDto> $stream */
+$stream = $client->searchStream($streamQuery);
+
+foreach ($stream as $chunk) {
+    echo $chunk->text; // Streams partial tokens/words in real-time
+    flush();
+}
+```
+
 ### Webhook Verification
 
 Verify incoming HMAC-SHA256 signatures for webhook events (e.g. from the `X-Kineti-Signature` header):

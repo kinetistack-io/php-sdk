@@ -68,4 +68,33 @@ class Psr18TransportResponse implements TransportResponseInterface
     {
         return $this->response;
     }
+
+    /**
+     * @return iterable<string>
+     */
+    public function getStreamIterator(): iterable
+    {
+        if ($this->cachedContent !== null) {
+            yield $this->cachedContent;
+            return;
+        }
+
+        try {
+            $stream = $this->response->getBody();
+            if ($stream->isSeekable()) {
+                $stream->rewind();
+            }
+
+            while (!$stream->eof()) {
+                $chunk = $stream->read(8192);
+                if ($chunk !== '') {
+                    yield $chunk;
+                }
+            }
+        } catch (TransportException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new TransportException('Failed to read response stream: ' . $e->getMessage(), 0, $e);
+        }
+    }
 }

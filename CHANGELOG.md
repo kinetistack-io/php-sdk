@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Streaming response consumption for RAG synthesis via `KinetiClient::searchStream()` yielding typed `RagStreamChunkDto` objects from Server-Sent Events (SSE) (PHPSDK-30).
+- `RagStreamChunkDto` representing streamed response chunks with citation and metadata support.
+- `SseParser` for robust Server-Sent Events parsing across arbitrary chunk boundaries with error detection.
+- Streaming support in `TransportInterface::requestStream()`, `Psr18Transport`, and `SymfonyTransport` (`getStreamIterator()`).
+- Added `withStream()` and `isStreaming()` to `SearchQueryDto`.
 - Typed `AnalyticsGrouping` backed enum (`DAY = 'day'`, `WEEK = 'week'`, `MONTH = 'month'`) for time-bucketed analytics (PHPSDK-27).
 - Dedicated `AnalyticsClient` and `AnalyticsClientInterface` for querying aggregated analytics data.
 - `AdminClientInterface::analytics()` accessor returning `AnalyticsClientInterface`.

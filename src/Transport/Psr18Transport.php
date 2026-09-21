@@ -196,6 +196,16 @@ class Psr18Transport implements TransportInterface
         }
     }
 
+    public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
+    {
+        $options['headers'] = array_merge(
+            ['Accept' => 'text/event-stream'],
+            $options['headers'] ?? []
+        );
+
+        return $this->request($method, $path, $options);
+    }
+
     public function withAuthHeaderValue(string $authHeaderValue): self
     {
         return new self(

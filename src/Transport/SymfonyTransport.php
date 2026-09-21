@@ -101,7 +101,7 @@ class SymfonyTransport implements TransportInterface
 
         try {
             $response = $this->client->request($method, $url, $mergedOptions);
-            $transportResponse = new SymfonyTransportResponse($response);
+            $transportResponse = new SymfonyTransportResponse($response, $this->client);
             $statusCode = $transportResponse->getStatusCode();
         } catch (TransportExceptionInterface $e) {
             throw new TransportException($e->getMessage(), 0, $e);
@@ -116,6 +116,17 @@ class SymfonyTransport implements TransportInterface
         }
 
         return $transportResponse;
+    }
+
+    public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
+    {
+        $options['buffer'] = false;
+        $options['headers'] = array_merge(
+            ['Accept' => 'text/event-stream'],
+            $options['headers'] ?? []
+        );
+
+        return $this->request($method, $path, $options);
     }
 
     public function withAuthHeaderValue(string $authHeaderValue): self

@@ -150,6 +150,13 @@ class KinetiClientSearchTest extends TestCase
         // Minimal query omits null keys
         $minimalQuery = SearchQueryDto::create('minimal');
         $this->assertSame(['query' => 'minimal'], $minimalQuery->toArray());
+
+        // Query with stream
+        $streamQuery = SearchQueryDto::create('stream test')->withStream(true);
+        $this->assertTrue($streamQuery->isStreaming());
+        $this->assertSame(['query' => 'stream test', 'stream' => true], $streamQuery->toArray());
+        $restored = SearchQueryDto::fromArray($streamQuery->toArray());
+        $this->assertTrue($restored->isStreaming());
     }
 
     public function testSearchWithStringShortcut(): void

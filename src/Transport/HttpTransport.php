@@ -62,6 +62,11 @@ class HttpTransport implements TransportInterface
         return $this->delegate->request($method, $path, $options);
     }
 
+    public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
+    {
+        return $this->delegate->requestStream($method, $path, $options);
+    }
+
     public function withAuthHeaderValue(string $authHeaderValue): self
     {
         return new self(

@@ -18,6 +18,7 @@ class SearchQueryDto
         public readonly ?bool $distinctDocuments = null,
         public readonly ?bool $synthesizeAnswer = null,
         public readonly ?SearchFilterDto $filters = null,
+        public readonly ?bool $stream = null,
     ) {
         if (trim($this->query) === '') {
             throw new \InvalidArgumentException('Search query cannot be empty.');
@@ -39,7 +40,8 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $this->filters
+            $this->filters,
+            $this->stream
         );
     }
 
@@ -53,7 +55,8 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $this->filters
+            $this->filters,
+            $this->stream
         );
     }
 
@@ -77,7 +80,8 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $this->filters
+            $this->filters,
+            $this->stream
         );
     }
 
@@ -91,7 +95,8 @@ class SearchQueryDto
             $minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $this->filters
+            $this->filters,
+            $this->stream
         );
     }
 
@@ -105,7 +110,8 @@ class SearchQueryDto
             $this->minScore,
             $distinctDocuments,
             $this->synthesizeAnswer,
-            $this->filters
+            $this->filters,
+            $this->stream
         );
     }
 
@@ -119,13 +125,34 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $synthesizeAnswer,
-            $this->filters
+            $this->filters,
+            $this->stream
         );
     }
 
     public function withSynthesizeAnswer(bool $synthesizeAnswer = true): self
     {
         return $this->withSynthesis($synthesizeAnswer);
+    }
+
+    public function withStream(bool $stream = true): self
+    {
+        return new self(
+            $this->query,
+            $this->limit,
+            $this->locale,
+            $this->userRoles,
+            $this->minScore,
+            $this->distinctDocuments,
+            $this->synthesizeAnswer,
+            $this->filters,
+            $stream
+        );
+    }
+
+    public function isStreaming(): bool
+    {
+        return $this->stream === true;
     }
 
     /**
@@ -143,7 +170,8 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $filterDto
+            $filterDto,
+            $this->stream
         );
     }
 
@@ -163,7 +191,8 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $newFilters
+            $newFilters,
+            $this->stream
         );
     }
 
@@ -180,7 +209,8 @@ class SearchQueryDto
             $this->minScore,
             $this->distinctDocuments,
             $this->synthesizeAnswer,
-            $newFilters
+            $newFilters,
+            $this->stream
         );
     }
 
@@ -217,6 +247,10 @@ class SearchQueryDto
             $data['synthesize_answer'] = $this->synthesizeAnswer;
         }
 
+        if ($this->stream !== null) {
+            $data['stream'] = $this->stream;
+        }
+
         if ($this->filters !== null && !$this->filters->isEmpty()) {
             $data['filters'] = $this->filters->toArray();
         }
@@ -244,6 +278,7 @@ class SearchQueryDto
         $minScore = ($val = $data['min_score'] ?? $data['minScore'] ?? null) !== null ? (float) $val : null;
         $distinctDocuments = ($val = $data['distinct_documents'] ?? $data['distinctDocuments'] ?? null) !== null ? (bool) $val : null;
         $synthesizeAnswer = ($val = $data['synthesize_answer'] ?? $data['synthesizeAnswer'] ?? null) !== null ? (bool) $val : null;
+        $stream = ($val = $data['stream'] ?? null) !== null ? (bool) $val : null;
 
         $filters = null;
         if (isset($data['filters']) && is_array($data['filters'])) {
@@ -258,7 +293,8 @@ class SearchQueryDto
             $minScore,
             $distinctDocuments,
             $synthesizeAnswer,
-            $filters
+            $filters,
+            $stream
         );
     }
 }
