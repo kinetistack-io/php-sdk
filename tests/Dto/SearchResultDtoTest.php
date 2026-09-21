@@ -87,12 +87,32 @@ class SearchResultDtoTest extends TestCase
         $this->assertInstanceOf(SearchFilterDto::class, $step11->filters);
         $this->assertSame(['staff'], $step11->filters->permissions);
         $this->assertSame(['category' => 'tech'], $step11->filters->custom);
+
+        $step12 = $step11->withPage(3);
+        $this->assertNotSame($step11, $step12);
+        $this->assertSame(3, $step12->page);
+        $this->assertSame(3, $step12->getPage());
+
+        $step13 = $step12->withOffset(30);
+        $this->assertNotSame($step12, $step13);
+        $this->assertSame(30, $step13->offset);
+        $this->assertSame(30, $step13->getOffset());
+
+        $step14 = $step13->setLimit(50)->setPage(2)->setOffset(10);
+        $this->assertSame(50, $step14->limit);
+        $this->assertSame(50, $step14->getLimit());
+        $this->assertSame(2, $step14->page);
+        $this->assertSame(2, $step14->getPage());
+        $this->assertSame(10, $step14->offset);
+        $this->assertSame(10, $step14->getOffset());
     }
 
     public function testSearchQueryDtoToArrayAndFromArray(): void
     {
         $query = SearchQueryDto::create('full test')
             ->withLimit(10)
+            ->withPage(2)
+            ->withOffset(10)
             ->withLocale('en')
             ->withUserRoles(['editor'])
             ->withMinScore(0.75)
@@ -105,6 +125,8 @@ class SearchResultDtoTest extends TestCase
 
         $this->assertSame('full test', $array['query']);
         $this->assertSame(10, $array['limit']);
+        $this->assertSame(2, $array['page']);
+        $this->assertSame(10, $array['offset']);
         $this->assertSame('en', $array['locale']);
         $this->assertSame(['editor'], $array['user_roles']);
         $this->assertSame(0.75, $array['min_score']);
@@ -116,6 +138,8 @@ class SearchResultDtoTest extends TestCase
         $restored = SearchQueryDto::fromArray($array);
         $this->assertSame('full test', $restored->query);
         $this->assertSame(10, $restored->limit);
+        $this->assertSame(2, $restored->page);
+        $this->assertSame(10, $restored->offset);
         $this->assertSame('en', $restored->locale);
         $this->assertSame(['editor'], $restored->userRoles);
         $this->assertSame(0.75, $restored->minScore);
@@ -300,5 +324,38 @@ class SearchResultDtoTest extends TestCase
         $response2 = SearchResponseDto::fromArray(['hydra:member' => 12345]);
         $this->assertCount(0, $response2->results);
         $this->assertSame(0, $response2->total);
+    }
+
+    public function testSearchResponseDtoPageAndLimit(): void
+    {
+        $dto = new SearchResponseDto([], 0, null, 2, 25);
+        $this->assertSame(2, $dto->page);
+        $this->assertSame(2, $dto->getPage());
+        $this->assertSame(25, $dto->limit);
+        $this->assertSame(25, $dto->getLimit());
+
+        $array = $dto->toArray();
+        $this->assertSame(2, $array['page']);
+        $this->assertSame(25, $array['limit']);
+
+        $restored = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 50,
+            'page' => 3,
+            'limit' => 15,
+        ]);
+        $this->assertSame(3, $restored->page);
+        $this->assertSame(3, $restored->getPage());
+        $this->assertSame(15, $restored->limit);
+        $this->assertSame(15, $restored->getLimit());
+
+        // Test fallback to itemsPerPage
+        $restoredWithItemsPerPage = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 50,
+            'page' => 1,
+            'itemsPerPage' => 20,
+        ]);
+        $this->assertSame(20, $restoredWithItemsPerPage->getLimit());
     }
 }

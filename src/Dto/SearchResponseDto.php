@@ -16,12 +16,24 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
         public readonly array $results = [],
         public readonly int $total = 0,
         public readonly ?RagSynthesisDto $synthesis = null,
+        public readonly ?int $page = null,
+        public readonly ?int $limit = null,
     ) {
     }
 
     public function hasSynthesis(): bool
     {
         return $this->synthesis !== null;
+    }
+
+    public function getPage(): ?int
+    {
+        return $this->page;
+    }
+
+    public function getLimit(): ?int
+    {
+        return $this->limit;
     }
 
     /**
@@ -57,7 +69,11 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
             $synthesis = RagSynthesisDto::fromArray($data['synthesis']);
         }
 
-        return new self($results, $total, $synthesis);
+        $page = isset($data['page']) ? (int) $data['page'] : null;
+        $limitValue = $data['limit'] ?? $data['itemsPerPage'] ?? $data['per_page'] ?? null;
+        $limit = $limitValue !== null ? (int) $limitValue : null;
+
+        return new self($results, $total, $synthesis, $page, $limit);
     }
 
     /**
@@ -72,6 +88,14 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
 
         if ($this->synthesis !== null) {
             $data['synthesis'] = $this->synthesis->toArray();
+        }
+
+        if ($this->page !== null) {
+            $data['page'] = $this->page;
+        }
+
+        if ($this->limit !== null) {
+            $data['limit'] = $this->limit;
         }
 
         return $data;

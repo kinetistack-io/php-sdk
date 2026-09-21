@@ -19,6 +19,8 @@ class SearchQueryDto
         public readonly ?bool $synthesizeAnswer = null,
         public readonly ?SearchFilterDto $filters = null,
         public readonly ?bool $stream = null,
+        public readonly ?int $page = null,
+        public readonly ?int $offset = null,
     ) {
         if (trim($this->query) === '') {
             throw new \InvalidArgumentException('Search query cannot be empty.');
@@ -30,34 +32,67 @@ class SearchQueryDto
         return new self($query);
     }
 
-    public function withLimit(int $limit): self
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function cloneWith(array $overrides): self
     {
-        return new self(
-            $this->query,
-            $limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $this->filters,
-            $this->stream
-        );
+        /** @var array<string, mixed> $vars */
+        $vars = get_object_vars($this);
+        /** @var array<string, mixed> $merged */
+        $merged = array_merge($vars, $overrides);
+
+        return new self(...$merged);
+    }
+
+    public function withLimit(?int $limit): self
+    {
+        return $this->cloneWith(['limit' => $limit]);
+    }
+
+    public function withPage(?int $page): self
+    {
+        return $this->cloneWith(['page' => $page]);
+    }
+
+    public function withOffset(?int $offset): self
+    {
+        return $this->cloneWith(['offset' => $offset]);
+    }
+
+    public function setLimit(?int $limit): self
+    {
+        return $this->withLimit($limit);
+    }
+
+    public function setPage(?int $page): self
+    {
+        return $this->withPage($page);
+    }
+
+    public function setOffset(?int $offset): self
+    {
+        return $this->withOffset($offset);
+    }
+
+    public function getPage(): ?int
+    {
+        return $this->page;
+    }
+
+    public function getLimit(): ?int
+    {
+        return $this->limit;
+    }
+
+    public function getOffset(): ?int
+    {
+        return $this->offset;
     }
 
     public function withLocale(?string $locale): self
     {
-        return new self(
-            $this->query,
-            $this->limit,
-            $locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $this->filters,
-            $this->stream
-        );
+        return $this->cloneWith(['locale' => $locale]);
     }
 
     /**
@@ -72,62 +107,22 @@ class SearchQueryDto
             $rolesList = array_values(array_map('strval', $userRoles));
         }
 
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $rolesList,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $this->filters,
-            $this->stream
-        );
+        return $this->cloneWith(['userRoles' => $rolesList]);
     }
 
     public function withMinScore(?float $minScore): self
     {
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $this->filters,
-            $this->stream
-        );
+        return $this->cloneWith(['minScore' => $minScore]);
     }
 
     public function withDistinctDocuments(bool $distinctDocuments = true): self
     {
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $distinctDocuments,
-            $this->synthesizeAnswer,
-            $this->filters,
-            $this->stream
-        );
+        return $this->cloneWith(['distinctDocuments' => $distinctDocuments]);
     }
 
     public function withSynthesis(bool $synthesizeAnswer = true): self
     {
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $synthesizeAnswer,
-            $this->filters,
-            $this->stream
-        );
+        return $this->cloneWith(['synthesizeAnswer' => $synthesizeAnswer]);
     }
 
     public function withSynthesizeAnswer(bool $synthesizeAnswer = true): self
@@ -137,17 +132,7 @@ class SearchQueryDto
 
     public function withStream(bool $stream = true): self
     {
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $this->filters,
-            $stream
-        );
+        return $this->cloneWith(['stream' => $stream]);
     }
 
     public function isStreaming(): bool
@@ -162,17 +147,7 @@ class SearchQueryDto
     {
         $filterDto = is_array($filters) ? SearchFilterDto::fromArray($filters) : $filters;
 
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $filterDto,
-            $this->stream
-        );
+        return $this->cloneWith(['filters' => $filterDto]);
     }
 
     /**
@@ -183,17 +158,7 @@ class SearchQueryDto
         $currentFilters = $this->filters ?? new SearchFilterDto();
         $newFilters = $currentFilters->withPermissions($permissions);
 
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $newFilters,
-            $this->stream
-        );
+        return $this->cloneWith(['filters' => $newFilters]);
     }
 
     public function withFilter(string $key, mixed $value): self
@@ -201,17 +166,7 @@ class SearchQueryDto
         $currentFilters = $this->filters ?? new SearchFilterDto();
         $newFilters = $currentFilters->withCustom($key, $value);
 
-        return new self(
-            $this->query,
-            $this->limit,
-            $this->locale,
-            $this->userRoles,
-            $this->minScore,
-            $this->distinctDocuments,
-            $this->synthesizeAnswer,
-            $newFilters,
-            $this->stream
-        );
+        return $this->cloneWith(['filters' => $newFilters]);
     }
 
     /**
@@ -225,6 +180,14 @@ class SearchQueryDto
 
         if ($this->limit !== null) {
             $data['limit'] = $this->limit;
+        }
+
+        if ($this->page !== null) {
+            $data['page'] = $this->page;
+        }
+
+        if ($this->offset !== null) {
+            $data['offset'] = $this->offset;
         }
 
         if ($this->locale !== null && $this->locale !== '') {
@@ -265,6 +228,8 @@ class SearchQueryDto
     {
         $query = (string) ($data['query'] ?? '');
         $limit = isset($data['limit']) ? (int) $data['limit'] : null;
+        $page = isset($data['page']) ? (int) $data['page'] : null;
+        $offset = isset($data['offset']) ? (int) $data['offset'] : null;
         $locale = isset($data['locale']) && is_string($data['locale']) ? $data['locale'] : null;
 
         /** @var list<string>|null $userRoles */
@@ -294,7 +259,9 @@ class SearchQueryDto
             $distinctDocuments,
             $synthesizeAnswer,
             $filters,
-            $stream
+            $stream,
+            $page,
+            $offset
         );
     }
 }

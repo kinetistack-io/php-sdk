@@ -15,6 +15,7 @@ use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
+use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
@@ -400,6 +401,42 @@ class KinetiClient
         $data = $response->toArray();
 
         return SearchResponseDto::fromArray($data);
+    }
+
+    /**
+     * Execute a semantic vector search and automatically paginate through all results.
+     *
+     * @param SearchQueryDto|string $query
+     * @return \Generator<int, SearchResultItemDto>
+     *
+     * @throws KinetiException
+     */
+    public function searchAll(SearchQueryDto|string $query): \Generator
+    {
+        if (is_string($query)) {
+            $query = SearchQueryDto::create($query);
+        }
+
+        $page = $query->page ?? 1;
+        $limit = max(1, $query->limit ?? 10);
+        $currentQuery = $query->withPage($page)->withLimit($limit)->withOffset(null);
+
+        while (true) {
+            $response = $this->search($currentQuery);
+
+            $count = 0;
+            foreach ($response->results as $result) {
+                yield $result;
+                $count++;
+            }
+
+            if ($count < $limit) {
+                break;
+            }
+
+            $page++;
+            $currentQuery = $currentQuery->withPage($page);
+        }
     }
 
     /**
