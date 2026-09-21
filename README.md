@@ -236,15 +236,25 @@ $admin->revokeApiKey($project->id, $newKey->id);
 #### Usage & Analytics
 
 ```php
+use KinetiStack\Sdk\AnalyticsClient;
+use KinetiStack\Sdk\Enum\AnalyticsGrouping;
+
 // Summary report across services
 $usage = $admin->getUsage(from: '2026-09-01', to: '2026-09-05', projectId: $project->id);
 foreach ($usage as $summary) {
     echo "{$summary->projectName} - {$summary->service}: {$summary->totalTokens} tokens ({$summary->requestCount} requests)\n";
 }
 
-// Time-bucketed analytics
-$analytics = $admin->getAnalytics(groupByOrOptions: 'day', from: '2026-09-01', to: '2026-09-07');
-print_r($analytics->data);
+// Time-bucketed analytics with typed grouping (DAY, WEEK, MONTH) via AdminClient
+$dailyAnalytics = $admin->getAnalytics(grouping: AnalyticsGrouping::DAY, from: '2026-09-01', to: '2026-09-07');
+$weeklyAnalytics = $admin->getAnalytics(grouping: AnalyticsGrouping::WEEK, from: '2026-09-01', to: '2026-09-30');
+$monthlyAnalytics = $admin->getAnalytics(grouping: AnalyticsGrouping::MONTH);
+print_r($weeklyAnalytics->data);
+
+// Or via dedicated AnalyticsClient
+$analyticsClient = $admin->analytics();
+// Or standalone: new AnalyticsClient('https://api.kinetistack.io', $jwtToken)
+$trends = $analyticsClient->getAnalytics(AnalyticsGrouping::WEEK);
 ```
 
 ## Development

@@ -17,6 +17,7 @@ use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
 use KinetiStack\Sdk\Dto\UserDto;
 use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
+use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
@@ -30,6 +31,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class AdminClient implements AdminClientInterface
 {
     private TransportInterface $transport;
+    private ?AnalyticsClientInterface $analyticsClient = null;
 
     /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
@@ -56,6 +58,7 @@ class AdminClient implements AdminClientInterface
     {
         $clone = clone $this;
         $clone->jwtToken = $jwtToken;
+        $clone->analyticsClient = null;
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
         if ($this->httpClient instanceof TransportInterface) {
@@ -530,47 +533,23 @@ class AdminClient implements AdminClientInterface
         return array_map(static fn (array $item): UsageSummaryDto => UsageSummaryDto::fromArray($item), $items);
     }
 
+    public function analytics(): AnalyticsClientInterface
+    {
+        return $this->analyticsClient ??= new AnalyticsClient($this->transport);
+    }
+
     /**
      * Query aggregated usage analytics buckets.
      *
-     * @param array<string, mixed>|string|null $groupByOrOptions
      * @throws KinetiException
      */
     public function getAnalytics(
-        array|string|null $groupByOrOptions = 'day',
+        AnalyticsGrouping $grouping = AnalyticsGrouping::DAY,
         ?string $from = null,
         ?string $to = null,
         ?string $projectId = null
     ): AnalyticsDto {
-        $query = [];
-        if (is_array($groupByOrOptions)) {
-            $query = $groupByOrOptions;
-        } else {
-            if ($groupByOrOptions !== null) {
-                $query['group_by'] = $groupByOrOptions;
-            }
-            if ($from !== null) {
-                $query['from'] = $from;
-            }
-            if ($to !== null) {
-                $query['to'] = $to;
-            }
-            if ($projectId !== null) {
-                $query['project_id'] = $projectId;
-            }
-        }
-
-        $requestOptions = [];
-        if (!empty($query)) {
-            $requestOptions['query'] = $query;
-        }
-
-        $response = $this->transport->request('GET', '/api/v1/admin/analytics', $requestOptions);
-
-        /** @var array<string, mixed> $data */
-        $data = $response->toArray();
-
-        return AnalyticsDto::fromArray($data);
+        return $this->analytics()->getAnalytics($grouping, $from, $to, $projectId);
     }
 
     /**

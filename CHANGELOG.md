@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Typed `AnalyticsGrouping` backed enum (`DAY = 'day'`, `WEEK = 'week'`, `MONTH = 'month'`) for time-bucketed analytics (PHPSDK-27).
+- Dedicated `AnalyticsClient` and `AnalyticsClientInterface` for querying aggregated analytics data.
+- `AdminClientInterface::analytics()` accessor returning `AnalyticsClientInterface`.
+
+### Changed
+- `AdminClient::getAnalytics()` now strictly accepts `AnalyticsGrouping` parameter defaulting to `AnalyticsGrouping::DAY`.
+
 ## [1.0.6] - 2026-09-20
 
 ### Changed

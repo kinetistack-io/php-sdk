@@ -17,6 +17,7 @@ use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
 use KinetiStack\Sdk\Dto\UserDto;
 use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
+use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\ValidationException;
@@ -157,12 +158,13 @@ interface AdminClientInterface
         ?string $projectId = null
     ): array;
 
+    public function analytics(): AnalyticsClientInterface;
+
     /**
-     * @param array<string, mixed>|string|null $groupByOrOptions
      * @throws KinetiException
      */
     public function getAnalytics(
-        array|string|null $groupByOrOptions = 'day',
+        AnalyticsGrouping $grouping = AnalyticsGrouping::DAY,
         ?string $from = null,
         ?string $to = null,
         ?string $projectId = null

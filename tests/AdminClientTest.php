@@ -17,6 +17,7 @@ use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Enum\RegistrationMode;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
@@ -731,7 +732,7 @@ class AdminClientTest extends TestCase
         $httpClient = new MockHttpClient($mockResponse);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
-        $analytics = $admin->getAnalytics('day', '2026-09-01', '2026-09-02');
+        $analytics = $admin->getAnalytics(AnalyticsGrouping::DAY, '2026-09-01', '2026-09-02');
 
         $this->assertInstanceOf(AnalyticsDto::class, $analytics);
         $this->assertCount(2, $analytics->data);
@@ -741,6 +742,25 @@ class AdminClientTest extends TestCase
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertStringContainsString('/api/v1/admin/analytics', $mockResponse->getRequestUrl());
         $this->assertStringContainsString('group_by=day', $mockResponse->getRequestUrl());
+    }
+
+    public function testGetAnalyticsWithWeekGrouping(): void
+    {
+        $responseBody = json_encode([
+            'data' => [
+                ['date' => '2026-W36', 'vision' => 100, 'search' => 50, 'ingest' => 0, 'rag' => 0],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $analytics = $admin->getAnalytics(AnalyticsGrouping::WEEK);
+
+        $this->assertInstanceOf(AnalyticsDto::class, $analytics);
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringContainsString('group_by=week', $mockResponse->getRequestUrl());
     }
 
     /**
