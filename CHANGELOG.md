@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-09-22
+
 ### Added
 - Streaming response consumption for RAG synthesis via `KinetiClient::searchStream()` yielding typed `RagStreamChunkDto` objects from Server-Sent Events (SSE) (PHPSDK-30).
 - `RagStreamChunkDto` representing streamed response chunks with citation and metadata support.
