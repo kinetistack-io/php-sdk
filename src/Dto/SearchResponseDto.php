@@ -11,6 +11,7 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
 {
     /**
      * @param list<SearchResultItemDto> $results
+     * @param array<string, list<FacetBucketDto>> $facets
      */
     public function __construct(
         public readonly array $results = [],
@@ -18,12 +19,26 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
         public readonly ?RagSynthesisDto $synthesis = null,
         public readonly ?int $page = null,
         public readonly ?int $limit = null,
+        public readonly array $facets = [],
     ) {
     }
 
     public function hasSynthesis(): bool
     {
         return $this->synthesis !== null;
+    }
+
+    /**
+     * @return array<string, list<FacetBucketDto>>
+     */
+    public function getFacets(): array
+    {
+        return $this->facets;
+    }
+
+    public function hasFacets(): bool
+    {
+        return !empty($this->facets);
     }
 
     public function getPage(): ?int
@@ -73,7 +88,23 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
         $limitValue = $data['limit'] ?? $data['itemsPerPage'] ?? $data['per_page'] ?? null;
         $limit = $limitValue !== null ? (int) $limitValue : null;
 
-        return new self($results, $total, $synthesis, $page, $limit);
+        /** @var array<string, list<FacetBucketDto>> $facets */
+        $facets = [];
+        if (isset($data['facets']) && is_array($data['facets'])) {
+            foreach ($data['facets'] as $field => $buckets) {
+                if (is_array($buckets)) {
+                    $fieldBuckets = [];
+                    foreach ($buckets as $bucket) {
+                        if (is_array($bucket)) {
+                            $fieldBuckets[] = FacetBucketDto::fromArray($bucket);
+                        }
+                    }
+                    $facets[(string) $field] = $fieldBuckets;
+                }
+            }
+        }
+
+        return new self($results, $total, $synthesis, $page, $limit, $facets);
     }
 
     /**
@@ -96,6 +127,17 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
 
         if ($this->limit !== null) {
             $data['limit'] = $this->limit;
+        }
+
+        if (!empty($this->facets)) {
+            $facetsData = [];
+            foreach ($this->facets as $field => $buckets) {
+                $facetsData[$field] = array_map(
+                    static fn (FacetBucketDto $bucket): array => $bucket->toArray(),
+                    $buckets
+                );
+            }
+            $data['facets'] = $facetsData;
         }
 
         return $data;

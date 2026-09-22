@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests;
 
+use KinetiStack\Sdk\Dto\FacetBucketDto;
+use KinetiStack\Sdk\Dto\FacetRequestDto;
 use KinetiStack\Sdk\Dto\RagSynthesisDto;
 use KinetiStack\Sdk\Dto\SearchFilterDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
@@ -273,5 +275,46 @@ class KinetiClientSearchTest extends TestCase
         $this->expectExceptionMessage('Vector indexing service is temporarily undergoing maintenance.');
 
         $kineti->search('query');
+    }
+
+    public function testSearchWithFacets200(): void
+    {
+        $fixture = $this->loadFixture('Search/search_response_with_facets_200.json');
+        $mockResponse = new MockResponse($fixture, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $query = SearchQueryDto::create('test')
+            ->withFacets(new FacetRequestDto(['type', 'language']));
+
+        $response = $kineti->search($query);
+
+        $this->assertInstanceOf(SearchResponseDto::class, $response);
+        $this->assertTrue($response->hasFacets());
+        $facets = $response->getFacets();
+        $this->assertArrayHasKey('type', $facets);
+        $this->assertArrayHasKey('language', $facets);
+
+        $this->assertCount(2, $facets['type']);
+        $this->assertInstanceOf(FacetBucketDto::class, $facets['type'][0]);
+        $this->assertSame('article', $facets['type'][0]->value);
+        $this->assertSame(47, $facets['type'][0]->count);
+        $this->assertSame('page', $facets['type'][1]->value);
+        $this->assertSame(12, $facets['type'][1]->count);
+
+        $this->assertCount(2, $facets['language']);
+        $this->assertSame('en', $facets['language'][0]->value);
+        $this->assertSame(38, $facets['language'][0]->count);
+        $this->assertSame('fr', $facets['language'][1]->value);
+        $this->assertSame(21, $facets['language'][1]->count);
+
+        /** @var array{body: string} $requestOptions */
+        $requestOptions = $mockResponse->getRequestOptions();
+        $requestBody = json_decode($requestOptions['body'], true);
+        $this->assertArrayHasKey('facets', $requestBody);
+        $this->assertSame(['fields' => ['type', 'language']], $requestBody['facets']);
     }
 }

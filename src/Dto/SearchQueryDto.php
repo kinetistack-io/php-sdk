@@ -21,6 +21,7 @@ class SearchQueryDto
         public readonly ?bool $stream = null,
         public readonly ?int $page = null,
         public readonly ?int $offset = null,
+        public readonly ?FacetRequestDto $facets = null,
     ) {
         if (trim($this->query) === '') {
             throw new \InvalidArgumentException('Search query cannot be empty.');
@@ -169,6 +170,16 @@ class SearchQueryDto
         return $this->cloneWith(['filters' => $newFilters]);
     }
 
+    public function withFacets(?FacetRequestDto $facets): self
+    {
+        return $this->cloneWith(['facets' => $facets]);
+    }
+
+    public function getFacets(): ?FacetRequestDto
+    {
+        return $this->facets;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -218,6 +229,10 @@ class SearchQueryDto
             $data['filters'] = $this->filters->toArray();
         }
 
+        if ($this->facets !== null) {
+            $data['facets'] = $this->facets->toArray();
+        }
+
         return $data;
     }
 
@@ -250,6 +265,11 @@ class SearchQueryDto
             $filters = SearchFilterDto::fromArray($data['filters']);
         }
 
+        $facets = null;
+        if (isset($data['facets']) && is_array($data['facets'])) {
+            $facets = FacetRequestDto::fromArray($data['facets']);
+        }
+
         return new self(
             $query,
             $limit,
@@ -261,7 +281,8 @@ class SearchQueryDto
             $filters,
             $stream,
             $page,
-            $offset
+            $offset,
+            $facets
         );
     }
 }

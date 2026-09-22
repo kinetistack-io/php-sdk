@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "id": "abc123",
+      "external_id": "abc123",
+      "title": "Introduction to Symfony",
+      "score": 0.95
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 10,
+  "facets": {
+    "type": [
+      {
+        "value": "article",
+        "count": 47
+      },
+      {
+        "value": "page",
+        "count": 12
+      }
+    ],
+    "language": [
+      {
+        "value": "en",
+        "count": 38
+      },
+      {
+        "value": "fr",
+        "count": 21
+      }
+    ]
+  }
+}

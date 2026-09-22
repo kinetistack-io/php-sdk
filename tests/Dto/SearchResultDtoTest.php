@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Dto;
 
+use KinetiStack\Sdk\Dto\FacetBucketDto;
+use KinetiStack\Sdk\Dto\FacetRequestDto;
 use KinetiStack\Sdk\Dto\RagSynthesisDto;
 use KinetiStack\Sdk\Dto\SearchFilterDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
@@ -357,5 +359,86 @@ class SearchResultDtoTest extends TestCase
             'itemsPerPage' => 20,
         ]);
         $this->assertSame(20, $restoredWithItemsPerPage->getLimit());
+    }
+
+    public function testSearchQueryDtoWithFacets(): void
+    {
+        $query = SearchQueryDto::create('my query');
+        $this->assertNull($query->facets);
+        $this->assertNull($query->getFacets());
+        $this->assertArrayNotHasKey('facets', $query->toArray());
+
+        $facetRequest = new FacetRequestDto(['type', 'language']);
+        $queryWithFacets = $query->withFacets($facetRequest);
+
+        // Immutability
+        $this->assertNotSame($query, $queryWithFacets);
+        $this->assertNull($query->facets);
+        $this->assertSame($facetRequest, $queryWithFacets->facets);
+        $this->assertSame($facetRequest, $queryWithFacets->getFacets());
+
+        // Serialization
+        $array = $queryWithFacets->toArray();
+        $this->assertArrayHasKey('facets', $array);
+        $this->assertSame(['fields' => ['type', 'language']], $array['facets']);
+
+        // Clearing facets with null
+        $queryCleared = $queryWithFacets->withFacets(null);
+        $this->assertNull($queryCleared->facets);
+        $this->assertArrayNotHasKey('facets', $queryCleared->toArray());
+
+        // Deserialization round-trip
+        $restored = SearchQueryDto::fromArray($array);
+        $this->assertInstanceOf(FacetRequestDto::class, $restored->facets);
+        $this->assertSame(['type', 'language'], $restored->facets->fields);
+    }
+
+    public function testSearchResponseDtoWithFacets(): void
+    {
+        // Default response without facets
+        $emptyResponse = new SearchResponseDto();
+        $this->assertFalse($emptyResponse->hasFacets());
+        $this->assertSame([], $emptyResponse->getFacets());
+        $this->assertArrayNotHasKey('facets', $emptyResponse->toArray());
+
+        // Response with facets constructor
+        $facets = [
+            'type' => [
+                new FacetBucketDto('article', 47),
+                new FacetBucketDto('page', 12),
+            ],
+            'language' => [
+                new FacetBucketDto('en', 38),
+            ],
+        ];
+        $response = new SearchResponseDto([], 0, null, null, null, $facets);
+
+        $this->assertTrue($response->hasFacets());
+        $this->assertSame($facets, $response->getFacets());
+
+        $array = $response->toArray();
+        $this->assertArrayHasKey('facets', $array);
+        $this->assertSame([
+            'type' => [
+                ['value' => 'article', 'count' => 47],
+                ['value' => 'page', 'count' => 12],
+            ],
+            'language' => [
+                ['value' => 'en', 'count' => 38],
+            ],
+        ], $array['facets']);
+
+        // fromArray deserialization
+        $fromArrayResponse = SearchResponseDto::fromArray($array);
+        $this->assertTrue($fromArrayResponse->hasFacets());
+        $this->assertCount(2, $fromArrayResponse->getFacets()['type']);
+        $this->assertInstanceOf(FacetBucketDto::class, $fromArrayResponse->getFacets()['type'][0]);
+        $this->assertSame('article', $fromArrayResponse->getFacets()['type'][0]->value);
+        $this->assertSame(47, $fromArrayResponse->getFacets()['type'][0]->count);
+        $this->assertSame('page', $fromArrayResponse->getFacets()['type'][1]->value);
+        $this->assertSame(12, $fromArrayResponse->getFacets()['type'][1]->count);
+        $this->assertCount(1, $fromArrayResponse->getFacets()['language']);
+        $this->assertSame('en', $fromArrayResponse->getFacets()['language'][0]->value);
+        $this->assertSame(38, $fromArrayResponse->getFacets()['language'][0]->count);
     }
 }
