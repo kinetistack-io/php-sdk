@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Tests\Transport;
 
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
+use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Transport\ResponseErrorHandler;
@@ -109,6 +110,7 @@ final class ResponseErrorHandlerTest extends TestCase
             $this->invokeErrorHandler(429, $headers, $body);
             $this->fail('Expected RateLimitException to be thrown');
         } catch (RateLimitException $e) {
+            $this->assertInstanceOf(RateLimitExceededException::class, $e);
             $this->assertSame('Rate limit exceeded.', $e->getMessage());
             $this->assertSame(429, $e->getCode());
             $this->assertSame(100, $e->getLimit());
@@ -141,6 +143,7 @@ final class ResponseErrorHandlerTest extends TestCase
             $this->invokeErrorHandler(429, ['Content-Type' => ['application/problem+json']], $body);
             $this->fail('Expected RateLimitException to be thrown');
         } catch (RateLimitException $e) {
+            $this->assertInstanceOf(RateLimitExceededException::class, $e);
             $this->assertSame('Rate limit exceeded.', $e->getMessage());
             $this->assertNull($e->getLimit());
             $this->assertNull($e->limit);

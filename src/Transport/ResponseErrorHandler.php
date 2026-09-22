@@ -11,6 +11,7 @@ use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
+use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
@@ -67,7 +68,7 @@ final class ResponseErrorHandler
             409 => new ConflictException($message),
             413 => new PayloadTooLargeException($message),
             422 => new ValidationException($message, $violations),
-            429 => new RateLimitException(
+            429 => new RateLimitExceededException(
                 $message,
                 $retryAfter,
                 null,
