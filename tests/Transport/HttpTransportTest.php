@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Transport;
 
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
@@ -124,7 +125,91 @@ class HttpTransportTest extends TestCase
         } catch (RateLimitException $e) {
             $this->assertSame('Too Many Requests', $e->getMessage());
             $this->assertSame(60, $e->retryAfter);
+            $this->assertSame(60, $e->getRetryAfter());
         }
+    }
+
+    public function testRateLimitExceptionWithAllRateLimitHeaders(): void
+    {
+        $mockResponse = new MockResponse('{"title": "Too Many Requests"}', [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'X-RateLimit-Limit' => '100',
+                'X-RateLimit-Remaining' => '0',
+                'X-RateLimit-Reset' => '1726950000',
+                'Retry-After' => '30',
+            ],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+
+        try {
+            $transport->request('GET', '/v1/test');
+            $this->fail('Expected RateLimitException');
+        } catch (RateLimitException $e) {
+            $this->assertSame('Too Many Requests', $e->getMessage());
+            $this->assertSame(100, $e->limit);
+            $this->assertSame(100, $e->getLimit());
+            $this->assertSame(0, $e->remaining);
+            $this->assertSame(0, $e->getRemaining());
+            $this->assertSame(1726950000, $e->reset);
+            $this->assertSame(1726950000, $e->getReset());
+            $this->assertSame(30, $e->retryAfter);
+            $this->assertSame(30, $e->getRetryAfter());
+
+            $info = $transport->getLastRateLimitInfo();
+            $this->assertNotNull($info);
+            $this->assertSame(100, $info->limit);
+            $this->assertSame(0, $info->remaining);
+            $this->assertSame(1726950000, $info->reset);
+            $this->assertSame(30, $info->retryAfter);
+        }
+    }
+
+    public function testSuccessfulResponseCapturesRateLimitHeaders(): void
+    {
+        $mockResponse = new MockResponse('{"data": "success"}', [
+            'http_code' => 200,
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '500',
+                'X-RateLimit-Remaining' => '499',
+                'X-RateLimit-Reset' => '1726959999',
+            ],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+
+        $this->assertNull($transport->getLastRateLimitInfo());
+
+        $response = $transport->request('GET', '/v1/data');
+        $this->assertSame(200, $response->getStatusCode());
+
+        $info = $transport->getLastRateLimitInfo();
+        $this->assertInstanceOf(RateLimitInfoDto::class, $info);
+        $this->assertSame(500, $info->limit);
+        $this->assertSame(500, $info->getLimit());
+        $this->assertSame(499, $info->remaining);
+        $this->assertSame(499, $info->getRemaining());
+        $this->assertSame(1726959999, $info->reset);
+        $this->assertSame(1726959999, $info->getReset());
+        $this->assertNull($info->retryAfter);
+    }
+
+    public function testSuccessfulResponseWithoutRateLimitHeadersReturnsNull(): void
+    {
+        $mockResponse = new MockResponse('{"data": "success"}', [
+            'http_code' => 200,
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+            ],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+
+        $transport->request('GET', '/v1/data');
+        $this->assertNull($transport->getLastRateLimitInfo());
     }
 
     /**

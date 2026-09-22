@@ -9,6 +9,7 @@ use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
@@ -205,7 +206,85 @@ class Psr18TransportTest extends TestCase
         } catch (RateLimitException $e) {
             $this->assertSame('Too Many Requests', $e->getMessage());
             $this->assertSame(60, $e->retryAfter);
+            $this->assertSame(60, $e->getRetryAfter());
         }
+    }
+
+    public function testRateLimitExceptionWithAllRateLimitHeaders(): void
+    {
+        $mock = new MockHandler([
+            new Response(429, [
+                'Content-Type' => 'application/problem+json',
+                'X-RateLimit-Limit' => '100',
+                'X-RateLimit-Remaining' => '0',
+                'X-RateLimit-Reset' => '1726950000',
+                'Retry-After' => '30',
+            ], '{"title": "Too Many Requests"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        try {
+            $transport->request('GET', '/v1/test');
+            $this->fail('Expected RateLimitException');
+        } catch (RateLimitException $e) {
+            $this->assertSame('Too Many Requests', $e->getMessage());
+            $this->assertSame(100, $e->limit);
+            $this->assertSame(100, $e->getLimit());
+            $this->assertSame(0, $e->remaining);
+            $this->assertSame(0, $e->getRemaining());
+            $this->assertSame(1726950000, $e->reset);
+            $this->assertSame(1726950000, $e->getReset());
+            $this->assertSame(30, $e->retryAfter);
+            $this->assertSame(30, $e->getRetryAfter());
+
+            $info = $transport->getLastRateLimitInfo();
+            $this->assertNotNull($info);
+            $this->assertSame(100, $info->limit);
+            $this->assertSame(0, $info->remaining);
+            $this->assertSame(1726950000, $info->reset);
+            $this->assertSame(30, $info->retryAfter);
+        }
+    }
+
+    public function testSuccessfulResponseCapturesRateLimitHeaders(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '250',
+                'X-RateLimit-Remaining' => '240',
+                'X-RateLimit-Reset' => '1726958888',
+            ], '{"data": "ok"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $this->assertNull($transport->getLastRateLimitInfo());
+
+        $response = $transport->request('GET', '/v1/data');
+        $this->assertSame(200, $response->getStatusCode());
+
+        $info = $transport->getLastRateLimitInfo();
+        $this->assertInstanceOf(RateLimitInfoDto::class, $info);
+        $this->assertSame(250, $info->limit);
+        $this->assertSame(240, $info->remaining);
+        $this->assertSame(1726958888, $info->reset);
+        $this->assertNull($info->retryAfter);
+    }
+
+    public function testSuccessfulResponseWithoutRateLimitHeadersReturnsNull(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [
+                'Content-Type' => 'application/json',
+            ], '{"data": "ok"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $transport->request('GET', '/v1/data');
+        $this->assertNull($transport->getLastRateLimitInfo());
     }
 
     /**
@@ -368,32 +447,6 @@ class Psr18TransportTest extends TestCase
         $transport->request('POST', '/v1/test', [
             'body' => $nonSeekableStream,
         ]);
-    }
-
-    public function testParseRetryAfterWithHttpDate(): void
-    {
-        $futureTime = time() + 120;
-        $httpDate = gmdate('D, d M Y H:i:s \G\M\T', $futureTime);
-
-        $headers = [
-            'Retry-After' => [$httpDate],
-        ];
-
-        $parsed = ResponseErrorHandler::parseRetryAfter($headers);
-        $this->assertNotNull($parsed);
-        $this->assertEqualsWithDelta(120, $parsed, 2);
-    }
-
-    public function testParseRetryAfterWithIntegerKeysAndEmptyValues(): void
-    {
-        $headers = [
-            0 => ['irrelevant'],
-            'Retry-After' => ['45'],
-            1 => ['another'],
-        ];
-
-        $parsed = ResponseErrorHandler::parseRetryAfter($headers);
-        $this->assertSame(45, $parsed);
     }
 
     public function testRetryWithHttpDateRetryAfter(): void

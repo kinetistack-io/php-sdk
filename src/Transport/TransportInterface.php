@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Transport;
 
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\KinetiException;
 
 interface TransportInterface
@@ -30,4 +31,9 @@ interface TransportInterface
      * @throws KinetiException On transport or API errors (status >= 400)
      */
     public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface;
+
+    /**
+     * Get the rate limit information from the most recent request, or null if unavailable.
+     */
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto;
 }

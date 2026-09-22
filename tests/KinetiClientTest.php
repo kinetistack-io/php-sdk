@@ -8,6 +8,7 @@ use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\JobDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
@@ -33,6 +34,47 @@ class KinetiClientTest extends TestCase
         $this->assertTrue($result->isReady());
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/healthz', $mockResponse->getRequestUrl());
+    }
+
+    public function testLastRateLimitInfoExposedAfterSuccessfulResponse(): void
+    {
+        $responseBody = json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR);
+        $mockResponse = new MockResponse($responseBody, [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '100',
+                'X-RateLimit-Remaining' => '98',
+                'X-RateLimit-Reset' => '1726950000',
+            ],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $this->assertNull($kineti->getLastRateLimitInfo());
+
+        $kineti->healthz();
+
+        $info = $kineti->getLastRateLimitInfo();
+        $this->assertInstanceOf(RateLimitInfoDto::class, $info);
+        $this->assertSame(100, $info->limit);
+        $this->assertSame(98, $info->remaining);
+        $this->assertSame(1726950000, $info->reset);
+        $this->assertNull($info->retryAfter);
+    }
+
+    public function testLastRateLimitInfoFallsBackToNullWhenNoHeaders(): void
+    {
+        $responseBody = json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR);
+        $mockResponse = new MockResponse($responseBody, [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+            ],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $kineti->healthz();
+        $this->assertNull($kineti->getLastRateLimitInfo());
     }
 
     public function testReadyz(): void

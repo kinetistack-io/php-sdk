@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Transport;
 
 use Http\Discovery\Psr17FactoryDiscovery;
 use Http\Discovery\Psr18ClientDiscovery;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\TransportException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -22,6 +23,7 @@ class Psr18Transport implements TransportInterface
     private readonly string $authHeaderValue;
     /** @var array<string, mixed> */
     private readonly array $defaultOptions;
+    private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
     /**
      * @param ClientInterface|array<string, mixed>|null $clientOrDefaultOptions
@@ -160,7 +162,7 @@ class Psr18Transport implements TransportInterface
             $statusCode = $psrResponse->getStatusCode();
 
             if (($statusCode === 429 || $statusCode === 503) && $attempts <= $maxRetries) {
-                $retryAfter = ResponseErrorHandler::parseRetryAfter($psrResponse->getHeaders());
+                $retryAfter = RateLimitInfoDto::fromHeaders($psrResponse->getHeaders())?->retryAfter;
                 $delaySeconds = $retryAfter !== null ? (float) $retryAfter : (1.0 * (2 ** ($attempts - 1)));
 
                 $pauseHandler = $mergedOptions['pause_handler'] ?? null;
@@ -183,6 +185,7 @@ class Psr18Transport implements TransportInterface
             }
 
             $transportResponse = new Psr18TransportResponse($psrResponse);
+            $this->lastRateLimitInfo = RateLimitInfoDto::fromHeaders($transportResponse->getHeaders());
 
             if ($statusCode >= 400) {
                 ResponseErrorHandler::handleError(
@@ -242,5 +245,10 @@ class Psr18Transport implements TransportInterface
     public function getApiKey(): string
     {
         return $this->authHeaderValue;
+    }
+
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto
+    {
+        return $this->lastRateLimitInfo;
     }
 }

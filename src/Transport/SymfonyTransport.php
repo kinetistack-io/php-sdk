@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Transport;
 
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\TransportException;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
@@ -19,6 +20,7 @@ class SymfonyTransport implements TransportInterface
     private readonly string $authHeaderValue;
     /** @var array<string, mixed> */
     private readonly array $defaultOptions;
+    private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
     /**
      * @param HttpClientInterface|array<string, mixed>|null $clientOrDefaultOptions
@@ -103,6 +105,7 @@ class SymfonyTransport implements TransportInterface
             $response = $this->client->request($method, $url, $mergedOptions);
             $transportResponse = new SymfonyTransportResponse($response, $this->client);
             $statusCode = $transportResponse->getStatusCode();
+            $this->lastRateLimitInfo = RateLimitInfoDto::fromHeaders($transportResponse->getHeaders());
         } catch (TransportExceptionInterface $e) {
             throw new TransportException($e->getMessage(), 0, $e);
         }
@@ -163,5 +166,10 @@ class SymfonyTransport implements TransportInterface
     public function getApiKey(): string
     {
         return $this->authHeaderValue;
+    }
+
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto
+    {
+        return $this->lastRateLimitInfo;
     }
 }

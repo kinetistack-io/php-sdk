@@ -11,6 +11,7 @@ use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
@@ -28,6 +29,8 @@ interface AdminClientInterface
     public function withToken(string $jwtToken): static;
 
     public function getTransport(): TransportInterface;
+
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto;
 
     public function getApiHost(): string;
 

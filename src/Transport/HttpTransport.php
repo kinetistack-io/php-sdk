@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Transport;
 
 use Http\Discovery\Psr18ClientDiscovery;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\TransportException;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Component\HttpClient\HttpClient;
@@ -15,6 +16,7 @@ class HttpTransport implements TransportInterface
     private readonly TransportInterface $delegate;
     private readonly string $authHeaderName;
     private readonly string $authHeaderValue;
+    private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
     /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|array<string, mixed>|null $clientOrDefaultOptions
@@ -59,12 +61,30 @@ class HttpTransport implements TransportInterface
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface
     {
-        return $this->delegate->request($method, $path, $options);
+        try {
+            $response = $this->delegate->request($method, $path, $options);
+            $this->lastRateLimitInfo = $this->delegate->getLastRateLimitInfo()
+                ?? RateLimitInfoDto::fromHeaders($response->getHeaders());
+
+            return $response;
+        } catch (\Throwable $e) {
+            $this->lastRateLimitInfo = $this->delegate->getLastRateLimitInfo() ?? $this->lastRateLimitInfo;
+            throw $e;
+        }
     }
 
     public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
     {
-        return $this->delegate->requestStream($method, $path, $options);
+        try {
+            $response = $this->delegate->requestStream($method, $path, $options);
+            $this->lastRateLimitInfo = $this->delegate->getLastRateLimitInfo()
+                ?? RateLimitInfoDto::fromHeaders($response->getHeaders());
+
+            return $response;
+        } catch (\Throwable $e) {
+            $this->lastRateLimitInfo = $this->delegate->getLastRateLimitInfo() ?? $this->lastRateLimitInfo;
+            throw $e;
+        }
     }
 
     public function withAuthHeaderValue(string $authHeaderValue): self
@@ -100,6 +120,11 @@ class HttpTransport implements TransportInterface
     public function getApiKey(): string
     {
         return $this->authHeaderValue;
+    }
+
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto
+    {
+        return $this->delegate->getLastRateLimitInfo() ?? $this->lastRateLimitInfo;
     }
 
     /**

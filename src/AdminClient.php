@@ -11,6 +11,7 @@ use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
@@ -78,6 +79,11 @@ class AdminClient implements AdminClientInterface
     public function getTransport(): TransportInterface
     {
         return $this->transport;
+    }
+
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto
+    {
+        return $this->transport->getLastRateLimitInfo();
     }
 
     public function getApiHost(): string

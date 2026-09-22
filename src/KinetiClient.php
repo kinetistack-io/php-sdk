@@ -13,6 +13,7 @@ use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
@@ -55,6 +56,14 @@ class KinetiClient
     public function getTransport(): TransportInterface
     {
         return $this->transport;
+    }
+
+    /**
+     * Get the rate limit information from the most recent request, or null if unavailable.
+     */
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto
+    {
+        return $this->transport->getLastRateLimitInfo();
     }
 
     public function modules(): ModuleClient

@@ -13,6 +13,7 @@ use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
@@ -45,6 +46,34 @@ class AdminClientTest extends TestCase
         $client = new AdminClient('https://api.test', 'initial-jwt');
         $this->assertInstanceOf(AdminClientInterface::class, $client);
         $this->assertInstanceOf(BaseAdminClientInterface::class, $client);
+    }
+
+    public function testLastRateLimitInfoOnAdminClient(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'registration_mode' => 'public',
+            'allowed_domains' => [],
+            'default_roles' => [],
+        ], JSON_THROW_ON_ERROR), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '300',
+                'X-RateLimit-Remaining' => '295',
+                'X-RateLimit-Reset' => '1726950123',
+            ],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', 'token', $httpClient);
+
+        $this->assertNull($client->getLastRateLimitInfo());
+
+        $client->getRegistrationStatus();
+
+        $info = $client->getLastRateLimitInfo();
+        $this->assertInstanceOf(RateLimitInfoDto::class, $info);
+        $this->assertSame(300, $info->limit);
+        $this->assertSame(295, $info->remaining);
+        $this->assertSame(1726950123, $info->reset);
     }
 
     /**
