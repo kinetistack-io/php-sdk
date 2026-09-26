@@ -7,6 +7,6 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 # Install system dependencies and required PHP extensions
 RUN apk add --no-cache git unzip bash \
-    && install-php-extensions pcntl zip curl intl
+    && install-php-extensions pcntl zip curl intl pcov
 
 WORKDIR /app
