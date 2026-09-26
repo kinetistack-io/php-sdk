@@ -67,6 +67,9 @@ class ApiKeyDto
     {
         $id = (string) ($data['id'] ?? '');
         $name = (string) ($data['name'] ?? '');
+        if (trim($name) === '') {
+            $name = 'API Key';
+        }
         $tokenSuffix = (string) ($data['token_suffix'] ?? $data['tokenSuffix'] ?? '');
         $scope = (string) ($data['scope'] ?? 'all');
         $rateLimitPerMinute = isset($data['rate_limit_per_minute'])

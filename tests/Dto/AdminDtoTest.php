@@ -170,6 +170,30 @@ class AdminDtoTest extends TestCase
         new ApiKeyDto('', 'Name', 'abcd');
     }
 
+    /**
+     * @dataProvider emptyNameProvider
+     * @param array<string, mixed> $payload
+     */
+    public function testApiKeyDtoFromArrayDefaultsEmptyNameToApiKey(array $payload): void
+    {
+        $dto = ApiKeyDto::fromArray($payload);
+
+        $this->assertSame('API Key', $dto->name);
+    }
+
+    /**
+     * @return array<string, array{0: array<string, mixed>}>
+     */
+    public static function emptyNameProvider(): array
+    {
+        return [
+            'empty string' => [['id' => 'key-123', 'name' => '', 'token_suffix' => 'abcd']],
+            'whitespace only' => [['id' => 'key-123', 'name' => '   ', 'token_suffix' => 'abcd']],
+            'null name' => [['id' => 'key-123', 'name' => null, 'token_suffix' => 'abcd']],
+            'missing name key' => [['id' => 'key-123', 'token_suffix' => 'abcd']],
+        ];
+    }
+
     public function testApiKeyCreatedDtoExposesToken(): void
     {
         $dto = new ApiKeyCreatedDto(
