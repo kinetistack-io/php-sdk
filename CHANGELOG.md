@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `monthlyQuotaCap` in `ProjectDto`, `OrganizationDto`, and `AdminClient` (`createProject`, `updateProject`, `createOrganization`, `updateOrganization`) (PHPSDK-37).
 - Added `resendVerificationEmail()` method to `AdminClient` and `AdminClientInterface` (`POST /api/v1/admin/resend-verification`) (PHPSDK-38).
 - Added `verifyEmail()` method to `AdminClient` and `AdminClientInterface` (`POST /api/v1/admin/verify-email`) (PHPSDK-39).
+- Added `getApiKey()` method to `AdminClient` and `AdminClientInterface` (`GET /api/v1/admin/projects/{projectId}/api-keys/{id}`) (PHPSDK-40).
 
 ## [1.0.7] - 2026-09-22
 

@@ -21,6 +21,7 @@ use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\TransportInterface;
 
@@ -163,6 +164,18 @@ interface AdminClientInterface
      * @throws KinetiException
      */
     public function listApiKeys(?string $projectId = null, array $options = []): array;
+
+    /**
+     * Retrieve metadata and status for a specific API key without fetching the entire project key collection.
+     *
+     * @param string $projectId The project identifier.
+     * @param string $keyId The API key identifier.
+     *
+     * @throws \InvalidArgumentException When $projectId or $keyId is empty.
+     * @throws NotFoundException When the API key is not found (HTTP 404).
+     * @throws KinetiException
+     */
+    public function getApiKey(string $projectId, string $keyId): ApiKeyDto;
 
     /**
      * @throws KinetiException

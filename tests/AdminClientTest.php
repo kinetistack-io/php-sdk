@@ -886,6 +886,125 @@ class AdminClientTest extends TestCase
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys/key-uuid-1/rotate', $mockResponse->getRequestUrl());
     }
 
+    public function testGetApiKeySuccess(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'key-uuid-123',
+            'name' => 'Production Key',
+            'token_suffix' => '8899',
+            'scope' => 'read_write',
+            'rate_limit_per_minute' => 60,
+            'expires_at' => '2027-12-31T23:59:59Z',
+            'created_at' => '2026-09-01T12:00:00Z',
+            'revoked_at' => null,
+            'grace_period_until' => null,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 200]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'admin-jwt-token', $httpClient);
+
+        $key = $admin->getApiKey('proj-123', 'key-uuid-123');
+
+        $this->assertInstanceOf(ApiKeyDto::class, $key);
+        $this->assertSame('key-uuid-123', $key->id);
+        $this->assertSame('Production Key', $key->name);
+        $this->assertSame('8899', $key->tokenSuffix);
+        $this->assertSame('read_write', $key->scope);
+        $this->assertSame(60, $key->rateLimitPerMinute);
+        $this->assertSame('2027-12-31T23:59:59Z', $key->expiresAt);
+        $this->assertSame('2026-09-01T12:00:00Z', $key->createdAt);
+        $this->assertNull($key->revokedAt);
+        $this->assertNull($key->gracePeriodUntil);
+        $this->assertObjectNotHasProperty('token', $key);
+
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj-123/api-keys/key-uuid-123', $mockResponse->getRequestUrl());
+        $this->assertContains('Authorization: Bearer admin-jwt-token', $mockResponse->getRequestOptions()['headers']);
+    }
+
+    /**
+     * @dataProvider provideEmptyKeyIdentifiers
+     */
+    public function testGetApiKeyEmptyProjectIdThrowsException(string $emptyProjectId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->getApiKey($emptyProjectId, 'key-123');
+    }
+
+    /**
+     * @dataProvider provideEmptyKeyIdentifiers
+     */
+    public function testGetApiKeyEmptyKeyIdThrowsException(string $emptyKeyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('API key ID cannot be empty.');
+
+        $admin->getApiKey('proj-123', $emptyKeyId);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function provideEmptyKeyIdentifiers(): array
+    {
+        return [
+            'empty string' => [''],
+            'whitespace only' => ['   '],
+            'tabs and newlines' => [" \t\n "],
+        ];
+    }
+
+    public function testGetApiKeyNotFoundThrowsNotFoundException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:not-found',
+            'title' => 'Not Found',
+            'status' => 404,
+            'detail' => 'API key not found.',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 404,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(NotFoundException::class);
+        $this->expectExceptionMessage('API key not found.');
+
+        $admin->getApiKey('proj-123', 'non-existent-key');
+    }
+
+    public function testGetApiKeyUrlEncodesPathParameters(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'key/with/slashes',
+            'name' => 'Special Key',
+            'token_suffix' => '9999',
+            'scope' => 'all',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 200]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $key = $admin->getApiKey('proj special 1', 'key/with/slashes');
+
+        $this->assertSame('key/with/slashes', $key->id);
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj%20special%201/api-keys/key%2Fwith%2Fslashes', $mockResponse->getRequestUrl());
+    }
+
     public function testGetUsage(): void
     {
         $responseBody = json_encode([

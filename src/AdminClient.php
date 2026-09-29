@@ -23,6 +23,7 @@ use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\TransportInterface;
@@ -531,6 +532,35 @@ class AdminClient implements AdminClientInterface
         $items = $this->extractCollection($data);
 
         return array_map(static fn (array $item): ApiKeyDto => ApiKeyDto::fromArray($item), $items);
+    }
+
+    /**
+     * Retrieve metadata and status for a specific API key without fetching the entire project key collection.
+     *
+     * @param string $projectId The project identifier.
+     * @param string $keyId The API key identifier.
+     *
+     * @throws \InvalidArgumentException When $projectId or $keyId is empty.
+     * @throws NotFoundException When the API key is not found (HTTP 404).
+     * @throws KinetiException
+     */
+    public function getApiKey(string $projectId, string $keyId): ApiKeyDto
+    {
+        if (trim($projectId) === '') {
+            throw new \InvalidArgumentException('Project ID cannot be empty.');
+        }
+
+        if (trim($keyId) === '') {
+            throw new \InvalidArgumentException('API key ID cannot be empty.');
+        }
+
+        $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s', rawurlencode($projectId), rawurlencode($keyId));
+        $response = $this->transport->request('GET', $path);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return ApiKeyDto::fromArray($data);
     }
 
     /**
