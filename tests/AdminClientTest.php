@@ -420,83 +420,26 @@ class AdminClientTest extends TestCase
         $admin->register('Acme Agency', 'admin@acme.com', '');
     }
 
-    /**
-     * S1: createOrganization() sends POST /api/v1/admin/organizations with Authorization: Bearer <jwt> and returns typed OrganizationDto.
-     */
-    public function testCreateOrganization(): void
+    public function testCreateOrganizationThrowsBadMethodCallException(): void
     {
-        $responseBody = json_encode([
-            'id' => 'org-uuid-100',
-            'name' => 'Acme Agency',
-            'billing_tier' => 'standard',
-            'created_at' => '2026-09-08T12:00:00Z',
-        ], JSON_THROW_ON_ERROR);
-
-        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
-        $httpClient = new MockHttpClient($mockResponse);
-        $admin = new AdminClient('https://api.test', 'my-admin-jwt', $httpClient);
-
-        $org = $admin->createOrganization('Acme Agency', 'standard');
-
-        $this->assertInstanceOf(OrganizationDto::class, $org);
-        $this->assertSame('org-uuid-100', $org->id);
-        $this->assertSame('Acme Agency', $org->name);
-        $this->assertSame('standard', $org->billingTier);
-        $this->assertSame('2026-09-08T12:00:00Z', $org->createdAt);
-
-        $this->assertSame('POST', $mockResponse->getRequestMethod());
-        $this->assertStringEndsWith('/api/v1/admin/organizations', $mockResponse->getRequestUrl());
-        $this->assertContains('Authorization: Bearer my-admin-jwt', $mockResponse->getRequestOptions()['headers']);
-
-        /** @var array<string, mixed> $body */
-        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
-        $this->assertSame('Acme Agency', $body['name']);
-        $this->assertSame('standard', $body['billing_tier']);
-    }
-
-    public function testCreateOrganizationWithArray(): void
-    {
-        $mockResponse = new MockResponse(json_encode([
-            'id' => 'org-uuid-101',
-            'name' => 'Acme Array',
-            'billing_tier' => 'pro',
-        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
-        $httpClient = new MockHttpClient($mockResponse);
+        $httpClient = new MockHttpClient([]);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
-        $org = $admin->createOrganization(['name' => 'Acme Array', 'billing_tier' => 'pro']);
-        $this->assertSame('org-uuid-101', $org->id);
-        $this->assertSame('Acme Array', $org->name);
-        $this->assertSame('pro', $org->billingTier);
+        $this->expectException(\BadMethodCallException::class);
+        $this->expectExceptionMessage('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
+
+        $admin->createOrganization('Acme Agency', 'standard');
     }
 
-    public function testListOrganizations(): void
+    public function testListOrganizationsThrowsBadMethodCallException(): void
     {
-        $responseBody = json_encode([
-            [
-                'id' => 'org-1',
-                'name' => 'Agency 1',
-                'billing_tier' => 'standard',
-            ],
-            [
-                'id' => 'org-2',
-                'name' => 'Agency 2',
-                'billing_tier' => 'enterprise',
-            ],
-        ], JSON_THROW_ON_ERROR);
-
-        $mockResponse = new MockResponse($responseBody);
-        $httpClient = new MockHttpClient($mockResponse);
+        $httpClient = new MockHttpClient([]);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
-        $list = $admin->listOrganizations(['page' => 1]);
+        $this->expectException(\BadMethodCallException::class);
+        $this->expectExceptionMessage('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
 
-        $this->assertCount(2, $list);
-        $this->assertInstanceOf(OrganizationDto::class, $list[0]);
-        $this->assertSame('org-1', $list[0]->id);
-        $this->assertSame('Agency 2', $list[1]->name);
-        $this->assertSame('GET', $mockResponse->getRequestMethod());
-        $this->assertStringContainsString('/api/v1/admin/organizations', $mockResponse->getRequestUrl());
+        $admin->listOrganizations(['page' => 1]);
     }
 
     public function testGetOrganization(): void
@@ -532,58 +475,6 @@ class AdminClientTest extends TestCase
         $this->assertSame('PATCH', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/admin/organizations/org-42', $mockResponse->getRequestUrl());
         $this->assertContains('Content-Type: application/merge-patch+json', $mockResponse->getRequestOptions()['headers']);
-    }
-
-    public function testCreateOrganizationWithMonthlyQuotaCap(): void
-    {
-        $responseBody = json_encode([
-            'id' => 'org-uuid-200',
-            'name' => 'Capped Org',
-            'billing_tier' => 'standard',
-            'monthly_quota_cap' => 50000,
-        ], JSON_THROW_ON_ERROR);
-
-        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
-        $httpClient = new MockHttpClient($mockResponse);
-        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
-
-        $org = $admin->createOrganization('Capped Org', 'standard', 50000);
-
-        $this->assertSame('org-uuid-200', $org->id);
-        $this->assertSame(50000, $org->monthlyQuotaCap);
-        $this->assertSame(50000, $org->getMonthlyQuotaCap());
-
-        /** @var array<string, mixed> $body */
-        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
-        $this->assertSame(50000, $body['monthly_quota_cap']);
-    }
-
-    public function testCreateOrganizationWithArrayMonthlyQuotaCapNormalizes(): void
-    {
-        $responseBody = json_encode([
-            'id' => 'org-uuid-201',
-            'name' => 'Camel Org',
-            'billing_tier' => 'pro',
-            'monthly_quota_cap' => 80000,
-        ], JSON_THROW_ON_ERROR);
-
-        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
-        $httpClient = new MockHttpClient($mockResponse);
-        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
-
-        $org = $admin->createOrganization([
-            'name' => 'Camel Org',
-            'billing_tier' => 'pro',
-            'monthlyQuotaCap' => 80000,
-        ]);
-
-        $this->assertSame(80000, $org->monthlyQuotaCap);
-        $this->assertSame(80000, $org->getMonthlyQuotaCap());
-
-        /** @var array<string, mixed> $body */
-        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
-        $this->assertSame(80000, $body['monthly_quota_cap']);
-        $this->assertArrayNotHasKey('monthlyQuotaCap', $body);
     }
 
     public function testUpdateOrganizationWithMonthlyQuotaCapAndResetToNull(): void
@@ -861,6 +752,18 @@ class AdminClientTest extends TestCase
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys/key-uuid-1', $mockResponse->getRequestUrl());
     }
 
+    public function testRevokeApiKeySupportsLegacyNamedArguments(): void
+    {
+        $mockResponse = new MockResponse('', ['http_code' => 204]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $admin->revokeApiKey(projectIdOrKeyId: 'proj-1', keyId: 'key-uuid-1');
+
+        $this->assertSame('DELETE', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys/key-uuid-1', $mockResponse->getRequestUrl());
+    }
+
     public function testRotateApiKey(): void
     {
         $responseBody = json_encode([
@@ -949,6 +852,120 @@ class AdminClientTest extends TestCase
         $this->expectExceptionMessage('API key ID cannot be empty.');
 
         $admin->getApiKey('proj-123', $emptyKeyId);
+    }
+
+    /**
+     * @dataProvider provideEmptyCreateApiKeyProjectPayloads
+     * @param array<string, mixed>|string $emptyProject
+     */
+    public function testCreateApiKeyEmptyProjectIdThrowsException(array|string $emptyProject): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->createApiKey($emptyProject, 'Key Name');
+    }
+
+    /**
+     * @dataProvider provideEmptyNullableKeyIdentifiers
+     */
+    public function testListApiKeysEmptyProjectIdThrowsException(?string $emptyProjectId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->listApiKeys($emptyProjectId);
+    }
+
+    /**
+     * @dataProvider provideEmptyKeyIdentifiers
+     */
+    public function testRevokeApiKeyEmptyProjectIdThrowsException(string $emptyProjectId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->revokeApiKey($emptyProjectId, 'key-123');
+    }
+
+    /**
+     * @dataProvider provideEmptyNullableKeyIdentifiers
+     */
+    public function testRevokeApiKeyEmptyKeyIdThrowsException(?string $emptyKeyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('API key ID cannot be empty.');
+
+        $admin->revokeApiKey('proj-123', $emptyKeyId);
+    }
+
+    /**
+     * @dataProvider provideEmptyKeyIdentifiers
+     */
+    public function testRotateApiKeyEmptyProjectIdThrowsException(string $emptyProjectId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->rotateApiKey($emptyProjectId, 'key-123');
+    }
+
+    /**
+     * @dataProvider provideEmptyKeyIdentifiers
+     */
+    public function testRotateApiKeyEmptyKeyIdThrowsException(string $emptyKeyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('API key ID cannot be empty.');
+
+        $admin->rotateApiKey('proj-123', $emptyKeyId);
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>|string}>
+     */
+    public static function provideEmptyCreateApiKeyProjectPayloads(): array
+    {
+        return [
+            'empty string' => [''],
+            'whitespace only' => ['   '],
+            'empty array' => [[]],
+            'array with name only' => [['name' => 'Key Without Project']],
+            'array with empty project_id' => [['project_id' => '']],
+            'array with whitespace project_id' => [['project_id' => '   ']],
+            'array with empty projectId' => [['projectId' => '']],
+        ];
+    }
+
+    /**
+     * @return array<string, array{?string}>
+     */
+    public static function provideEmptyNullableKeyIdentifiers(): array
+    {
+        return [
+            'null' => [null],
+            'empty string' => [''],
+            'whitespace only' => ['   '],
+            'tabs and newlines' => [" \t\n "],
+        ];
     }
 
     /**

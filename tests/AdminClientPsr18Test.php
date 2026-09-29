@@ -34,8 +34,8 @@ class AdminClientPsr18Test extends TestCase
         $mock = new MockHandler([
             // 1. login
             new Response(200, ['Content-Type' => 'application/json'], '{"token": "jwt-psr18-token", "refresh_token": null}'),
-            // 2. createOrganization
-            new Response(201, ['Content-Type' => 'application/json'], '{"id": "org-psr18", "name": "PSR-18 Agency", "billing_tier": "standard"}'),
+            // 2. getOrganization
+            new Response(200, ['Content-Type' => 'application/json'], '{"id": "org-psr18", "name": "PSR-18 Agency", "billing_tier": "standard"}'),
             // 3. createProject
             new Response(201, ['Content-Type' => 'application/json'], '{"id": "proj-psr18", "name": "PSR-18 Project", "domain": "psr18.test"}'),
             // 4. createApiKey
@@ -61,8 +61,8 @@ class AdminClientPsr18Test extends TestCase
         $auth = $admin->login('admin@test.com', 'pass');
         $this->assertSame('jwt-psr18-token', $auth->token);
 
-        // 2. createOrganization
-        $org = $admin->createOrganization('PSR-18 Agency', 'standard');
+        // 2. getOrganization
+        $org = $admin->getOrganization('org-psr18');
         $this->assertInstanceOf(OrganizationDto::class, $org);
         $this->assertSame('org-psr18', $org->id);
 
@@ -90,9 +90,9 @@ class AdminClientPsr18Test extends TestCase
         // Verify that authenticated requests sent Authorization: Bearer jwt-psr18-token
         assert(is_array($container));
         $this->assertCount(6, $container);
-        $createOrgRequest = $container[1]['request'];
-        $this->assertTrue($createOrgRequest->hasHeader('Authorization'));
-        $this->assertSame('Bearer jwt-psr18-token', $createOrgRequest->getHeaderLine('Authorization'));
+        $getOrgRequest = $container[1]['request'];
+        $this->assertTrue($getOrgRequest->hasHeader('Authorization'));
+        $this->assertSame('Bearer jwt-psr18-token', $getOrgRequest->getHeaderLine('Authorization'));
     }
 
     public function testGetRegistrationStatusWithPsr18(): void

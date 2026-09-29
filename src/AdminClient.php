@@ -229,7 +229,10 @@ class AdminClient implements AdminClientInterface
     /**
      * Create a new organization.
      *
+     * @deprecated Organizations cannot be created directly. Organizations are single-tenant roots initialized during registration via register() and retrieved via getOrganization($id). This method will be removed in the next major version.
+     *
      * @param array<string, mixed>|string $name
+     * @throws \BadMethodCallException Because organization creation via this endpoint is not supported by the backend.
      * @throws KinetiException
      */
     public function createOrganization(
@@ -237,54 +240,22 @@ class AdminClient implements AdminClientInterface
         ?string $billingTier = null,
         ?int $monthlyQuotaCap = null
     ): OrganizationDto {
-        if (is_array($name)) {
-            $payload = $name;
-        } else {
-            $payload = ['name' => $name];
-            if ($billingTier !== null) {
-                $payload['billing_tier'] = $billingTier;
-            }
-            if ($monthlyQuotaCap !== null) {
-                $payload['monthly_quota_cap'] = $monthlyQuotaCap;
-            }
-        }
-
-        if (array_key_exists('monthlyQuotaCap', $payload) && !array_key_exists('monthly_quota_cap', $payload)) {
-            $payload['monthly_quota_cap'] = $payload['monthlyQuotaCap'];
-            unset($payload['monthlyQuotaCap']);
-        }
-
-        $response = $this->transport->request('POST', '/api/v1/admin/organizations', [
-            'json' => $payload,
-        ]);
-
-        /** @var array<string, mixed> $data */
-        $data = $response->toArray();
-
-        return OrganizationDto::fromArray($data);
+        throw new \BadMethodCallException('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
     }
 
     /**
      * List organizations.
      *
+     * @deprecated Organizations cannot be listed directly. Organizations are single-tenant roots initialized during registration and retrieved via getOrganization($id). This method will be removed in the next major version.
+     *
      * @param array<string, mixed> $options
      * @return list<OrganizationDto>
+     * @throws \BadMethodCallException Because organization listing is not supported by the backend.
      * @throws KinetiException
      */
     public function listOrganizations(array $options = []): array
     {
-        $requestOptions = [];
-        if (!empty($options)) {
-            $requestOptions['query'] = $options;
-        }
-
-        $response = $this->transport->request('GET', '/api/v1/admin/organizations', $requestOptions);
-
-        /** @var array<string, mixed>|list<array<string, mixed>> $data */
-        $data = $response->toArray();
-        $items = $this->extractCollection($data);
-
-        return array_map(static fn (array $item): OrganizationDto => OrganizationDto::fromArray($item), $items);
+        throw new \BadMethodCallException('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
     }
 
     /**
@@ -462,6 +433,7 @@ class AdminClient implements AdminClientInterface
      *
      * @param array<string, mixed>|string $projectOrData Project ID string or full data array
      * @param array<string, mixed>|string $nameOrData
+     * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException
      */
     public function createApiKey(
@@ -493,9 +465,11 @@ class AdminClient implements AdminClientInterface
             }
         }
 
-        $path = $projectId !== ''
-            ? sprintf('/api/v1/admin/projects/%s/api-keys', urlencode($projectId))
-            : '/api/v1/admin/api-keys';
+        if (trim($projectId) === '') {
+            throw new \InvalidArgumentException('Project ID cannot be empty.');
+        }
+
+        $path = sprintf('/api/v1/admin/projects/%s/api-keys', urlencode($projectId));
 
         $response = $this->transport->request('POST', $path, [
             'json' => $payload,
@@ -510,15 +484,19 @@ class AdminClient implements AdminClientInterface
     /**
      * List API keys for a project (without plaintext token).
      *
+     * @param string|null $projectId Project ID string. Must not be empty.
      * @param array<string, mixed> $options
      * @return list<ApiKeyDto>
+     * @throws \InvalidArgumentException When $projectId is null or empty.
      * @throws KinetiException
      */
     public function listApiKeys(?string $projectId = null, array $options = []): array
     {
-        $path = $projectId !== null && $projectId !== ''
-            ? sprintf('/api/v1/admin/projects/%s/api-keys', urlencode($projectId))
-            : '/api/v1/admin/api-keys';
+        if ($projectId === null || trim($projectId) === '') {
+            throw new \InvalidArgumentException('Project ID cannot be empty.');
+        }
+
+        $path = sprintf('/api/v1/admin/projects/%s/api-keys', urlencode($projectId));
 
         $requestOptions = [];
         if (!empty($options)) {
@@ -566,15 +544,22 @@ class AdminClient implements AdminClientInterface
     /**
      * Revoke an API key.
      *
+     * @param string $projectIdOrKeyId The project identifier (named $projectIdOrKeyId for backwards compatibility).
+     * @param string|null $keyId The API key identifier. Must not be empty.
+     * @throws \InvalidArgumentException When $projectIdOrKeyId or $keyId is empty.
      * @throws KinetiException
      */
     public function revokeApiKey(string $projectIdOrKeyId, ?string $keyId = null): void
     {
-        if ($keyId !== null) {
-            $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s', urlencode($projectIdOrKeyId), urlencode($keyId));
-        } else {
-            $path = sprintf('/api/v1/admin/api-keys/%s', urlencode($projectIdOrKeyId));
+        if (trim($projectIdOrKeyId) === '') {
+            throw new \InvalidArgumentException('Project ID cannot be empty.');
         }
+
+        if ($keyId === null || trim($keyId) === '') {
+            throw new \InvalidArgumentException('API key ID cannot be empty.');
+        }
+
+        $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s', urlencode($projectIdOrKeyId), urlencode($keyId));
 
         $this->transport->request('DELETE', $path);
     }
@@ -582,10 +567,19 @@ class AdminClient implements AdminClientInterface
     /**
      * Rotate an existing API key, generating a new raw token with a grace period for the old key.
      *
+     * @throws \InvalidArgumentException When $projectId or $keyId is empty.
      * @throws KinetiException
      */
     public function rotateApiKey(string $projectId, string $keyId): ApiKeyCreatedDto
     {
+        if (trim($projectId) === '') {
+            throw new \InvalidArgumentException('Project ID cannot be empty.');
+        }
+
+        if (trim($keyId) === '') {
+            throw new \InvalidArgumentException('API key ID cannot be empty.');
+        }
+
         $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s/rotate', urlencode($projectId), urlencode($keyId));
         $response = $this->transport->request('POST', $path);
 

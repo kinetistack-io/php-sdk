@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `verifyEmail()` method to `AdminClient` and `AdminClientInterface` (`POST /api/v1/admin/verify-email`) (PHPSDK-39).
 - Added `getApiKey()` method to `AdminClient` and `AdminClientInterface` (`GET /api/v1/admin/projects/{projectId}/api-keys/{id}`) (PHPSDK-40).
 
+### Deprecated
+- Marked `createOrganization()` and `listOrganizations()` as deprecated in `AdminClient` and `AdminClientInterface`. In KinetiStack's single-tenant organization model, organizations are created during registration (`register()`) and retrieved via `getOrganization($id)`. Calling these methods now throws `\BadMethodCallException` to avoid sending invalid requests to non-existent backend endpoints (PHPSDK-41).
+
+### Changed
+- Enforced mandatory non-empty `$projectId` validation across `createApiKey()`, `listApiKeys()`, and `revokeApiKey()`, throwing `\InvalidArgumentException('Project ID cannot be empty.')` before dispatching network requests (PHPSDK-41).
+- Removed unsupported fallback routes to `/api/v1/admin/api-keys` in `AdminClient::createApiKey()`, `listApiKeys()`, and `revokeApiKey()` in favor of strict project scoping (`/api/v1/admin/projects/{projectId}/api-keys`) (PHPSDK-41).
+- Enforced non-empty `$keyId` validation in `AdminClient::revokeApiKey()` and `rotateApiKey()` throwing `\InvalidArgumentException('API key ID cannot be empty.')`. Note: omitting `$keyId` in `revokeApiKey()` was previously allowed via the fallback route; it now throws an exception as required by backend routing. The first parameter name `$projectIdOrKeyId` is retained for backwards compatibility with PHP 8+ named arguments (PHPSDK-41).
+
 ## [1.0.7] - 2026-09-22
 
 ### Added

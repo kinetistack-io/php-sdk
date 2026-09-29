@@ -82,7 +82,10 @@ interface AdminClientInterface
     public function verifyEmail(string $token): void;
 
     /**
+     * @deprecated Organizations cannot be created directly. Organizations are single-tenant roots initialized during registration via register() and retrieved via getOrganization($id). This method will be removed in the next major version.
+     *
      * @param array<string, mixed>|string $name
+     * @throws \BadMethodCallException Because organization creation via this endpoint is not supported by the backend.
      * @throws KinetiException
      */
     public function createOrganization(
@@ -92,8 +95,11 @@ interface AdminClientInterface
     ): OrganizationDto;
 
     /**
+     * @deprecated Organizations cannot be listed directly. Organizations are single-tenant roots initialized during registration and retrieved via getOrganization($id). This method will be removed in the next major version.
+     *
      * @param array<string, mixed> $options
      * @return list<OrganizationDto>
+     * @throws \BadMethodCallException Because organization listing is not supported by the backend.
      * @throws KinetiException
      */
     public function listOrganizations(array $options = []): array;
@@ -146,8 +152,9 @@ interface AdminClientInterface
     public function deleteProject(string $id): void;
 
     /**
-     * @param array<string, mixed>|string $projectOrData
+     * @param array<string, mixed>|string $projectOrData Project ID string or array containing project_id/projectId
      * @param array<string, mixed>|string $nameOrData
+     * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException
      */
     public function createApiKey(
@@ -159,8 +166,10 @@ interface AdminClientInterface
     ): ApiKeyCreatedDto;
 
     /**
+     * @param string|null $projectId Project ID string. Must not be empty.
      * @param array<string, mixed> $options
      * @return list<ApiKeyDto>
+     * @throws \InvalidArgumentException When $projectId is null or empty.
      * @throws KinetiException
      */
     public function listApiKeys(?string $projectId = null, array $options = []): array;
@@ -178,11 +187,15 @@ interface AdminClientInterface
     public function getApiKey(string $projectId, string $keyId): ApiKeyDto;
 
     /**
+     * @param string $projectIdOrKeyId The project identifier (named $projectIdOrKeyId for backwards compatibility).
+     * @param string|null $keyId The API key identifier. Must not be empty.
+     * @throws \InvalidArgumentException When $projectIdOrKeyId or $keyId is empty.
      * @throws KinetiException
      */
     public function revokeApiKey(string $projectIdOrKeyId, ?string $keyId = null): void;
 
     /**
+     * @throws \InvalidArgumentException When $projectId or $keyId is empty.
      * @throws KinetiException
      */
     public function rotateApiKey(string $projectId, string $keyId): ApiKeyCreatedDto;

@@ -233,11 +233,11 @@ $admin = new AdminClient('https://api.kinetistack.io', $jwtToken);
 #### Organizations & Projects
 
 ```php
-// Organizations
-$org = $admin->createOrganization('Acme Agency', 'standard');
-$orgList = $admin->listOrganizations();
-$currentOrg = $admin->getOrganization($org->id);
-$updatedOrg = $admin->updateOrganization($org->id, ['name' => 'Acme Global Agency']);
+// Organizations are initialized during registration (POST /api/v1/admin/register).
+// Once registered, manage your organization via item operations:
+$orgId = 'org-uuid-123'; // Obtained from registration response or user profile
+$currentOrg = $admin->getOrganization($orgId);
+$updatedOrg = $admin->updateOrganization($orgId, ['name' => 'Acme Global Agency']);
 
 // Projects
 $project = $admin->createProject('Client Portal', 'portal.example.com', 'https://webhook.example.com/events');
