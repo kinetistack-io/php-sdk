@@ -65,7 +65,11 @@ interface AdminClientInterface
      * @param array<string, mixed>|string $name
      * @throws KinetiException
      */
-    public function createOrganization(array|string $name, ?string $billingTier = null): OrganizationDto;
+    public function createOrganization(
+        array|string $name,
+        ?string $billingTier = null,
+        ?int $monthlyQuotaCap = null
+    ): OrganizationDto;
 
     /**
      * @param array<string, mixed> $options
@@ -94,7 +98,8 @@ interface AdminClientInterface
         array|string $nameOrData,
         ?string $domain = null,
         ?string $webhookUrl = null,
-        ?array $settings = null
+        ?array $settings = null,
+        ?int $monthlyQuotaCap = null
     ): ProjectDto;
 
     /**

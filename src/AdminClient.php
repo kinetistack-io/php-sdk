@@ -194,8 +194,11 @@ class AdminClient implements AdminClientInterface
      * @param array<string, mixed>|string $name
      * @throws KinetiException
      */
-    public function createOrganization(array|string $name, ?string $billingTier = null): OrganizationDto
-    {
+    public function createOrganization(
+        array|string $name,
+        ?string $billingTier = null,
+        ?int $monthlyQuotaCap = null
+    ): OrganizationDto {
         if (is_array($name)) {
             $payload = $name;
         } else {
@@ -203,6 +206,14 @@ class AdminClient implements AdminClientInterface
             if ($billingTier !== null) {
                 $payload['billing_tier'] = $billingTier;
             }
+            if ($monthlyQuotaCap !== null) {
+                $payload['monthly_quota_cap'] = $monthlyQuotaCap;
+            }
+        }
+
+        if (array_key_exists('monthlyQuotaCap', $payload) && !array_key_exists('monthly_quota_cap', $payload)) {
+            $payload['monthly_quota_cap'] = $payload['monthlyQuotaCap'];
+            unset($payload['monthlyQuotaCap']);
         }
 
         $response = $this->transport->request('POST', '/api/v1/admin/organizations', [
@@ -261,6 +272,11 @@ class AdminClient implements AdminClientInterface
      */
     public function updateOrganization(string $id, array $data): OrganizationDto
     {
+        if (array_key_exists('monthlyQuotaCap', $data) && !array_key_exists('monthly_quota_cap', $data)) {
+            $data['monthly_quota_cap'] = $data['monthlyQuotaCap'];
+            unset($data['monthlyQuotaCap']);
+        }
+
         $response = $this->transport->request(
             'PATCH',
             sprintf('/api/v1/admin/organizations/%s', urlencode($id)),
@@ -289,7 +305,8 @@ class AdminClient implements AdminClientInterface
         array|string $nameOrData,
         ?string $domain = null,
         ?string $webhookUrl = null,
-        ?array $settings = null
+        ?array $settings = null,
+        ?int $monthlyQuotaCap = null
     ): ProjectDto {
         if (is_array($nameOrData)) {
             $payload = $nameOrData;
@@ -304,6 +321,14 @@ class AdminClient implements AdminClientInterface
             if ($settings !== null) {
                 $payload['settings'] = $settings;
             }
+            if ($monthlyQuotaCap !== null) {
+                $payload['monthly_quota_cap'] = $monthlyQuotaCap;
+            }
+        }
+
+        if (array_key_exists('monthlyQuotaCap', $payload) && !array_key_exists('monthly_quota_cap', $payload)) {
+            $payload['monthly_quota_cap'] = $payload['monthlyQuotaCap'];
+            unset($payload['monthlyQuotaCap']);
         }
 
         $response = $this->transport->request('POST', '/api/v1/admin/projects', [
@@ -362,6 +387,11 @@ class AdminClient implements AdminClientInterface
      */
     public function updateProject(string $id, array $data): ProjectDto
     {
+        if (array_key_exists('monthlyQuotaCap', $data) && !array_key_exists('monthly_quota_cap', $data)) {
+            $data['monthly_quota_cap'] = $data['monthlyQuotaCap'];
+            unset($data['monthlyQuotaCap']);
+        }
+
         $response = $this->transport->request(
             'PATCH',
             sprintf('/api/v1/admin/projects/%s', urlencode($id)),

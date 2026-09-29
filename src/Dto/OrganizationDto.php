@@ -11,6 +11,7 @@ class OrganizationDto
         public readonly string $name,
         public readonly string $billingTier = 'free',
         public readonly ?string $createdAt = null,
+        public readonly ?int $monthlyQuotaCap = null,
     ) {
         if (trim($this->id) === '') {
             throw new \InvalidArgumentException('id cannot be empty.');
@@ -18,6 +19,14 @@ class OrganizationDto
         if (trim($this->name) === '') {
             throw new \InvalidArgumentException('name cannot be empty.');
         }
+        if ($this->monthlyQuotaCap !== null && $this->monthlyQuotaCap < 0) {
+            throw new \InvalidArgumentException('monthlyQuotaCap must be greater than or equal to 0.');
+        }
+    }
+
+    public function getMonthlyQuotaCap(): ?int
+    {
+        return $this->monthlyQuotaCap;
     }
 
     /**
@@ -35,6 +44,10 @@ class OrganizationDto
             $data['created_at'] = $this->createdAt;
         }
 
+        if ($this->monthlyQuotaCap !== null) {
+            $data['monthly_quota_cap'] = $this->monthlyQuotaCap;
+        }
+
         return $data;
     }
 
@@ -49,7 +62,13 @@ class OrganizationDto
         $createdAt = isset($data['created_at']) && is_string($data['created_at'])
             ? $data['created_at']
             : (isset($data['createdAt']) && is_string($data['createdAt']) ? $data['createdAt'] : null);
+        $monthlyQuotaCap = null;
+        if (isset($data['monthly_quota_cap']) && is_numeric($data['monthly_quota_cap'])) {
+            $monthlyQuotaCap = (int) $data['monthly_quota_cap'];
+        } elseif (isset($data['monthlyQuotaCap']) && is_numeric($data['monthlyQuotaCap'])) {
+            $monthlyQuotaCap = (int) $data['monthlyQuotaCap'];
+        }
 
-        return new self($id, $name, $billingTier, $createdAt);
+        return new self($id, $name, $billingTier, $createdAt, $monthlyQuotaCap);
     }
 }

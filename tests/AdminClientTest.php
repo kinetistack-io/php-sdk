@@ -505,12 +505,15 @@ class AdminClientTest extends TestCase
             'id' => 'org-42',
             'name' => 'Org 42',
             'billing_tier' => 'free',
+            'monthly_quota_cap' => 60000,
         ], JSON_THROW_ON_ERROR));
         $httpClient = new MockHttpClient($mockResponse);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
         $org = $admin->getOrganization('org-42');
         $this->assertSame('org-42', $org->id);
+        $this->assertSame(60000, $org->monthlyQuotaCap);
+        $this->assertSame(60000, $org->getMonthlyQuotaCap());
         $this->assertStringEndsWith('/api/v1/admin/organizations/org-42', $mockResponse->getRequestUrl());
     }
 
@@ -529,6 +532,93 @@ class AdminClientTest extends TestCase
         $this->assertSame('PATCH', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/admin/organizations/org-42', $mockResponse->getRequestUrl());
         $this->assertContains('Content-Type: application/merge-patch+json', $mockResponse->getRequestOptions()['headers']);
+    }
+
+    public function testCreateOrganizationWithMonthlyQuotaCap(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'org-uuid-200',
+            'name' => 'Capped Org',
+            'billing_tier' => 'standard',
+            'monthly_quota_cap' => 50000,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $org = $admin->createOrganization('Capped Org', 'standard', 50000);
+
+        $this->assertSame('org-uuid-200', $org->id);
+        $this->assertSame(50000, $org->monthlyQuotaCap);
+        $this->assertSame(50000, $org->getMonthlyQuotaCap());
+
+        /** @var array<string, mixed> $body */
+        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(50000, $body['monthly_quota_cap']);
+    }
+
+    public function testCreateOrganizationWithArrayMonthlyQuotaCapNormalizes(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'org-uuid-201',
+            'name' => 'Camel Org',
+            'billing_tier' => 'pro',
+            'monthly_quota_cap' => 80000,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $org = $admin->createOrganization([
+            'name' => 'Camel Org',
+            'billing_tier' => 'pro',
+            'monthlyQuotaCap' => 80000,
+        ]);
+
+        $this->assertSame(80000, $org->monthlyQuotaCap);
+        $this->assertSame(80000, $org->getMonthlyQuotaCap());
+
+        /** @var array<string, mixed> $body */
+        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(80000, $body['monthly_quota_cap']);
+        $this->assertArrayNotHasKey('monthlyQuotaCap', $body);
+    }
+
+    public function testUpdateOrganizationWithMonthlyQuotaCapAndResetToNull(): void
+    {
+        $mock1 = new MockResponse(json_encode(['id' => 'org-42', 'name' => 'Org', 'monthly_quota_cap' => 70000], JSON_THROW_ON_ERROR));
+        $mock2 = new MockResponse(json_encode(['id' => 'org-42', 'name' => 'Org', 'monthly_quota_cap' => null], JSON_THROW_ON_ERROR));
+        $mock3 = new MockResponse(json_encode(['id' => 'org-42', 'name' => 'Org', 'monthly_quota_cap' => null], JSON_THROW_ON_ERROR));
+
+        $httpClient = new MockHttpClient([$mock1, $mock2, $mock3]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        // 1. camelCase normalization
+        $res1 = $admin->updateOrganization('org-42', ['monthlyQuotaCap' => 70000]);
+        $this->assertSame(70000, $res1->monthlyQuotaCap);
+        /** @var array<string, mixed> $body1 */
+        $body1 = json_decode((string) $mock1->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(70000, $body1['monthly_quota_cap']);
+        $this->assertArrayNotHasKey('monthlyQuotaCap', $body1);
+
+        // 2. snake_case null reset
+        $res2 = $admin->updateOrganization('org-42', ['monthly_quota_cap' => null]);
+        $this->assertNull($res2->monthlyQuotaCap);
+        /** @var array<string, mixed> $body2 */
+        $body2 = json_decode((string) $mock2->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('monthly_quota_cap', $body2);
+        $this->assertNull($body2['monthly_quota_cap']);
+
+        // 3. camelCase null reset
+        $res3 = $admin->updateOrganization('org-42', ['monthlyQuotaCap' => null]);
+        $this->assertNull($res3->monthlyQuotaCap);
+        /** @var array<string, mixed> $body3 */
+        $body3 = json_decode((string) $mock3->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('monthly_quota_cap', $body3);
+        $this->assertNull($body3['monthly_quota_cap']);
+        $this->assertArrayNotHasKey('monthlyQuotaCap', $body3);
     }
 
     public function testCreateProject(): void
@@ -559,8 +649,62 @@ class AdminClientTest extends TestCase
         $this->assertSame('portal.customer.com', $project->domain);
         $this->assertSame('https://webhook.customer.com/events', $project->webhookUrl);
         $this->assertSame(['notifications' => true], $project->settings);
+        $this->assertNull($project->monthlyQuotaCap);
+        $this->assertNull($project->getMonthlyQuotaCap());
         $this->assertSame('POST', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/admin/projects', $mockResponse->getRequestUrl());
+    }
+
+    public function testCreateProjectWithMonthlyQuotaCap(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'proj-capped',
+            'name' => 'Capped Project',
+            'domain' => 'capped.test',
+            'monthly_quota_cap' => 15000,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $project = $admin->createProject('Capped Project', 'capped.test', null, null, 15000);
+
+        $this->assertSame('proj-capped', $project->id);
+        $this->assertSame(15000, $project->monthlyQuotaCap);
+        $this->assertSame(15000, $project->getMonthlyQuotaCap());
+
+        /** @var array<string, mixed> $body */
+        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(15000, $body['monthly_quota_cap']);
+    }
+
+    public function testCreateProjectWithArrayMonthlyQuotaCapNormalizes(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'proj-camel',
+            'name' => 'Camel Project',
+            'domain' => 'camel.test',
+            'monthly_quota_cap' => 25000,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $project = $admin->createProject([
+            'name' => 'Camel Project',
+            'domain' => 'camel.test',
+            'monthlyQuotaCap' => 25000,
+        ]);
+
+        $this->assertSame(25000, $project->monthlyQuotaCap);
+        $this->assertSame(25000, $project->getMonthlyQuotaCap());
+
+        /** @var array<string, mixed> $body */
+        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(25000, $body['monthly_quota_cap']);
+        $this->assertArrayNotHasKey('monthlyQuotaCap', $body);
     }
 
     public function testListProjects(): void
@@ -582,18 +726,52 @@ class AdminClientTest extends TestCase
 
     public function testGetAndUpdateAndDeleteProject(): void
     {
-        $mockGet = new MockResponse(json_encode(['id' => 'p1', 'name' => 'Project 1', 'domain' => 'p1.test'], JSON_THROW_ON_ERROR));
-        $mockPatch = new MockResponse(json_encode(['id' => 'p1', 'name' => 'Updated P1', 'domain' => 'p1.test'], JSON_THROW_ON_ERROR));
+        $mockGet = new MockResponse(json_encode([
+            'id' => 'p1',
+            'name' => 'Project 1',
+            'domain' => 'p1.test',
+            'monthly_quota_cap' => 12000,
+        ], JSON_THROW_ON_ERROR));
+        $mockPatch = new MockResponse(json_encode([
+            'id' => 'p1',
+            'name' => 'Updated P1',
+            'domain' => 'p1.test',
+            'monthly_quota_cap' => 20000,
+        ], JSON_THROW_ON_ERROR));
+        $mockPatchNull = new MockResponse(json_encode([
+            'id' => 'p1',
+            'name' => 'Updated P1',
+            'domain' => 'p1.test',
+            'monthly_quota_cap' => null,
+        ], JSON_THROW_ON_ERROR));
         $mockDelete = new MockResponse('', ['http_code' => 204]);
 
-        $httpClient = new MockHttpClient([$mockGet, $mockPatch, $mockDelete]);
+        $httpClient = new MockHttpClient([$mockGet, $mockPatch, $mockPatchNull, $mockDelete]);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
         $project = $admin->getProject('p1');
         $this->assertSame('p1', $project->id);
+        $this->assertSame(12000, $project->monthlyQuotaCap);
+        $this->assertSame(12000, $project->getMonthlyQuotaCap());
 
-        $updated = $admin->updateProject('p1', ['name' => 'Updated P1']);
-        $this->assertSame('Updated P1', $updated->name);
+        // Update with monthlyQuotaCap camelCase
+        $updated = $admin->updateProject('p1', ['monthlyQuotaCap' => 20000]);
+        $this->assertSame(20000, $updated->monthlyQuotaCap);
+        $this->assertSame(20000, $updated->getMonthlyQuotaCap());
+        /** @var array<string, mixed> $patchBody */
+        $patchBody = json_decode((string) $mockPatch->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(20000, $patchBody['monthly_quota_cap']);
+        $this->assertArrayNotHasKey('monthlyQuotaCap', $patchBody);
+
+        // Update with null reset
+        $reset = $admin->updateProject('p1', ['monthlyQuotaCap' => null]);
+        $this->assertNull($reset->monthlyQuotaCap);
+        $this->assertNull($reset->getMonthlyQuotaCap());
+        /** @var array<string, mixed> $patchNullBody */
+        $patchNullBody = json_decode((string) $mockPatchNull->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('monthly_quota_cap', $patchNullBody);
+        $this->assertNull($patchNullBody['monthly_quota_cap']);
+        $this->assertArrayNotHasKey('monthlyQuotaCap', $patchNullBody);
 
         $admin->deleteProject('p1');
         $this->assertSame('DELETE', $mockDelete->getRequestMethod());

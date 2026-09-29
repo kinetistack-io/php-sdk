@@ -79,6 +79,48 @@ class AdminDtoTest extends TestCase
         new OrganizationDto('id-1', '   ');
     }
 
+    public function testOrganizationDtoWithMonthlyQuotaCap(): void
+    {
+        $dto = new OrganizationDto('org-uuid-1', 'Acme Corp', 'standard', '2026-09-01T00:00:00Z', 50000);
+        $this->assertSame(50000, $dto->monthlyQuotaCap);
+        $this->assertSame(50000, $dto->getMonthlyQuotaCap());
+
+        $array = $dto->toArray();
+        $this->assertSame(50000, $array['monthly_quota_cap']);
+
+        $fromSnake = OrganizationDto::fromArray([
+            'id' => 'org-2',
+            'name' => 'Agency 2',
+            'monthly_quota_cap' => 75000,
+        ]);
+        $this->assertSame(75000, $fromSnake->monthlyQuotaCap);
+        $this->assertSame(75000, $fromSnake->getMonthlyQuotaCap());
+
+        $fromCamel = OrganizationDto::fromArray([
+            'id' => 'org-3',
+            'name' => 'Agency 3',
+            'monthlyQuotaCap' => 100000,
+        ]);
+        $this->assertSame(100000, $fromCamel->monthlyQuotaCap);
+        $this->assertSame(100000, $fromCamel->getMonthlyQuotaCap());
+
+        $fromNull = OrganizationDto::fromArray([
+            'id' => 'org-4',
+            'name' => 'Agency 4',
+            'monthly_quota_cap' => null,
+        ]);
+        $this->assertNull($fromNull->monthlyQuotaCap);
+        $this->assertNull($fromNull->getMonthlyQuotaCap());
+        $this->assertArrayNotHasKey('monthly_quota_cap', $fromNull->toArray());
+    }
+
+    public function testOrganizationDtoNegativeMonthlyQuotaCapThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('monthlyQuotaCap must be greater than or equal to 0.');
+        new OrganizationDto('org-id', 'Name', 'standard', null, -1);
+    }
+
     public function testProjectDto(): void
     {
         $dto = new ProjectDto(
@@ -96,11 +138,14 @@ class AdminDtoTest extends TestCase
         $this->assertSame('https://webhook.test/events', $dto->webhookUrl);
         $this->assertSame(['theme' => 'dark'], $dto->settings);
         $this->assertSame('2026-09-01T00:00:00Z', $dto->createdAt);
+        $this->assertNull($dto->monthlyQuotaCap);
+        $this->assertNull($dto->getMonthlyQuotaCap());
 
         $array = $dto->toArray();
         $this->assertSame('proj-1', $array['id']);
         $this->assertSame('https://webhook.test/events', $array['webhook_url']);
         $this->assertSame(['theme' => 'dark'], $array['settings']);
+        $this->assertArrayNotHasKey('monthly_quota_cap', $array);
 
         $fromArray = ProjectDto::fromArray([
             'id' => 'proj-2',
@@ -112,9 +157,65 @@ class AdminDtoTest extends TestCase
         ]);
         $this->assertSame('https://site2.com/wh', $fromArray->webhookUrl);
         $this->assertSame(['k' => 'v'], $fromArray->settings);
+        $this->assertNull($fromArray->monthlyQuotaCap);
+        $this->assertNull($fromArray->getMonthlyQuotaCap());
 
         $this->expectException(\InvalidArgumentException::class);
         new ProjectDto('', 'Site', 'site.com');
+    }
+
+    public function testProjectDtoWithMonthlyQuotaCap(): void
+    {
+        $dto = new ProjectDto(
+            'proj-1',
+            'Main Site',
+            'example.com',
+            null,
+            null,
+            null,
+            25000
+        );
+
+        $this->assertSame(25000, $dto->monthlyQuotaCap);
+        $this->assertSame(25000, $dto->getMonthlyQuotaCap());
+
+        $array = $dto->toArray();
+        $this->assertSame(25000, $array['monthly_quota_cap']);
+
+        $fromSnake = ProjectDto::fromArray([
+            'id' => 'proj-2',
+            'name' => 'Site 2',
+            'domain' => 'site2.com',
+            'monthly_quota_cap' => 30000,
+        ]);
+        $this->assertSame(30000, $fromSnake->monthlyQuotaCap);
+        $this->assertSame(30000, $fromSnake->getMonthlyQuotaCap());
+
+        $fromCamel = ProjectDto::fromArray([
+            'id' => 'proj-3',
+            'name' => 'Site 3',
+            'domain' => 'site3.com',
+            'monthlyQuotaCap' => 45000,
+        ]);
+        $this->assertSame(45000, $fromCamel->monthlyQuotaCap);
+        $this->assertSame(45000, $fromCamel->getMonthlyQuotaCap());
+
+        $fromNull = ProjectDto::fromArray([
+            'id' => 'proj-4',
+            'name' => 'Site 4',
+            'domain' => 'site4.com',
+            'monthly_quota_cap' => null,
+        ]);
+        $this->assertNull($fromNull->monthlyQuotaCap);
+        $this->assertNull($fromNull->getMonthlyQuotaCap());
+        $this->assertArrayNotHasKey('monthly_quota_cap', $fromNull->toArray());
+    }
+
+    public function testProjectDtoNegativeMonthlyQuotaCapThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('monthlyQuotaCap must be greater than or equal to 0.');
+        new ProjectDto('proj-id', 'Name', 'domain.com', null, null, null, -100);
     }
 
     public function testProjectDtoValidationExceptions(): void
