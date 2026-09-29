@@ -189,6 +189,21 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Resend an email verification message for an unverified user account.
+     *
+     * @throws ValidationException When email is invalid or unprocessable (HTTP 422).
+     * @throws KinetiException
+     */
+    public function resendVerificationEmail(string $email): void
+    {
+        $this->transport->request('POST', '/api/v1/admin/resend-verification', [
+            'json' => [
+                'email' => $email,
+            ],
+        ]);
+    }
+
+    /**
      * Create a new organization.
      *
      * @param array<string, mixed>|string $name

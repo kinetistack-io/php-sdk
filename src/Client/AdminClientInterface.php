@@ -62,6 +62,14 @@ interface AdminClientInterface
     public function getRegistrationStatus(): RegistrationStatusDto;
 
     /**
+     * Resend an email verification message for an unverified user account.
+     *
+     * @throws ValidationException When email is invalid or unprocessable (HTTP 422).
+     * @throws KinetiException
+     */
+    public function resendVerificationEmail(string $email): void;
+
+    /**
      * @param array<string, mixed>|string $name
      * @throws KinetiException
      */

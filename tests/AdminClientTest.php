@@ -1089,6 +1089,55 @@ class AdminClientTest extends TestCase
         $this->assertSame('https://api.test/api/v1/admin/registration-status', $mockResponse->getRequestUrl());
     }
 
+    public function testResendVerificationEmailSuccess(): void
+    {
+        $mockResponse = new MockResponse('', [
+            'http_code' => 204,
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        $client->resendVerificationEmail('user@example.com');
+
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('https://api.test/api/v1/admin/resend-verification', $mockResponse->getRequestUrl());
+
+        /** @var string $body */
+        $body = $mockResponse->getRequestOptions()['body'];
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($payload);
+        $this->assertSame(['email' => 'user@example.com'], $payload);
+    }
+
+    public function testResendVerificationEmailValidationFails(): void
+    {
+        $errorBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Unprocessable Entity',
+            'status' => 422,
+            'detail' => 'This value is not a valid email address.',
+            'violations' => [
+                [
+                    'propertyPath' => 'email',
+                    'message' => 'This value is not a valid email address.',
+                ],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($errorBody, [
+            'http_code' => 422,
+            'response_headers' => ['content-type' => 'application/problem+json'],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('This value is not a valid email address.');
+
+        $client->resendVerificationEmail('invalid-email');
+    }
+
     public function testListProjectJobs(): void
     {
         $payload = [
