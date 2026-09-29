@@ -70,6 +70,17 @@ interface AdminClientInterface
     public function resendVerificationEmail(string $email): void;
 
     /**
+     * Verify a user's email address using a verification token.
+     *
+     * @param string $token The verification token received via email.
+     *
+     * @throws \InvalidArgumentException When the token is empty or whitespace.
+     * @throws ValidationException When the token is invalid or expired (HTTP 422).
+     * @throws KinetiException
+     */
+    public function verifyEmail(string $token): void;
+
+    /**
      * @param array<string, mixed>|string $name
      * @throws KinetiException
      */

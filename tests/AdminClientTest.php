@@ -1138,6 +1138,81 @@ class AdminClientTest extends TestCase
         $client->resendVerificationEmail('invalid-email');
     }
 
+    public function testVerifyEmailSuccess(): void
+    {
+        $mockResponse = new MockResponse('', [
+            'http_code' => 204,
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        $client->verifyEmail('valid-token-123');
+
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('https://api.test/api/v1/admin/verify-email', $mockResponse->getRequestUrl());
+
+        /** @var string $body */
+        $body = $mockResponse->getRequestOptions()['body'];
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($payload);
+        $this->assertSame(['token' => 'valid-token-123'], $payload);
+    }
+
+    /**
+     * @dataProvider provideEmptyVerificationTokens
+     */
+    public function testVerifyEmailEmptyTokenThrowsException(string $emptyToken): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Verification token cannot be empty.');
+
+        $client->verifyEmail($emptyToken);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function provideEmptyVerificationTokens(): array
+    {
+        return [
+            'empty string' => [''],
+            'whitespace only' => ['   '],
+            'tabs and newlines' => [" \t\n "],
+        ];
+    }
+
+    public function testVerifyEmailValidationFails(): void
+    {
+        $errorBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Unprocessable Entity',
+            'status' => 422,
+            'detail' => 'The verification token is invalid or has expired.',
+            'violations' => [
+                [
+                    'propertyPath' => 'token',
+                    'message' => 'The verification token is invalid or has expired.',
+                ],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($errorBody, [
+            'http_code' => 422,
+            'response_headers' => ['content-type' => 'application/problem+json'],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('The verification token is invalid or has expired.');
+
+        $client->verifyEmail('invalid-token');
+    }
+
     public function testListProjectJobs(): void
     {
         $payload = [

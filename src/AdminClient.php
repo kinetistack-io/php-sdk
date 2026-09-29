@@ -204,6 +204,28 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Verify a user's email address using a verification token.
+     *
+     * @param string $token The verification token received via email.
+     *
+     * @throws \InvalidArgumentException When the token is empty or whitespace.
+     * @throws ValidationException When the token is invalid or expired (HTTP 422).
+     * @throws KinetiException
+     */
+    public function verifyEmail(string $token): void
+    {
+        if (trim($token) === '') {
+            throw new \InvalidArgumentException('Verification token cannot be empty.');
+        }
+
+        $this->transport->request('POST', '/api/v1/admin/verify-email', [
+            'json' => [
+                'token' => $token,
+            ],
+        ]);
+    }
+
+    /**
      * Create a new organization.
      *
      * @param array<string, mixed>|string $name
