@@ -19,6 +19,8 @@ use KinetiStack\Sdk\Dto\UsageSummaryDto;
 use KinetiStack\Sdk\Dto\UserDto;
 use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
+use KinetiStack\Sdk\Exception\AuthenticationException;
+use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
@@ -46,6 +48,17 @@ interface AdminClientInterface
      * @throws KinetiException
      */
     public function refreshToken(): AuthTokenDto;
+
+    /**
+     * Verify whether the current admin session or JWT token is valid and active.
+     *
+     * @return bool True if session is valid and active.
+     *
+     * @throws AuthenticationException When the admin session or JWT token is expired, invalid, or unauthenticated (HTTP 401).
+     * @throws AuthorizationException When the authenticated user lacks admin privileges (HTTP 403).
+     * @throws KinetiException
+     */
+    public function ping(): bool;
 
     /**
      * @param RegisterDto|array<string, mixed>|string $orgNameOrData

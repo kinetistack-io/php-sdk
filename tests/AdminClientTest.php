@@ -216,6 +216,81 @@ class AdminClientTest extends TestCase
         $admin->refreshToken();
     }
 
+    public function testPingSuccessReturnsTrue(): void
+    {
+        $responseBody = json_encode(['status' => 'pong'], JSON_THROW_ON_ERROR);
+        $mockResponse = new MockResponse($responseBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'valid-admin-jwt', $httpClient);
+
+        $result = $admin->ping();
+
+        $this->assertTrue($result);
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/ping', $mockResponse->getRequestUrl());
+        $this->assertContains('Authorization: Bearer valid-admin-jwt', $mockResponse->getRequestOptions()['headers']);
+    }
+
+    public function testPingUnexpectedPayloadReturnsFalse(): void
+    {
+        $responseBody = json_encode(['status' => 'unexpected'], JSON_THROW_ON_ERROR);
+        $mockResponse = new MockResponse($responseBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'valid-admin-jwt', $httpClient);
+
+        $this->assertFalse($admin->ping());
+    }
+
+    public function testPingUnauthorizedThrowsAuthenticationException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:unauthorized',
+            'title' => 'Unauthorized',
+            'status' => 401,
+            'detail' => 'Invalid or expired JWT token',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 401,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'expired-jwt', $httpClient);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid or expired JWT token');
+
+        $admin->ping();
+    }
+
+    public function testPingForbiddenThrowsAuthorizationException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:forbidden',
+            'title' => 'Forbidden',
+            'status' => 403,
+            'detail' => 'Access denied',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'non-admin-jwt', $httpClient);
+
+        $this->expectException(AuthorizationException::class);
+        $this->expectExceptionMessage('Access denied');
+
+        $admin->ping();
+    }
+
     public function testRegisterSuccess(): void
     {
         $responseBody = json_encode([

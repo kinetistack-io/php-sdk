@@ -134,6 +134,27 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Verify whether the current admin session or JWT token is valid and active.
+     *
+     * Dispatches an HTTP GET request to /api/v1/admin/ping.
+     *
+     * @return bool True if session is valid and active.
+     *
+     * @throws AuthenticationException When the admin session or JWT token is expired, invalid, or unauthenticated (HTTP 401).
+     * @throws AuthorizationException When the authenticated user lacks admin privileges (HTTP 403).
+     * @throws KinetiException
+     */
+    public function ping(): bool
+    {
+        $response = $this->transport->request('GET', '/api/v1/admin/ping');
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return ($data['status'] ?? null) === 'pong';
+    }
+
+    /**
      * Register a new organization and initial administrator user.
      *
      * Note: This endpoint is unauthenticated and must be called on an AdminClient
