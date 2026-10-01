@@ -16,12 +16,16 @@ class ApiKeyDto
         public readonly ?string $createdAt = null,
         public readonly ?string $revokedAt = null,
         public readonly ?string $gracePeriodUntil = null,
+        public readonly ?int $dailyTokenQuotaOverride = null,
     ) {
         if (trim($this->id) === '') {
             throw new \InvalidArgumentException('id cannot be empty.');
         }
         if (trim($this->name) === '') {
             throw new \InvalidArgumentException('name cannot be empty.');
+        }
+        if ($this->dailyTokenQuotaOverride !== null && $this->dailyTokenQuotaOverride <= 0) {
+            throw new \InvalidArgumentException('dailyTokenQuotaOverride must be greater than 0.');
         }
     }
 
@@ -57,6 +61,10 @@ class ApiKeyDto
             $data['grace_period_until'] = $this->gracePeriodUntil;
         }
 
+        if ($this->dailyTokenQuotaOverride !== null) {
+            $data['daily_token_quota_override'] = $this->dailyTokenQuotaOverride;
+        }
+
         return $data;
     }
 
@@ -87,6 +95,9 @@ class ApiKeyDto
         $gracePeriodUntil = isset($data['grace_period_until']) && is_string($data['grace_period_until'])
             ? $data['grace_period_until']
             : (isset($data['gracePeriodUntil']) && is_string($data['gracePeriodUntil']) ? $data['gracePeriodUntil'] : null);
+        $dailyTokenQuotaOverride = isset($data['daily_token_quota_override'])
+            ? (int) $data['daily_token_quota_override']
+            : (isset($data['dailyTokenQuotaOverride']) ? (int) $data['dailyTokenQuotaOverride'] : null);
 
         return new self(
             $id,
@@ -97,7 +108,8 @@ class ApiKeyDto
             $expiresAt,
             $createdAt,
             $revokedAt,
-            $gracePeriodUntil
+            $gracePeriodUntil,
+            $dailyTokenQuotaOverride
         );
     }
 }

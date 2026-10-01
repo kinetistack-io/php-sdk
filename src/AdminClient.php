@@ -454,6 +454,7 @@ class AdminClient implements AdminClientInterface
      *
      * @param array<string, mixed>|string $projectOrData Project ID string or full data array
      * @param array<string, mixed>|string $nameOrData
+     * @param int|null $dailyTokenQuotaOverride Optional per-key daily token quota override (must be > 0)
      * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException
      */
@@ -462,7 +463,8 @@ class AdminClient implements AdminClientInterface
         array|string $nameOrData = [],
         string $scope = 'all',
         ?int $rateLimitPerMinute = null,
-        ?string $expiresAt = null
+        ?string $expiresAt = null,
+        ?int $dailyTokenQuotaOverride = null,
     ): ApiKeyCreatedDto {
         $projectId = '';
         if (is_array($projectOrData)) {
@@ -484,6 +486,14 @@ class AdminClient implements AdminClientInterface
             if ($expiresAt !== null) {
                 $payload['expires_at'] = $expiresAt;
             }
+            if ($dailyTokenQuotaOverride !== null) {
+                $payload['daily_token_quota_override'] = $dailyTokenQuotaOverride;
+            }
+        }
+
+        if (array_key_exists('dailyTokenQuotaOverride', $payload) && !array_key_exists('daily_token_quota_override', $payload)) {
+            $payload['daily_token_quota_override'] = $payload['dailyTokenQuotaOverride'];
+            unset($payload['dailyTokenQuotaOverride']);
         }
 
         if (trim($projectId) === '') {

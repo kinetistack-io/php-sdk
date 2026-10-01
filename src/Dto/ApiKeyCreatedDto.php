@@ -17,6 +17,7 @@ class ApiKeyCreatedDto extends ApiKeyDto
         ?string $createdAt = null,
         ?string $revokedAt = null,
         ?string $gracePeriodUntil = null,
+        ?int $dailyTokenQuotaOverride = null,
     ) {
         if (trim($token) === '') {
             throw new \InvalidArgumentException('token cannot be empty.');
@@ -31,7 +32,8 @@ class ApiKeyCreatedDto extends ApiKeyDto
             $expiresAt,
             $createdAt,
             $revokedAt,
-            $gracePeriodUntil
+            $gracePeriodUntil,
+            $dailyTokenQuotaOverride
         );
     }
 
@@ -63,7 +65,8 @@ class ApiKeyCreatedDto extends ApiKeyDto
             $base->expiresAt,
             $base->createdAt,
             $base->revokedAt,
-            $base->gracePeriodUntil
+            $base->gracePeriodUntil,
+            $base->dailyTokenQuotaOverride
         );
     }
 }

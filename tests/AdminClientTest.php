@@ -759,6 +759,7 @@ class AdminClientTest extends TestCase
             'rate_limit_per_minute' => 120,
             'expires_at' => '2027-01-01T00:00:00Z',
             'created_at' => '2026-09-08T14:00:00Z',
+            'daily_token_quota_override' => 25000,
         ], JSON_THROW_ON_ERROR);
 
         $listResponseBody = json_encode([
@@ -770,6 +771,7 @@ class AdminClientTest extends TestCase
                 'rate_limit_per_minute' => 120,
                 'expires_at' => '2027-01-01T00:00:00Z',
                 'created_at' => '2026-09-08T14:00:00Z',
+                'daily_token_quota_override' => 25000,
             ],
             [
                 'id' => 'key-uuid-2',
@@ -788,7 +790,7 @@ class AdminClientTest extends TestCase
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
         // 1. Create API key
-        $createdKey = $admin->createApiKey('proj-1', 'Production Key', 'all', 120, '2027-01-01T00:00:00Z');
+        $createdKey = $admin->createApiKey('proj-1', 'Production Key', 'all', 120, '2027-01-01T00:00:00Z', 25000);
 
         $this->assertInstanceOf(ApiKeyCreatedDto::class, $createdKey);
         $this->assertSame('key-uuid-1', $createdKey->id);
@@ -796,7 +798,11 @@ class AdminClientTest extends TestCase
         $this->assertSame('kineti_live_abcdef1234567890', $createdKey->token);
         $this->assertSame('7890', $createdKey->tokenSuffix);
         $this->assertSame(120, $createdKey->rateLimitPerMinute);
+        $this->assertSame(25000, $createdKey->dailyTokenQuotaOverride);
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys', $mockCreateResponse->getRequestUrl());
+
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(25000, $requestBody['daily_token_quota_override'] ?? null);
 
         // 2. List API keys
         $keys = $admin->listApiKeys('proj-1');
@@ -810,9 +816,60 @@ class AdminClientTest extends TestCase
 
         $this->assertSame('key-uuid-1', $keys[0]->id);
         $this->assertSame('7890', $keys[0]->tokenSuffix);
+        $this->assertSame(25000, $keys[0]->dailyTokenQuotaOverride);
         $this->assertSame('key-uuid-2', $keys[1]->id);
         $this->assertSame('1111', $keys[1]->tokenSuffix);
+        $this->assertNull($keys[1]->dailyTokenQuotaOverride);
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys', $mockListResponse->getRequestUrl());
+    }
+
+    public function testCreateApiKeyWithArrayDataNormalizesDailyTokenQuotaOverride(): void
+    {
+        $mockCreateResponse = new MockResponse(json_encode([
+            'id' => 'key-uuid-99',
+            'name' => 'Array Key',
+            'token' => 'token-123',
+            'token_suffix' => '1234',
+            'daily_token_quota_override' => 15000,
+        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+
+        $httpClient = new MockHttpClient([$mockCreateResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $createdKey = $admin->createApiKey('proj-1', [
+            'name' => 'Array Key',
+            'dailyTokenQuotaOverride' => 15000,
+        ]);
+
+        $this->assertSame(15000, $createdKey->dailyTokenQuotaOverride);
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(15000, $requestBody['daily_token_quota_override']);
+        $this->assertArrayNotHasKey('dailyTokenQuotaOverride', $requestBody);
+    }
+
+    public function testCreateApiKeyWithArrayDataNormalizesExplicitNullDailyTokenQuotaOverride(): void
+    {
+        $mockCreateResponse = new MockResponse(json_encode([
+            'id' => 'key-uuid-100',
+            'name' => 'Null Override Key',
+            'token' => 'token-456',
+            'token_suffix' => '5678',
+            'daily_token_quota_override' => null,
+        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+
+        $httpClient = new MockHttpClient([$mockCreateResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $createdKey = $admin->createApiKey('proj-1', [
+            'name' => 'Null Override Key',
+            'dailyTokenQuotaOverride' => null,
+        ]);
+
+        $this->assertNull($createdKey->dailyTokenQuotaOverride);
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('daily_token_quota_override', $requestBody);
+        $this->assertNull($requestBody['daily_token_quota_override']);
+        $this->assertArrayNotHasKey('dailyTokenQuotaOverride', $requestBody);
     }
 
     public function testRevokeApiKey(): void

@@ -167,6 +167,7 @@ interface AdminClientInterface
     /**
      * @param array<string, mixed>|string $projectOrData Project ID string or array containing project_id/projectId
      * @param array<string, mixed>|string $nameOrData
+     * @param int|null $dailyTokenQuotaOverride Optional per-key daily token quota override (must be > 0)
      * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException
      */
@@ -175,7 +176,8 @@ interface AdminClientInterface
         array|string $nameOrData = [],
         string $scope = 'all',
         ?int $rateLimitPerMinute = null,
-        ?string $expiresAt = null
+        ?string $expiresAt = null,
+        ?int $dailyTokenQuotaOverride = null,
     ): ApiKeyCreatedDto;
 
     /**

@@ -271,6 +271,76 @@ class AdminDtoTest extends TestCase
         new ApiKeyDto('', 'Name', 'abcd');
     }
 
+    public function testApiKeyDtoWithDailyTokenQuotaOverride(): void
+    {
+        $dto = new ApiKeyDto(
+            'key-1',
+            'Drupal Key',
+            'abcd',
+            'all',
+            60,
+            '2027-01-01T00:00:00Z',
+            '2026-09-01T00:00:00Z',
+            null,
+            null,
+            50000
+        );
+
+        $this->assertSame(50000, $dto->dailyTokenQuotaOverride);
+
+        $array = $dto->toArray();
+        $this->assertSame(50000, $array['daily_token_quota_override']);
+
+        $fromSnake = ApiKeyDto::fromArray([
+            'id' => 'key-2',
+            'name' => 'Key 2',
+            'token_suffix' => 'wxyz',
+            'daily_token_quota_override' => 75000,
+        ]);
+        $this->assertSame(75000, $fromSnake->dailyTokenQuotaOverride);
+
+        $fromCamel = ApiKeyDto::fromArray([
+            'id' => 'key-3',
+            'name' => 'Key 3',
+            'token_suffix' => '1234',
+            'dailyTokenQuotaOverride' => 80000,
+        ]);
+        $this->assertSame(80000, $fromCamel->dailyTokenQuotaOverride);
+
+        $fromNull = ApiKeyDto::fromArray([
+            'id' => 'key-4',
+            'name' => 'Key 4',
+            'token_suffix' => '5678',
+            'daily_token_quota_override' => null,
+        ]);
+        $this->assertNull($fromNull->dailyTokenQuotaOverride);
+        $this->assertArrayNotHasKey('daily_token_quota_override', $fromNull->toArray());
+    }
+
+    public function testApiKeyDtoNegativeDailyTokenQuotaOverrideThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('dailyTokenQuotaOverride must be greater than 0.');
+        new ApiKeyDto(
+            id: 'key-1',
+            name: 'Key',
+            tokenSuffix: 'abcd',
+            dailyTokenQuotaOverride: -100,
+        );
+    }
+
+    public function testApiKeyDtoZeroDailyTokenQuotaOverrideThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('dailyTokenQuotaOverride must be greater than 0.');
+        new ApiKeyDto(
+            id: 'key-1',
+            name: 'Key',
+            tokenSuffix: 'abcd',
+            dailyTokenQuotaOverride: 0,
+        );
+    }
+
     /**
      * @dataProvider emptyNameProvider
      * @param array<string, mixed> $payload
@@ -298,29 +368,33 @@ class AdminDtoTest extends TestCase
     public function testApiKeyCreatedDtoExposesToken(): void
     {
         $dto = new ApiKeyCreatedDto(
-            'key-1',
-            'Drupal Key',
-            'abcd',
-            'raw-plaintext-token-12345',
-            'all',
-            60
+            id: 'key-1',
+            name: 'Drupal Key',
+            tokenSuffix: 'abcd',
+            token: 'raw-plaintext-token-12345',
+            rateLimitPerMinute: 60,
+            dailyTokenQuotaOverride: 30000,
         );
 
         $this->assertInstanceOf(ApiKeyDto::class, $dto);
         $this->assertSame('raw-plaintext-token-12345', $dto->token);
         $this->assertSame('abcd', $dto->tokenSuffix);
+        $this->assertSame(30000, $dto->dailyTokenQuotaOverride);
 
         $array = $dto->toArray();
         $this->assertArrayHasKey('token', $array);
         $this->assertSame('raw-plaintext-token-12345', $array['token']);
+        $this->assertSame(30000, $array['daily_token_quota_override']);
 
         $fromArray = ApiKeyCreatedDto::fromArray([
             'id' => 'key-3',
             'name' => 'Key 3',
             'token_suffix' => '9999',
             'token' => 'plain-token-9999',
+            'daily_token_quota_override' => 45000,
         ]);
         $this->assertSame('plain-token-9999', $fromArray->token);
+        $this->assertSame(45000, $fromArray->dailyTokenQuotaOverride);
 
         $this->expectException(\InvalidArgumentException::class);
         new ApiKeyCreatedDto('id', 'Name', 'suffix', '');
