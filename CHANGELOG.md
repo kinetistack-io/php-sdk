@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-10-03
+
+### Added
+- Added optional `$apiKeyId` parameter to `AdminClient::getUsage()` and `AdminClientInterface::getUsage()` to support API key filtering, with query normalization for positional args, named args, and options array (`api_key_id` / `apiKeyId`) (PHPSDK-43).
+- Added optional `tokensConsumedToday` and `requestsToday` properties with non-negative constraints to `ApiKeyDto` and `ApiKeyCreatedDto` (PHPSDK-43).
+- Added `ExtractsTokenUsageTrait` providing standardized token usage extraction from `tokens_consumed`, `tokensConsumed`, or nested/scalar `usage` payloads across response DTOs (PHPSDK-43, PHPSDK-44).
+- Added optional `tokensConsumed` property and serialization support to `SearchResponseDto` and `RagSynthesisDto` (PHPSDK-43).
+- Added optional `tokensConsumed` property and serialization support to `DocumentResponseDto` (PHPSDK-44).
+- Added optional `tokensConsumed` property and serialization support to `JobDto`, extracting from top-level job payload or nested `results` array (PHPSDK-44).
+- Added optional `tokensConsumed` property and serialization support to `VisionResponseDto` (PHPSDK-44).
+- Added optional `tokensConsumed` property to `RagStreamChunkDto`, extracting from chunk payload or nested `metadata`, and updated `create()` factory method (PHPSDK-44).
+
 ## [1.0.9] - 2026-10-01
 
 ### Added
