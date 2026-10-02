@@ -9,6 +9,8 @@ use KinetiStack\Sdk\Enum\WebhookStatus;
 
 class JobDto
 {
+    use ExtractsTokenUsageTrait;
+
     /**
      * @param array<string, mixed>|list<mixed>|null $results
      */
@@ -26,6 +28,7 @@ class JobDto
         public readonly ?string $documentId = null,
         public readonly ?string $externalId = null,
         public readonly ?int $chunksGenerated = null,
+        public readonly ?int $tokensConsumed = null,
     ) {
     }
 
@@ -79,6 +82,11 @@ class JobDto
             $chunksGenerated = (int) $results['chunks_generated'];
         }
 
+        $tokensConsumed = self::extractTokensConsumed($data);
+        if ($tokensConsumed === null && is_array($results)) {
+            $tokensConsumed = self::extractTokensConsumed($results);
+        }
+
         return new self(
             (string) ($data['job_id'] ?? $data['jobId'] ?? ''),
             $status,
@@ -93,6 +101,7 @@ class JobDto
             $documentId,
             $externalId,
             $chunksGenerated,
+            $tokensConsumed,
         );
     }
 
@@ -146,6 +155,9 @@ class JobDto
         }
         if ($this->chunksGenerated !== null) {
             $data['chunks_generated'] = $this->chunksGenerated;
+        }
+        if ($this->tokensConsumed !== null) {
+            $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
         return $data;

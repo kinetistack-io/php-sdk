@@ -375,4 +375,73 @@ class JobDtoTest extends TestCase
         $this->assertArrayNotHasKey('caption', $errArray);
         $this->assertArrayNotHasKey('confidence_score', $errArray);
     }
+
+    public function testJobDtoWithTokensConsumed(): void
+    {
+        $dto = new JobDto(
+            jobId: 'job-1',
+            status: JobStatus::Completed,
+            tokensConsumed: 450,
+        );
+
+        $this->assertSame(450, $dto->tokensConsumed);
+        $this->assertSame(450, $dto->toArray()['tokens_consumed']);
+
+        // From top-level snake_case tokens_consumed
+        $fromSnake = JobDto::fromArray([
+            'job_id' => 'job-1',
+            'status' => 'completed',
+            'tokens_consumed' => 300,
+        ]);
+        $this->assertSame(300, $fromSnake->tokensConsumed);
+
+        // From top-level camelCase tokensConsumed
+        $fromCamel = JobDto::fromArray([
+            'job_id' => 'job-1',
+            'status' => 'completed',
+            'tokensConsumed' => 350,
+        ]);
+        $this->assertSame(350, $fromCamel->tokensConsumed);
+
+        // From top-level usage array
+        $fromUsage = JobDto::fromArray([
+            'job_id' => 'job-1',
+            'status' => 'completed',
+            'usage' => ['total_tokens' => 400],
+        ]);
+        $this->assertSame(400, $fromUsage->tokensConsumed);
+
+        // From nested results tokens_consumed (e.g. document ingest job result)
+        $fromNestedResults = JobDto::fromArray([
+            'job_id' => 'job-1',
+            'status' => 'completed',
+            'results' => [
+                'document_id' => 'doc-1',
+                'external_id' => 'ext-1',
+                'chunks_generated' => 5,
+                'tokens_consumed' => 520,
+            ],
+        ]);
+        $this->assertSame(520, $fromNestedResults->tokensConsumed);
+
+        // From nested results usage object
+        $fromNestedUsage = JobDto::fromArray([
+            'job_id' => 'job-1',
+            'status' => 'completed',
+            'results' => [
+                'document_id' => 'doc-1',
+                'external_id' => 'ext-1',
+                'usage' => ['tokens_consumed' => 600],
+            ],
+        ]);
+        $this->assertSame(600, $fromNestedUsage->tokensConsumed);
+
+        // Without tokens consumed
+        $fromNull = JobDto::fromArray([
+            'job_id' => 'job-1',
+            'status' => 'completed',
+        ]);
+        $this->assertNull($fromNull->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
+    }
 }

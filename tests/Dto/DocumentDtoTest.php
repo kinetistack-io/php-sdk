@@ -108,6 +108,76 @@ class DocumentDtoTest extends TestCase
         $this->assertSame('node:42:en', $array['external_id']);
         $this->assertSame(4, $array['chunks_generated']);
         $this->assertSame('indexed', $array['status']);
+        $this->assertNull($dto->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $array);
+    }
+
+    public function testDocumentResponseDtoWithTokensConsumed(): void
+    {
+        $dto = new DocumentResponseDto(
+            documentId: 'doc-1',
+            externalId: 'ext-1',
+            chunksGenerated: 5,
+            status: 'indexed',
+            tokensConsumed: 120,
+        );
+
+        $this->assertSame(120, $dto->tokensConsumed);
+        $this->assertSame(120, $dto->toArray()['tokens_consumed']);
+
+        // From snake_case tokens_consumed
+        $fromSnake = DocumentResponseDto::fromArray([
+            'document_id' => 'doc-1',
+            'external_id' => 'ext-1',
+            'chunks_generated' => 5,
+            'tokens_consumed' => 85,
+        ]);
+        $this->assertSame(85, $fromSnake->tokensConsumed);
+
+        // From camelCase tokensConsumed
+        $fromCamel = DocumentResponseDto::fromArray([
+            'document_id' => 'doc-1',
+            'external_id' => 'ext-1',
+            'chunks_generated' => 5,
+            'tokensConsumed' => 95,
+        ]);
+        $this->assertSame(95, $fromCamel->tokensConsumed);
+
+        // From usage array with total_tokens
+        $fromUsageTotal = DocumentResponseDto::fromArray([
+            'document_id' => 'doc-1',
+            'external_id' => 'ext-1',
+            'chunks_generated' => 5,
+            'usage' => ['total_tokens' => 150],
+        ]);
+        $this->assertSame(150, $fromUsageTotal->tokensConsumed);
+
+        // From usage array with tokens_consumed
+        $fromUsageConsumed = DocumentResponseDto::fromArray([
+            'document_id' => 'doc-1',
+            'external_id' => 'ext-1',
+            'chunks_generated' => 5,
+            'usage' => ['tokens_consumed' => 175],
+        ]);
+        $this->assertSame(175, $fromUsageConsumed->tokensConsumed);
+
+        // From usage numeric scalar
+        $fromUsageScalar = DocumentResponseDto::fromArray([
+            'document_id' => 'doc-1',
+            'external_id' => 'ext-1',
+            'chunks_generated' => 5,
+            'usage' => 200,
+        ]);
+        $this->assertSame(200, $fromUsageScalar->tokensConsumed);
+
+        // Without tokens consumed
+        $fromNull = DocumentResponseDto::fromArray([
+            'document_id' => 'doc-1',
+            'external_id' => 'ext-1',
+            'chunks_generated' => 5,
+        ]);
+        $this->assertNull($fromNull->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
     }
 
     public function testDocumentSummaryDtoFromArrayAndToArray(): void

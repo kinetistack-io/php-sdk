@@ -203,4 +203,47 @@ class VisionResponseDtoTest extends TestCase
         $this->assertSame([], $dto->tags);
         $this->assertFalse($dto->hasTags());
     }
+
+    public function testVisionResponseDtoWithTokensConsumed(): void
+    {
+        $dto = new VisionResponseDto(
+            altText: 'Cat on sofa',
+            caption: 'Cozy cat',
+            tags: ['cat'],
+            confidenceScore: 0.95,
+            modelUsed: 'llava',
+            tokensConsumed: 180,
+        );
+
+        $this->assertSame(180, $dto->tokensConsumed);
+        $this->assertSame(180, $dto->toArray()['tokens_consumed']);
+
+        // From snake_case tokens_consumed
+        $fromSnake = VisionResponseDto::fromArray([
+            'alt_text' => 'Cat on sofa',
+            'tokens_consumed' => 125,
+        ]);
+        $this->assertSame(125, $fromSnake->tokensConsumed);
+
+        // From camelCase tokensConsumed
+        $fromCamel = VisionResponseDto::fromArray([
+            'alt_text' => 'Cat on sofa',
+            'tokensConsumed' => 135,
+        ]);
+        $this->assertSame(135, $fromCamel->tokensConsumed);
+
+        // From usage array
+        $fromUsage = VisionResponseDto::fromArray([
+            'alt_text' => 'Cat on sofa',
+            'usage' => ['total_tokens' => 190],
+        ]);
+        $this->assertSame(190, $fromUsage->tokensConsumed);
+
+        // Without tokens consumed
+        $fromNull = VisionResponseDto::fromArray([
+            'alt_text' => 'Cat on sofa',
+        ]);
+        $this->assertNull($fromNull->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
+    }
 }

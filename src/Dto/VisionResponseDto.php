@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class VisionResponseDto
 {
+    use ExtractsTokenUsageTrait;
+
     /**
      * @param string[] $tags
      */
@@ -15,6 +17,7 @@ class VisionResponseDto
         public readonly array $tags,
         public readonly ?float $confidenceScore,
         public readonly ?string $modelUsed,
+        public readonly ?int $tokensConsumed = null,
     ) {
     }
 
@@ -51,6 +54,7 @@ class VisionResponseDto
             $tags,
             $confidence,
             $modelUsed,
+            self::extractTokensConsumed($data),
         );
     }
 
@@ -82,6 +86,9 @@ class VisionResponseDto
         }
         if ($this->modelUsed !== null) {
             $data['model_used'] = $this->modelUsed;
+        }
+        if ($this->tokensConsumed !== null) {
+            $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
         return $data;

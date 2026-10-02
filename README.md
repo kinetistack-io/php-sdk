@@ -64,6 +64,9 @@ $response = $client->analyzeImage('https://example.com/image.jpg', [
     'page_title' => 'Renewable Energy'
 ]);
 echo $response->altText;
+if ($response->tokensConsumed !== null) {
+    echo "Tokens consumed: {$response->tokensConsumed}\n";
+}
 
 // From a stream resource (memory-efficient for large files & remote stream wrappers)
 $stream = fopen('/path/to/image.jpg', 'rb');
@@ -105,6 +108,10 @@ try {
         maxPollIntervalSeconds: KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS // Default: 10s (capped interval)
     );
     
+    if ($completedBatch->tokensConsumed !== null) {
+        echo "Tokens consumed: {$completedBatch->tokensConsumed}\n";
+    }
+
     foreach ($completedBatch->results as $result) {
         echo $result->externalId . ': ' . $result->altText . "\n";
     }
@@ -161,6 +168,9 @@ $stream = $client->searchStream($streamQuery);
 
 foreach ($stream as $chunk) {
     echo $chunk->text; // Streams partial tokens/words in real-time
+    if ($chunk->tokensConsumed !== null) {
+        echo "\nTokens consumed: {$chunk->tokensConsumed}\n";
+    }
     flush();
 }
 ```

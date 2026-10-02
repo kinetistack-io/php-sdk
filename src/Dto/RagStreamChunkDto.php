@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class RagStreamChunkDto implements \Stringable
 {
+    use ExtractsTokenUsageTrait;
+
     public readonly string $chunk;
 
     /**
@@ -18,13 +20,14 @@ class RagStreamChunkDto implements \Stringable
         public readonly array $citations = [],
         public readonly array $metadata = [],
         ?string $chunk = null,
+        public readonly ?int $tokensConsumed = null,
     ) {
         $this->chunk = $chunk ?? $this->text;
     }
 
-    public static function create(string $text, bool $isDone = false): self
+    public static function create(string $text, bool $isDone = false, ?int $tokensConsumed = null): self
     {
-        return new self($text, $isDone);
+        return new self($text, $isDone, tokensConsumed: $tokensConsumed);
     }
 
     public function getText(): string
@@ -52,13 +55,19 @@ class RagStreamChunkDto implements \Stringable
      */
     public function toArray(): array
     {
-        return [
+        $data = [
             'text' => $this->text,
             'chunk' => $this->chunk,
             'is_done' => $this->isDone,
             'citations' => $this->citations,
             'metadata' => $this->metadata,
         ];
+
+        if ($this->tokensConsumed !== null) {
+            $data['tokens_consumed'] = $this->tokensConsumed;
+        }
+
+        return $data;
     }
 
     /**
@@ -79,12 +88,18 @@ class RagStreamChunkDto implements \Stringable
             ? $data['metadata']
             : [];
 
+        $tokensConsumed = self::extractTokensConsumed($data);
+        if ($tokensConsumed === null && !empty($metadata)) {
+            $tokensConsumed = self::extractTokensConsumed($metadata);
+        }
+
         return new self(
             text: $text,
             isDone: $isDone,
             citations: $citations,
             metadata: $metadata,
             chunk: isset($data['chunk']) && is_string($data['chunk']) ? $data['chunk'] : null,
+            tokensConsumed: $tokensConsumed,
         );
     }
 }

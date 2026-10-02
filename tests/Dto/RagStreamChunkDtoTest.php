@@ -77,4 +77,54 @@ class RagStreamChunkDtoTest extends TestCase
         $this->assertSame([], $dto->citations);
         $this->assertSame([], $dto->metadata);
     }
+
+    public function testRagStreamChunkDtoWithTokensConsumed(): void
+    {
+        $dto = new RagStreamChunkDto(
+            text: 'Final chunk',
+            isDone: true,
+            tokensConsumed: 75,
+        );
+
+        $this->assertSame(75, $dto->tokensConsumed);
+        $this->assertSame(75, $dto->toArray()['tokens_consumed']);
+
+        $created = RagStreamChunkDto::create('Final chunk', true, 75);
+        $this->assertSame(75, $created->tokensConsumed);
+
+        // From top-level tokens_consumed
+        $fromSnake = RagStreamChunkDto::fromArray([
+            'chunk' => 'Done',
+            'tokens_consumed' => 60,
+        ]);
+        $this->assertSame(60, $fromSnake->tokensConsumed);
+
+        // From top-level tokensConsumed
+        $fromCamel = RagStreamChunkDto::fromArray([
+            'chunk' => 'Done',
+            'tokensConsumed' => 65,
+        ]);
+        $this->assertSame(65, $fromCamel->tokensConsumed);
+
+        // From metadata tokens_consumed
+        $fromMetaSnake = RagStreamChunkDto::fromArray([
+            'chunk' => 'Done',
+            'metadata' => ['tokens_consumed' => 80],
+        ]);
+        $this->assertSame(80, $fromMetaSnake->tokensConsumed);
+
+        // From metadata usage object
+        $fromMetaUsage = RagStreamChunkDto::fromArray([
+            'chunk' => 'Done',
+            'metadata' => ['usage' => ['total_tokens' => 90]],
+        ]);
+        $this->assertSame(90, $fromMetaUsage->tokensConsumed);
+
+        // Without tokens consumed
+        $fromNull = RagStreamChunkDto::fromArray([
+            'chunk' => 'In progress',
+        ]);
+        $this->assertNull($fromNull->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
+    }
 }
