@@ -630,11 +630,26 @@ class AdminClient implements AdminClientInterface
     public function getUsage(
         array|string|null $fromOrOptions = null,
         ?string $to = null,
-        ?string $projectId = null
+        ?string $projectId = null,
+        ?string $apiKeyId = null,
     ): array {
         $query = [];
         if (is_array($fromOrOptions)) {
             $query = $fromOrOptions;
+            if (isset($query['apiKeyId']) && !isset($query['api_key_id'])) {
+                $query['api_key_id'] = $query['apiKeyId'];
+                unset($query['apiKeyId']);
+            }
+            if (isset($query['projectId']) && !isset($query['project_id'])) {
+                $query['project_id'] = $query['projectId'];
+                unset($query['projectId']);
+            }
+            if ($apiKeyId !== null && !isset($query['api_key_id'])) {
+                $query['api_key_id'] = $apiKeyId;
+            }
+            if ($projectId !== null && !isset($query['project_id'])) {
+                $query['project_id'] = $projectId;
+            }
         } else {
             if ($fromOrOptions !== null) {
                 $query['from'] = $fromOrOptions;
@@ -644,6 +659,9 @@ class AdminClient implements AdminClientInterface
             }
             if ($projectId !== null) {
                 $query['project_id'] = $projectId;
+            }
+            if ($apiKeyId !== null) {
+                $query['api_key_id'] = $apiKeyId;
             }
         }
 

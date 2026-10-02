@@ -141,8 +141,14 @@ $query = SearchQueryDto::create('How does solar net metering work?')
 
 $response = $client->search($query);
 echo "Found {$response->total} results.\n";
+if ($response->tokensConsumed !== null) {
+    echo "Tokens consumed: {$response->tokensConsumed}\n";
+}
 if ($response->hasSynthesis()) {
     echo "Synthesized Answer: " . $response->synthesis->answer . "\n";
+    if ($response->synthesis->tokensConsumed !== null) {
+        echo "Synthesis Tokens: " . $response->synthesis->tokensConsumed . "\n";
+    }
 }
 
 // 2. Streamed RAG synthesis via PHP generator (reduces perceived latency)
@@ -255,8 +261,13 @@ $newKey = $admin->createApiKey($project->id, 'Production Drupal Key', 'all', rat
 echo $newKey->token; // Secret plaintext token — save this now!
 echo $newKey->tokenSuffix; // e.g. '1234'
 
-// List API keys (returns ApiKeyDto[] without plaintext token)
+// List API keys (returns ApiKeyDto[] without plaintext token, with optional usage metrics)
 $keys = $admin->listApiKeys($project->id);
+foreach ($keys as $key) {
+    $tokens = $key->tokensConsumedToday ?? 0;
+    $requests = $key->requestsToday ?? 0;
+    echo "{$key->name}: {$tokens} tokens consumed today across {$requests} requests\n";
+}
 
 // Rotate API key (old key continues working during grace period)
 $rotated = $admin->rotateApiKey($project->id, $newKey->id);
@@ -272,8 +283,8 @@ $admin->revokeApiKey($project->id, $newKey->id);
 use KinetiStack\Sdk\AnalyticsClient;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 
-// Summary report across services
-$usage = $admin->getUsage(from: '2026-09-01', to: '2026-09-05', projectId: $project->id);
+// Summary report across services (supports optional apiKeyId filter)
+$usage = $admin->getUsage(from: '2026-09-01', to: '2026-09-05', projectId: $project->id, apiKeyId: $newKey->id);
 foreach ($usage as $summary) {
     echo "{$summary->projectName} - {$summary->service}: {$summary->totalTokens} tokens ({$summary->requestCount} requests)\n";
 }

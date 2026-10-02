@@ -260,6 +260,60 @@ class SearchResultDtoTest extends TestCase
         $this->assertSame('Rate limited', $fallbackDto->toArray()['fallback_reason']);
     }
 
+    public function testRagSynthesisDtoWithTokensConsumed(): void
+    {
+        $dto = new RagSynthesisDto(
+            answer: 'Answer',
+            citations: ['node:1'],
+            successful: true,
+            fallbackReason: null,
+            tokensConsumed: 120,
+        );
+
+        $this->assertSame(120, $dto->tokensConsumed);
+        $this->assertSame(120, $dto->toArray()['tokens_consumed']);
+
+        // From snake_case tokens_consumed
+        $fromSnake = RagSynthesisDto::fromArray([
+            'answer' => 'A',
+            'tokens_consumed' => 85,
+        ]);
+        $this->assertSame(85, $fromSnake->tokensConsumed);
+
+        // From camelCase tokensConsumed
+        $fromCamel = RagSynthesisDto::fromArray([
+            'answer' => 'A',
+            'tokensConsumed' => 95,
+        ]);
+        $this->assertSame(95, $fromCamel->tokensConsumed);
+
+        // From usage array with total_tokens
+        $fromUsageTotal = RagSynthesisDto::fromArray([
+            'answer' => 'A',
+            'usage' => ['total_tokens' => 150],
+        ]);
+        $this->assertSame(150, $fromUsageTotal->tokensConsumed);
+
+        // From usage array with tokens_consumed
+        $fromUsageConsumed = RagSynthesisDto::fromArray([
+            'answer' => 'A',
+            'usage' => ['tokens_consumed' => 175],
+        ]);
+        $this->assertSame(175, $fromUsageConsumed->tokensConsumed);
+
+        // From usage numeric scalar
+        $fromUsageScalar = RagSynthesisDto::fromArray([
+            'answer' => 'A',
+            'usage' => 200,
+        ]);
+        $this->assertSame(200, $fromUsageScalar->tokensConsumed);
+
+        // Without tokens consumed
+        $fromNull = RagSynthesisDto::fromArray(['answer' => 'A']);
+        $this->assertNull($fromNull->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
+    }
+
     public function testSearchResponseDtoWithSynthesisFixture(): void
     {
         $data = $this->loadFixtureArray('Search/search_response_with_synthesis_200.json');
@@ -359,6 +413,70 @@ class SearchResultDtoTest extends TestCase
             'itemsPerPage' => 20,
         ]);
         $this->assertSame(20, $restoredWithItemsPerPage->getLimit());
+    }
+
+    public function testSearchResponseDtoWithTokensConsumed(): void
+    {
+        $dto = new SearchResponseDto(
+            results: [],
+            total: 0,
+            synthesis: null,
+            page: 1,
+            limit: 10,
+            facets: [],
+            tokensConsumed: 350,
+        );
+
+        $this->assertSame(350, $dto->tokensConsumed);
+        $this->assertSame(350, $dto->toArray()['tokens_consumed']);
+
+        // From snake_case tokens_consumed
+        $fromSnake = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+            'tokens_consumed' => 250,
+        ]);
+        $this->assertSame(250, $fromSnake->tokensConsumed);
+
+        // From camelCase tokensConsumed
+        $fromCamel = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+            'tokensConsumed' => 275,
+        ]);
+        $this->assertSame(275, $fromCamel->tokensConsumed);
+
+        // From usage array with total_tokens
+        $fromUsageTotal = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+            'usage' => ['total_tokens' => 300],
+        ]);
+        $this->assertSame(300, $fromUsageTotal->tokensConsumed);
+
+        // From usage array with tokens_consumed
+        $fromUsageConsumed = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+            'usage' => ['tokens_consumed' => 320],
+        ]);
+        $this->assertSame(320, $fromUsageConsumed->tokensConsumed);
+
+        // From usage scalar
+        $fromUsageScalar = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+            'usage' => 400,
+        ]);
+        $this->assertSame(400, $fromUsageScalar->tokensConsumed);
+
+        // Without tokens consumed
+        $fromNull = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+        ]);
+        $this->assertNull($fromNull->tokensConsumed);
+        $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
     }
 
     public function testSearchQueryDtoWithFacets(): void

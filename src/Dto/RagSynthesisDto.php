@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class RagSynthesisDto
 {
+    use ExtractsTokenUsageTrait;
+
     /**
      * @param list<string> $citations List of unique external_ids referenced in the synthesized answer
      */
@@ -14,6 +16,7 @@ class RagSynthesisDto
         public readonly array $citations = [],
         public readonly bool $successful = true,
         public readonly ?string $fallbackReason = null,
+        public readonly ?int $tokensConsumed = null,
     ) {
     }
 
@@ -30,6 +33,10 @@ class RagSynthesisDto
 
         if ($this->fallbackReason !== null) {
             $data['fallback_reason'] = $this->fallbackReason;
+        }
+
+        if ($this->tokensConsumed !== null) {
+            $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
         return $data;
@@ -56,11 +63,14 @@ class RagSynthesisDto
             $fallbackReason = $data['fallbackReason'];
         }
 
+        $tokensConsumed = self::extractTokensConsumed($data);
+
         return new self(
             $answer,
             $citations,
             $successful,
-            $fallbackReason
+            $fallbackReason,
+            $tokensConsumed
         );
     }
 }

@@ -341,6 +341,80 @@ class AdminDtoTest extends TestCase
         );
     }
 
+    public function testApiKeyDtoWithUsageProperties(): void
+    {
+        $dto = new ApiKeyDto(
+            id: 'key-1',
+            name: 'Drupal Key',
+            tokenSuffix: 'abcd',
+            tokensConsumedToday: 1500,
+            requestsToday: 25,
+        );
+
+        $this->assertSame(1500, $dto->tokensConsumedToday);
+        $this->assertSame(25, $dto->requestsToday);
+
+        $array = $dto->toArray();
+        $this->assertSame(1500, $array['tokens_consumed_today']);
+        $this->assertSame(25, $array['requests_today']);
+
+        $fromSnake = ApiKeyDto::fromArray([
+            'id' => 'key-2',
+            'name' => 'Key 2',
+            'token_suffix' => 'wxyz',
+            'tokens_consumed_today' => 2000,
+            'requests_today' => 40,
+        ]);
+        $this->assertSame(2000, $fromSnake->tokensConsumedToday);
+        $this->assertSame(40, $fromSnake->requestsToday);
+
+        $fromCamel = ApiKeyDto::fromArray([
+            'id' => 'key-3',
+            'name' => 'Key 3',
+            'token_suffix' => '1234',
+            'tokensConsumedToday' => 3500,
+            'requestsToday' => 50,
+        ]);
+        $this->assertSame(3500, $fromCamel->tokensConsumedToday);
+        $this->assertSame(50, $fromCamel->requestsToday);
+
+        $fromNull = ApiKeyDto::fromArray([
+            'id' => 'key-4',
+            'name' => 'Key 4',
+            'token_suffix' => '5678',
+            'tokens_consumed_today' => null,
+            'requests_today' => null,
+        ]);
+        $this->assertNull($fromNull->tokensConsumedToday);
+        $this->assertNull($fromNull->requestsToday);
+        $this->assertArrayNotHasKey('tokens_consumed_today', $fromNull->toArray());
+        $this->assertArrayNotHasKey('requests_today', $fromNull->toArray());
+    }
+
+    public function testApiKeyDtoNegativeTokensConsumedTodayThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('tokensConsumedToday must be greater than or equal to 0.');
+        new ApiKeyDto(
+            id: 'key-1',
+            name: 'Key',
+            tokenSuffix: 'abcd',
+            tokensConsumedToday: -1,
+        );
+    }
+
+    public function testApiKeyDtoNegativeRequestsTodayThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requestsToday must be greater than or equal to 0.');
+        new ApiKeyDto(
+            id: 'key-1',
+            name: 'Key',
+            tokenSuffix: 'abcd',
+            requestsToday: -5,
+        );
+    }
+
     /**
      * @dataProvider emptyNameProvider
      * @param array<string, mixed> $payload
@@ -398,6 +472,37 @@ class AdminDtoTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         new ApiKeyCreatedDto('id', 'Name', 'suffix', '');
+    }
+
+    public function testApiKeyCreatedDtoWithUsageProperties(): void
+    {
+        $dto = new ApiKeyCreatedDto(
+            id: 'key-1',
+            name: 'Drupal Key',
+            tokenSuffix: 'abcd',
+            token: 'raw-token',
+            tokensConsumedToday: 600,
+            requestsToday: 12,
+        );
+
+        $this->assertSame(600, $dto->tokensConsumedToday);
+        $this->assertSame(12, $dto->requestsToday);
+
+        $array = $dto->toArray();
+        $this->assertSame(600, $array['tokens_consumed_today']);
+        $this->assertSame(12, $array['requests_today']);
+
+        $fromArray = ApiKeyCreatedDto::fromArray([
+            'id' => 'key-3',
+            'name' => 'Key 3',
+            'token_suffix' => '9999',
+            'token' => 'plain-token-9999',
+            'tokens_consumed_today' => 800,
+            'requests_today' => 15,
+        ]);
+        $this->assertSame(800, $fromArray->tokensConsumedToday);
+        $this->assertSame(15, $fromArray->requestsToday);
+        $this->assertSame('plain-token-9999', $fromArray->token);
     }
 
     public function testUsageSummaryDto(): void

@@ -9,6 +9,8 @@ namespace KinetiStack\Sdk\Dto;
  */
 class SearchResponseDto implements \Countable, \IteratorAggregate
 {
+    use ExtractsTokenUsageTrait;
+
     /**
      * @param list<SearchResultItemDto> $results
      * @param array<string, list<FacetBucketDto>> $facets
@@ -20,6 +22,7 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
         public readonly ?int $page = null,
         public readonly ?int $limit = null,
         public readonly array $facets = [],
+        public readonly ?int $tokensConsumed = null,
     ) {
     }
 
@@ -104,7 +107,9 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
             }
         }
 
-        return new self($results, $total, $synthesis, $page, $limit, $facets);
+        $tokensConsumed = self::extractTokensConsumed($data);
+
+        return new self($results, $total, $synthesis, $page, $limit, $facets, $tokensConsumed);
     }
 
     /**
@@ -127,6 +132,10 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
 
         if ($this->limit !== null) {
             $data['limit'] = $this->limit;
+        }
+
+        if ($this->tokensConsumed !== null) {
+            $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
         if (!empty($this->facets)) {

@@ -1194,6 +1194,107 @@ class AdminClientTest extends TestCase
         $this->assertStringContainsString('project_id=p1', $mockResponse->getRequestUrl());
     }
 
+    public function testGetUsageWithApiKeyIdPositional(): void
+    {
+        $responseBody = json_encode([
+            [
+                'project_id' => 'p1',
+                'project_name' => 'Project Alpha',
+                'service' => 'search',
+                'total_tokens' => 200,
+                'request_count' => 5,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $usage = $admin->getUsage('2026-09-01', '2026-09-05', 'p1', 'key-uuid-123');
+
+        $this->assertCount(1, $usage);
+        $this->assertInstanceOf(UsageSummaryDto::class, $usage[0]);
+        $this->assertSame('p1', $usage[0]->projectId);
+        $this->assertSame(200, $usage[0]->totalTokens);
+        $this->assertSame(5, $usage[0]->requestCount);
+
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringContainsString('/api/v1/admin/usage', $mockResponse->getRequestUrl());
+        $this->assertStringContainsString('from=2026-09-01', $mockResponse->getRequestUrl());
+        $this->assertStringContainsString('to=2026-09-05', $mockResponse->getRequestUrl());
+        $this->assertStringContainsString('project_id=p1', $mockResponse->getRequestUrl());
+        $this->assertStringContainsString('api_key_id=key-uuid-123', $mockResponse->getRequestUrl());
+    }
+
+    public function testGetUsageWithApiKeyIdNamedArgument(): void
+    {
+        $responseBody = json_encode([
+            [
+                'project_id' => 'p-uuid-99',
+                'project_name' => 'Project Beta',
+                'service' => 'rag',
+                'total_tokens' => 450,
+                'request_count' => 2,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $usage = $admin->getUsage(projectId: 'p-uuid-99', apiKeyId: 'key-uuid-456');
+
+        $this->assertCount(1, $usage);
+        $this->assertInstanceOf(UsageSummaryDto::class, $usage[0]);
+        $this->assertSame('p-uuid-99', $usage[0]->projectId);
+        $this->assertSame(450, $usage[0]->totalTokens);
+
+        $this->assertSame('GET', $mockResponse->getRequestMethod());
+        $this->assertStringContainsString('/api/v1/admin/usage', $mockResponse->getRequestUrl());
+        $this->assertStringContainsString('project_id=p-uuid-99', $mockResponse->getRequestUrl());
+        $this->assertStringContainsString('api_key_id=key-uuid-456', $mockResponse->getRequestUrl());
+        $this->assertStringNotContainsString('from=', $mockResponse->getRequestUrl());
+        $this->assertStringNotContainsString('to=', $mockResponse->getRequestUrl());
+    }
+
+    public function testGetUsageWithOptionsArrayApiKeyId(): void
+    {
+        $responseBody = json_encode([
+            [
+                'project_id' => 'p1',
+                'project_name' => 'Project Alpha',
+                'service' => 'search',
+                'total_tokens' => 100,
+                'request_count' => 1,
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse1 = new MockResponse($responseBody);
+        $mockResponse2 = new MockResponse($responseBody);
+        $httpClient = new MockHttpClient([$mockResponse1, $mockResponse2]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        // Test with camelCase options
+        $usage1 = $admin->getUsage([
+            'apiKeyId' => 'key-camel-1',
+            'projectId' => 'proj-camel-1',
+        ]);
+        $this->assertCount(1, $usage1);
+        $this->assertStringContainsString('api_key_id=key-camel-1', $mockResponse1->getRequestUrl());
+        $this->assertStringContainsString('project_id=proj-camel-1', $mockResponse1->getRequestUrl());
+        $this->assertStringNotContainsString('apiKeyId=', $mockResponse1->getRequestUrl());
+        $this->assertStringNotContainsString('projectId=', $mockResponse1->getRequestUrl());
+
+        // Test with snake_case options
+        $usage2 = $admin->getUsage([
+            'api_key_id' => 'key-snake-2',
+            'project_id' => 'proj-snake-2',
+        ]);
+        $this->assertCount(1, $usage2);
+        $this->assertStringContainsString('api_key_id=key-snake-2', $mockResponse2->getRequestUrl());
+        $this->assertStringContainsString('project_id=proj-snake-2', $mockResponse2->getRequestUrl());
+    }
+
     public function testGetAnalytics(): void
     {
         $responseBody = json_encode([

@@ -17,6 +17,8 @@ class ApiKeyDto
         public readonly ?string $revokedAt = null,
         public readonly ?string $gracePeriodUntil = null,
         public readonly ?int $dailyTokenQuotaOverride = null,
+        public readonly ?int $tokensConsumedToday = null,
+        public readonly ?int $requestsToday = null,
     ) {
         if (trim($this->id) === '') {
             throw new \InvalidArgumentException('id cannot be empty.');
@@ -26,6 +28,12 @@ class ApiKeyDto
         }
         if ($this->dailyTokenQuotaOverride !== null && $this->dailyTokenQuotaOverride <= 0) {
             throw new \InvalidArgumentException('dailyTokenQuotaOverride must be greater than 0.');
+        }
+        if ($this->tokensConsumedToday !== null && $this->tokensConsumedToday < 0) {
+            throw new \InvalidArgumentException('tokensConsumedToday must be greater than or equal to 0.');
+        }
+        if ($this->requestsToday !== null && $this->requestsToday < 0) {
+            throw new \InvalidArgumentException('requestsToday must be greater than or equal to 0.');
         }
     }
 
@@ -65,6 +73,14 @@ class ApiKeyDto
             $data['daily_token_quota_override'] = $this->dailyTokenQuotaOverride;
         }
 
+        if ($this->tokensConsumedToday !== null) {
+            $data['tokens_consumed_today'] = $this->tokensConsumedToday;
+        }
+
+        if ($this->requestsToday !== null) {
+            $data['requests_today'] = $this->requestsToday;
+        }
+
         return $data;
     }
 
@@ -98,6 +114,12 @@ class ApiKeyDto
         $dailyTokenQuotaOverride = isset($data['daily_token_quota_override'])
             ? (int) $data['daily_token_quota_override']
             : (isset($data['dailyTokenQuotaOverride']) ? (int) $data['dailyTokenQuotaOverride'] : null);
+        $tokensConsumedToday = isset($data['tokens_consumed_today'])
+            ? (int) $data['tokens_consumed_today']
+            : (isset($data['tokensConsumedToday']) ? (int) $data['tokensConsumedToday'] : null);
+        $requestsToday = isset($data['requests_today'])
+            ? (int) $data['requests_today']
+            : (isset($data['requestsToday']) ? (int) $data['requestsToday'] : null);
 
         return new self(
             $id,
@@ -109,7 +131,9 @@ class ApiKeyDto
             $createdAt,
             $revokedAt,
             $gracePeriodUntil,
-            $dailyTokenQuotaOverride
+            $dailyTokenQuotaOverride,
+            $tokensConsumedToday,
+            $requestsToday
         );
     }
 }

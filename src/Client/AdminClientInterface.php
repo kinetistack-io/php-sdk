@@ -223,7 +223,8 @@ interface AdminClientInterface
     public function getUsage(
         array|string|null $fromOrOptions = null,
         ?string $to = null,
-        ?string $projectId = null
+        ?string $projectId = null,
+        ?string $apiKeyId = null
     ): array;
 
     public function analytics(): AnalyticsClientInterface;
