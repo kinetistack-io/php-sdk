@@ -22,6 +22,7 @@ class AdminClientProfileTest extends TestCase
             'role' => 'member',
             'roles' => ['ROLE_USER'],
             'must_change_password' => false,
+            'is_verified' => true,
             'created_at' => '2026-09-18T10:00:00+00:00',
         ];
 
@@ -49,6 +50,7 @@ class AdminClientProfileTest extends TestCase
         $this->assertSame('ROLE_USER', $user->getRole());
         $this->assertTrue($user->hasRole('ROLE_USER'));
         $this->assertFalse($user->mustChangePassword);
+        $this->assertTrue($user->isVerified);
         $this->assertSame('2026-09-18T10:00:00+00:00', $user->createdAt);
     }
 
@@ -60,6 +62,7 @@ class AdminClientProfileTest extends TestCase
             'role' => 'member',
             'roles' => ['ROLE_USER'],
             'must_change_password' => false,
+            'is_verified' => false,
             'created_at' => '2026-09-18T10:00:00+00:00',
         ];
 
@@ -89,6 +92,7 @@ class AdminClientProfileTest extends TestCase
         $this->assertInstanceOf(UserDto::class, $user);
         $this->assertSame('user-me-123', $user->id);
         $this->assertSame('new-email@agency.com', $user->email);
+        $this->assertFalse($user->isVerified);
     }
 
     public function testUpdateMeConflictThrowsConflictException(): void

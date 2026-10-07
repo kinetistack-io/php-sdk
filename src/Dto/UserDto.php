@@ -16,6 +16,7 @@ class UserDto
         public readonly bool $mustChangePassword = false,
         public readonly ?string $deletedAt = null,
         public readonly string $createdAt = '',
+        public readonly bool $isVerified = false,
     ) {
         if (trim($this->id) === '') {
             throw new \InvalidArgumentException('id cannot be empty.');
@@ -45,6 +46,7 @@ class UserDto
             'email' => $this->email,
             'roles' => $this->roles,
             'must_change_password' => $this->mustChangePassword,
+            'is_verified' => $this->isVerified,
             'created_at' => $this->createdAt,
         ];
 
@@ -72,6 +74,7 @@ class UserDto
         }
 
         $mustChangePassword = (bool) ($data['must_change_password'] ?? $data['mustChangePassword'] ?? false);
+        $isVerified = (bool) ($data['is_verified'] ?? $data['isVerified'] ?? false);
         $deletedAt = isset($data['deleted_at']) && is_string($data['deleted_at'])
             ? $data['deleted_at']
             : (isset($data['deletedAt']) && is_string($data['deletedAt']) ? $data['deletedAt'] : null);
@@ -83,7 +86,8 @@ class UserDto
             $roles,
             $mustChangePassword,
             $deletedAt,
-            $createdAt
+            $createdAt,
+            $isVerified
         );
     }
 }

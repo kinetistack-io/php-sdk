@@ -27,10 +27,26 @@ class UserDtoTest extends TestCase
         $this->assertTrue($dto->mustChangePassword);
         $this->assertNull($dto->deletedAt);
         $this->assertSame('2026-09-18T00:00:00Z', $dto->createdAt);
+        $this->assertFalse($dto->isVerified);
         $this->assertSame('admin', $dto->getRole());
         $this->assertTrue($dto->hasRole('admin'));
         $this->assertTrue($dto->hasRole('member'));
         $this->assertFalse($dto->hasRole('super_admin'));
+    }
+
+    public function testUserDtoConstructorWithIsVerified(): void
+    {
+        $dto = new UserDto(
+            'user-123',
+            'admin@example.com',
+            ['admin'],
+            false,
+            null,
+            '2026-09-18T00:00:00Z',
+            true
+        );
+
+        $this->assertTrue($dto->isVerified);
     }
 
     public function testUserDtoEmptyIdThrows(): void
@@ -55,7 +71,8 @@ class UserDtoTest extends TestCase
             ['member'],
             false,
             '2026-09-18T10:00:00Z',
-            '2026-09-18T00:00:00Z'
+            '2026-09-18T00:00:00Z',
+            true
         );
 
         $array = $dto->toArray();
@@ -63,6 +80,7 @@ class UserDtoTest extends TestCase
         $this->assertSame('user@example.com', $array['email']);
         $this->assertSame(['member'], $array['roles']);
         $this->assertFalse($array['must_change_password']);
+        $this->assertTrue($array['is_verified']);
         $this->assertSame('2026-09-18T10:00:00Z', $array['deleted_at']);
         $this->assertSame('2026-09-18T00:00:00Z', $array['created_at']);
     }
@@ -82,8 +100,45 @@ class UserDtoTest extends TestCase
         $this->assertSame('u1@example.com', $dto->email);
         $this->assertSame(['admin'], $dto->roles);
         $this->assertTrue($dto->mustChangePassword);
+        $this->assertFalse($dto->isVerified);
         $this->assertNull($dto->deletedAt);
         $this->assertSame('2026-09-18T08:00:00Z', $dto->createdAt);
+    }
+
+    public function testUserDtoFromArrayWithIsVerifiedSnakeCase(): void
+    {
+        $data = [
+            'id' => 'u-verified',
+            'email' => 'verified@example.com',
+            'is_verified' => true,
+        ];
+
+        $dto = UserDto::fromArray($data);
+        $this->assertTrue($dto->isVerified);
+    }
+
+    public function testUserDtoFromArrayWithIsVerifiedCamelCase(): void
+    {
+        $data = [
+            'id' => 'u-verified-camel',
+            'email' => 'verified-camel@example.com',
+            'isVerified' => true,
+        ];
+
+        $dto = UserDto::fromArray($data);
+        $this->assertTrue($dto->isVerified);
+    }
+
+    public function testUserDtoFromArrayWithIsVerifiedFalse(): void
+    {
+        $data = [
+            'id' => 'u-unverified',
+            'email' => 'unverified@example.com',
+            'is_verified' => false,
+        ];
+
+        $dto = UserDto::fromArray($data);
+        $this->assertFalse($dto->isVerified);
     }
 
     public function testUserDtoFromArrayWithSingleRoleString(): void
@@ -93,6 +148,7 @@ class UserDtoTest extends TestCase
             'email' => 'u2@example.com',
             'role' => 'member',
             'mustChangePassword' => false,
+            'is_verified' => true,
             'deletedAt' => '2026-09-18T09:00:00Z',
             'createdAt' => '2026-09-18T08:00:00Z',
         ];
@@ -103,6 +159,7 @@ class UserDtoTest extends TestCase
         $this->assertSame(['member'], $dto->roles);
         $this->assertSame('member', $dto->getRole());
         $this->assertFalse($dto->mustChangePassword);
+        $this->assertTrue($dto->isVerified);
         $this->assertSame('2026-09-18T09:00:00Z', $dto->deletedAt);
         $this->assertSame('2026-09-18T08:00:00Z', $dto->createdAt);
     }

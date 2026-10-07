@@ -350,6 +350,8 @@ interface AdminClientInterface
     /**
      * Update the currently authenticated user's profile.
      *
+     * Note: Updating `email` requires providing `current_password` (or `currentPassword`) in $payload.
+     *
      * @param array<string, mixed> $payload
      * @throws ConflictException When email already exists (HTTP 409).
      * @throws ValidationException When payload fails validation (HTTP 422).
