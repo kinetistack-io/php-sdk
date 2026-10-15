@@ -177,22 +177,36 @@ foreach ($stream as $chunk) {
 
 ### Webhook Verification
 
-Verify incoming HMAC-SHA256 signatures for webhook events (e.g. from the `X-Kineti-Signature` header):
+Verify incoming HMAC-SHA256 signatures for webhook events from the `Kineti-Signature` header (`v1={timestamp}.{hmac}`), with replay protection and automatic fallback to legacy `X-Kineti-Signature`:
 
 ```php
 use KinetiStack\Sdk\WebhookVerifier;
 
 $payload = file_get_contents('php://input');
-$signatureHeader = $_SERVER['HTTP_X_KINETI_SIGNATURE'] ?? '';
+
+// Prefer modern Kineti-Signature (v1={timestamp}.{hmac}), fallback to legacy X-Kineti-Signature
+$signatureHeader = $_SERVER['HTTP_KINETI_SIGNATURE']
+    ?? $_SERVER['HTTP_X_KINETI_SIGNATURE']
+    ?? '';
+
 $webhookSecret = 'whsec_your_secret_key';
 
+// Verifies HMAC and validates timestamp within 300s replay window (default)
 $isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret);
+
+// Or customize tolerance window in seconds (pass 0 to disable replay check)
+// $isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret, toleranceSeconds: 600);
 
 if (!$isValid) {
     http_response_code(401);
-    exit('Invalid signature');
+    exit('Invalid or expired signature');
 }
 ```
+
+#### Available Constants
+- `WebhookVerifier::HEADER_SIGNATURE`: `'Kineti-Signature'`
+- `WebhookVerifier::HEADER_LEGACY_SIGNATURE`: `'X-Kineti-Signature'`
+- `WebhookVerifier::DEFAULT_TOLERANCE_SECONDS`: `300`
 
 ### Error Handling
 
