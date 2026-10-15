@@ -160,10 +160,8 @@ class AdminClient implements AdminClientInterface
      * Note: This endpoint is unauthenticated and must be called on an AdminClient
      * initialized without a JWT token (similar to login()).
      *
-     * @param RegisterDto|array<string, mixed>|string $orgNameOrData Organization name, RegisterDto, or associative payload array containing 'org_name', 'email', and 'password'.
+     * @param RegisterDto|array<string, mixed>|string $orgNameOrData Organization name, RegisterDto, or associative payload array containing 'org_name' and 'email'.
      * @param string|null $email Admin user email (required when $orgNameOrData is a string).
-     * @param string|null $password Admin user password (required when $orgNameOrData is a string).
-     *                              @sensitive $password
      * @return RegisterResponseDto
      * @throws \InvalidArgumentException When scalar arguments are empty.
      * @throws ConflictException When the email address is already registered (HTTP 409).
@@ -174,14 +172,14 @@ class AdminClient implements AdminClientInterface
     public function register(
         RegisterDto|array|string $orgNameOrData,
         ?string $email = null,
-        ?string $password = null,
     ): RegisterResponseDto {
         if ($orgNameOrData instanceof RegisterDto) {
             $payload = $orgNameOrData->toArray();
         } elseif (is_array($orgNameOrData)) {
             $payload = $orgNameOrData;
+            unset($payload['password']);
         } else {
-            $dto = new RegisterDto($orgNameOrData, (string) $email, (string) $password);
+            $dto = new RegisterDto($orgNameOrData, (string) $email);
             $payload = $dto->toArray();
         }
 
@@ -226,25 +224,38 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
-     * Verify a user's email address using a verification token.
+     * Verify a user's email address using a verification token and set their password.
      *
      * @param string $token The verification token received via email.
+     * @param string $password The password to set for the account.
      *
-     * @throws \InvalidArgumentException When the token is empty or whitespace.
+     * @return AuthTokenDto The authentication token issued upon successful verification.
+     *
+     * @throws \InvalidArgumentException When the token or password is empty or whitespace.
      * @throws ValidationException When the token is invalid or expired (HTTP 422).
      * @throws KinetiException
      */
-    public function verifyEmail(string $token): void
+    public function verifyEmail(string $token, #[\SensitiveParameter] string $password): AuthTokenDto
     {
         if (trim($token) === '') {
             throw new \InvalidArgumentException('Verification token cannot be empty.');
         }
 
-        $this->transport->request('POST', '/api/v1/admin/verify-email', [
+        if (trim($password) === '') {
+            throw new \InvalidArgumentException('Password cannot be empty.');
+        }
+
+        $response = $this->transport->request('POST', '/api/v1/admin/verify-email', [
             'json' => [
                 'token' => $token,
+                'password' => $password,
             ],
         ]);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return AuthTokenDto::fromArray($data);
     }
 
     /**

@@ -11,108 +11,46 @@ class RegisterResponseDtoTest extends TestCase
 {
     public function testConstructorAndProperties(): void
     {
-        $org = [
-            'id' => 'org-uuid-1',
-            'name' => 'Acme Agency',
-            'billing_tier' => 'pro',
-        ];
-        $user = [
-            'id' => 'user-uuid-1',
-            'email' => 'admin@acme.com',
-            'roles' => ['ROLE_ADMIN', 'ROLE_USER'],
-        ];
+        $dto = new RegisterResponseDto(
+            'If this address can be registered, a verification email has been sent.',
+            'admin@acme.com'
+        );
 
-        $dto = new RegisterResponseDto($org, $user);
-
-        $this->assertSame($org, $dto->organization);
-        $this->assertSame($user, $dto->user);
-        $this->assertSame('org-uuid-1', $dto->getOrganizationId());
-        $this->assertSame('Acme Agency', $dto->getOrganizationName());
-        $this->assertSame('pro', $dto->getBillingTier());
-        $this->assertSame('user-uuid-1', $dto->getUserId());
-        $this->assertSame('admin@acme.com', $dto->getUserEmail());
-        $this->assertSame(['ROLE_ADMIN', 'ROLE_USER'], $dto->getUserRoles());
+        $this->assertSame('If this address can be registered, a verification email has been sent.', $dto->message);
+        $this->assertSame('admin@acme.com', $dto->email);
+        $this->assertSame('If this address can be registered, a verification email has been sent.', $dto->getMessage());
+        $this->assertSame('admin@acme.com', $dto->getEmail());
     }
 
     public function testToArray(): void
     {
-        $org = [
-            'id' => 'org-uuid-2',
-            'name' => 'Beta Corp',
-            'billing_tier' => 'enterprise',
-        ];
-        $user = [
-            'id' => 'user-uuid-2',
-            'email' => 'admin@betacorp.com',
-            'roles' => ['ROLE_ADMIN'],
-        ];
-
-        $dto = new RegisterResponseDto($org, $user);
+        $dto = new RegisterResponseDto('Verification email sent.', 'admin@betacorp.com');
         $array = $dto->toArray();
 
         $this->assertSame([
-            'organization' => $org,
-            'user' => $user,
+            'message' => 'Verification email sent.',
+            'email' => 'admin@betacorp.com',
         ], $array);
     }
 
     public function testFromArrayWithCompleteData(): void
     {
         $data = [
-            'organization' => [
-                'id' => 'org-uuid-123',
-                'name' => 'Complete Agency',
-                'billing_tier' => 'standard',
-            ],
-            'user' => [
-                'id' => 'user-uuid-456',
-                'email' => 'lead@agency.com',
-                'roles' => ['ROLE_ADMIN'],
-            ],
+            'message' => 'Verification email sent.',
+            'email' => 'lead@agency.com',
         ];
 
         $dto = RegisterResponseDto::fromArray($data);
 
-        $this->assertSame('org-uuid-123', $dto->getOrganizationId());
-        $this->assertSame('Complete Agency', $dto->getOrganizationName());
-        $this->assertSame('standard', $dto->getBillingTier());
-        $this->assertSame('user-uuid-456', $dto->getUserId());
-        $this->assertSame('lead@agency.com', $dto->getUserEmail());
-        $this->assertSame(['ROLE_ADMIN'], $dto->getUserRoles());
-    }
-
-    public function testFromArrayWithDefaults(): void
-    {
-        $data = [
-            'organization' => [
-                'id' => 'org-uuid-999',
-                'name' => 'Default Agency',
-            ],
-            'user' => [
-                'id' => 'user-uuid-999',
-                'email' => 'default@agency.com',
-            ],
-        ];
-
-        $dto = RegisterResponseDto::fromArray($data);
-
-        $this->assertSame('org-uuid-999', $dto->getOrganizationId());
-        $this->assertSame('Default Agency', $dto->getOrganizationName());
-        $this->assertSame('free', $dto->getBillingTier());
-        $this->assertSame('user-uuid-999', $dto->getUserId());
-        $this->assertSame('default@agency.com', $dto->getUserEmail());
-        $this->assertSame([], $dto->getUserRoles());
+        $this->assertSame('Verification email sent.', $dto->getMessage());
+        $this->assertSame('lead@agency.com', $dto->getEmail());
     }
 
     public function testFromArrayWithEmptyData(): void
     {
         $dto = RegisterResponseDto::fromArray([]);
 
-        $this->assertSame('', $dto->getOrganizationId());
-        $this->assertSame('', $dto->getOrganizationName());
-        $this->assertSame('free', $dto->getBillingTier());
-        $this->assertSame('', $dto->getUserId());
-        $this->assertSame('', $dto->getUserEmail());
-        $this->assertSame([], $dto->getUserRoles());
+        $this->assertSame('', $dto->getMessage());
+        $this->assertSame('', $dto->getEmail());
     }
 }

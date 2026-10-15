@@ -12,9 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Refactored `KinetiClient::searchAll()` to paginate via `offset` instead of `page` following backend top-K semantics, omitting `page` from outgoing requests, enforcing strictly forward offset progression to prevent infinite loops, and halting at the backend boundary `offset <= 1000` (PHPSDK-46).
+- Removed `$password` parameter from `AdminClient::register()` and `AdminClientInterface::register()`. Registration requests now send `{org_name, email}` without password to support backend pre-account takeover protection (PHPSDK-47).
+- Updated `AdminClient::verifyEmail()` and `AdminClientInterface::verifyEmail()` signature to `verifyEmail(string $token, string $password): AuthTokenDto`. Now sends `{token, password}` to `POST /api/v1/admin/verify-email` and returns the issued JWT authentication token as `AuthTokenDto` (PHPSDK-47).
+- Adapted `RegisterResponseDto` to reflect uniform `202 Accepted` response with `message` and `email` properties (PHPSDK-47).
 
 ### Deprecated
 - Marked `SearchQueryDto::$page`, `withPage()`, `setPage()`, and `getPage()` as deprecated in favor of `withOffset()`, `setOffset()`, and `getOffset()` (PHPSDK-46).
+
+### Removed
+- Removed `password` parameter and property from `RegisterDto` (PHPSDK-47).
+- Removed `organization` and `user` properties and getters (`getOrganizationId()`, `getOrganizationName()`, `getBillingTier()`, `getUserId()`, `getUserEmail()`, `getUserRoles()`) from `RegisterResponseDto` as the backend no longer returns entity identifiers on registration (PHPSDK-47).
 
 ## [1.0.10] - 2026-10-03
 

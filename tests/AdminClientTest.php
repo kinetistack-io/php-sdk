@@ -294,31 +294,21 @@ class AdminClientTest extends TestCase
     public function testRegisterSuccess(): void
     {
         $responseBody = json_encode([
-            'organization' => [
-                'id' => 'org-uuid-1',
-                'name' => 'Acme Agency',
-                'billing_tier' => 'free',
-            ],
-            'user' => [
-                'id' => 'user-uuid-1',
-                'email' => 'admin@acme.com',
-                'roles' => ['ROLE_ADMIN'],
-            ],
+            'message' => 'If this address can be registered, a verification email has been sent.',
+            'email' => 'admin@acme.com',
         ], JSON_THROW_ON_ERROR);
 
-        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 202]);
         $httpClient = new MockHttpClient($mockResponse);
         $admin = new AdminClient('https://api.test', '', $httpClient);
 
-        $result = $admin->register('Acme Agency', 'admin@acme.com', 'SecurePass1!');
+        $result = $admin->register('Acme Agency', 'admin@acme.com');
 
         $this->assertInstanceOf(RegisterResponseDto::class, $result);
-        $this->assertSame('org-uuid-1', $result->getOrganizationId());
-        $this->assertSame('Acme Agency', $result->getOrganizationName());
-        $this->assertSame('free', $result->getBillingTier());
-        $this->assertSame('user-uuid-1', $result->getUserId());
-        $this->assertSame('admin@acme.com', $result->getUserEmail());
-        $this->assertSame(['ROLE_ADMIN'], $result->getUserRoles());
+        $this->assertSame('If this address can be registered, a verification email has been sent.', $result->message);
+        $this->assertSame('If this address can be registered, a verification email has been sent.', $result->getMessage());
+        $this->assertSame('admin@acme.com', $result->email);
+        $this->assertSame('admin@acme.com', $result->getEmail());
 
         $this->assertSame('POST', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/admin/register', $mockResponse->getRequestUrl());
@@ -333,70 +323,55 @@ class AdminClientTest extends TestCase
         $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('Acme Agency', $sentBody['org_name']);
         $this->assertSame('admin@acme.com', $sentBody['email']);
-        $this->assertSame('SecurePass1!', $sentBody['password']);
+        $this->assertArrayNotHasKey('password', $sentBody);
     }
 
     public function testRegisterWithArrayPayload(): void
     {
         $responseBody = json_encode([
-            'organization' => [
-                'id' => 'org-uuid-2',
-                'name' => 'Acme',
-                'billing_tier' => 'free',
-            ],
-            'user' => [
-                'id' => 'user-uuid-2',
-                'email' => 'a@b.com',
-                'roles' => ['ROLE_ADMIN'],
-            ],
+            'message' => 'If this address can be registered, a verification email has been sent.',
+            'email' => 'a@b.com',
         ], JSON_THROW_ON_ERROR);
 
-        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 202]);
         $httpClient = new MockHttpClient($mockResponse);
         $admin = new AdminClient('https://api.test', '', $httpClient);
 
         $result = $admin->register(['org_name' => 'Acme', 'email' => 'a@b.com', 'password' => 'x']);
 
         $this->assertInstanceOf(RegisterResponseDto::class, $result);
-        $this->assertSame('Acme', $result->getOrganizationName());
-        $this->assertSame('a@b.com', $result->getUserEmail());
+        $this->assertSame('If this address can be registered, a verification email has been sent.', $result->getMessage());
+        $this->assertSame('a@b.com', $result->getEmail());
 
         /** @var array<string, mixed> $sentBody */
         $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
-        $this->assertSame(['org_name' => 'Acme', 'email' => 'a@b.com', 'password' => 'x'], $sentBody);
+        $this->assertSame(['org_name' => 'Acme', 'email' => 'a@b.com'], $sentBody);
+        $this->assertArrayNotHasKey('password', $sentBody);
     }
 
     public function testRegisterWithDto(): void
     {
         $responseBody = json_encode([
-            'organization' => [
-                'id' => 'org-uuid-3',
-                'name' => 'Acme DTO',
-                'billing_tier' => 'free',
-            ],
-            'user' => [
-                'id' => 'user-uuid-3',
-                'email' => 'dto@acme.com',
-                'roles' => ['ROLE_ADMIN'],
-            ],
+            'message' => 'If this address can be registered, a verification email has been sent.',
+            'email' => 'dto@acme.com',
         ], JSON_THROW_ON_ERROR);
 
-        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 202]);
         $httpClient = new MockHttpClient($mockResponse);
         $admin = new AdminClient('https://api.test', '', $httpClient);
 
-        $dto = new RegisterDto('Acme DTO', 'dto@acme.com', 'dto-secret');
+        $dto = new RegisterDto('Acme DTO', 'dto@acme.com');
         $result = $admin->register($dto);
 
         $this->assertInstanceOf(RegisterResponseDto::class, $result);
-        $this->assertSame('Acme DTO', $result->getOrganizationName());
-        $this->assertSame('dto@acme.com', $result->getUserEmail());
+        $this->assertSame('If this address can be registered, a verification email has been sent.', $result->getMessage());
+        $this->assertSame('dto@acme.com', $result->getEmail());
 
         /** @var array<string, mixed> $sentBody */
         $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('Acme DTO', $sentBody['org_name']);
         $this->assertSame('dto@acme.com', $sentBody['email']);
-        $this->assertSame('dto-secret', $sentBody['password']);
+        $this->assertArrayNotHasKey('password', $sentBody);
     }
 
     public function testRegisterConflict(): void
@@ -418,7 +393,7 @@ class AdminClientTest extends TestCase
         $this->expectException(ConflictException::class);
         $this->expectExceptionMessage('An account with email admin@acme.com already exists.');
 
-        $admin->register('Acme Agency', 'admin@acme.com', 'SecurePass1!');
+        $admin->register('Acme Agency', 'admin@acme.com');
     }
 
     public function testRegisterValidationError(): void
@@ -427,7 +402,7 @@ class AdminClientTest extends TestCase
             'type' => 'https://tools.ietf.org/html/rfc9457',
             'title' => 'Unprocessable Entity',
             'status' => 422,
-            'detail' => 'Missing or invalid required fields (org_name, email, password).',
+            'detail' => 'Missing or invalid required fields (org_name, email).',
         ], JSON_THROW_ON_ERROR);
 
         $mockResponse = new MockResponse($errorBody, [
@@ -438,9 +413,9 @@ class AdminClientTest extends TestCase
         $admin = new AdminClient('https://api.test', '', $httpClient);
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Missing or invalid required fields (org_name, email, password).');
+        $this->expectExceptionMessage('Missing or invalid required fields (org_name, email).');
 
-        $admin->register(['email' => 'admin@acme.com', 'password' => 'SecurePass1!']);
+        $admin->register(['email' => 'admin@acme.com']);
     }
 
     public function testRegisterForbidden(): void
@@ -462,7 +437,7 @@ class AdminClientTest extends TestCase
         $this->expectException(AuthorizationException::class);
         $this->expectExceptionMessage('Self-registration is closed.');
 
-        $admin->register('Acme Agency', 'admin@acme.com', 'SecurePass1!');
+        $admin->register('Acme Agency', 'admin@acme.com');
     }
 
     public function testRegisterWithEmptyScalarOrgNameThrowsException(): void
@@ -472,7 +447,7 @@ class AdminClientTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('org_name cannot be empty.');
 
-        $admin->register('   ', 'admin@acme.com', 'SecurePass1!');
+        $admin->register('   ', 'admin@acme.com');
     }
 
     public function testRegisterWithEmptyScalarEmailThrowsException(): void
@@ -482,17 +457,7 @@ class AdminClientTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('email cannot be empty.');
 
-        $admin->register('Acme Agency', '   ', 'SecurePass1!');
-    }
-
-    public function testRegisterWithEmptyScalarPasswordThrowsException(): void
-    {
-        $admin = new AdminClient('https://api.test', '');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('password cannot be empty.');
-
-        $admin->register('Acme Agency', 'admin@acme.com', '');
+        $admin->register('Acme Agency', '   ');
     }
 
     public function testCreateOrganizationThrowsBadMethodCallException(): void
@@ -1509,13 +1474,24 @@ class AdminClientTest extends TestCase
 
     public function testVerifyEmailSuccess(): void
     {
-        $mockResponse = new MockResponse('', [
-            'http_code' => 204,
+        $responseBody = json_encode([
+            'token' => 'jwt-token-xyz',
+            'refresh_token' => 'refresh-token-xyz',
+            'must_change_password' => false,
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, [
+            'http_code' => 200,
+            'response_headers' => ['content-type' => 'application/json'],
         ]);
         $httpClient = new MockHttpClient($mockResponse);
         $client = new AdminClient('https://api.test', '', $httpClient);
 
-        $client->verifyEmail('valid-token-123');
+        $result = $client->verifyEmail('valid-token-123', 'NewSecurePassword123!');
+
+        $this->assertInstanceOf(AuthTokenDto::class, $result);
+        $this->assertSame('jwt-token-xyz', $result->token);
+        $this->assertSame('refresh-token-xyz', $result->refreshToken);
 
         $this->assertSame('POST', $mockResponse->getRequestMethod());
         $this->assertSame('https://api.test/api/v1/admin/verify-email', $mockResponse->getRequestUrl());
@@ -1524,7 +1500,7 @@ class AdminClientTest extends TestCase
         $body = $mockResponse->getRequestOptions()['body'];
         $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         $this->assertIsArray($payload);
-        $this->assertSame(['token' => 'valid-token-123'], $payload);
+        $this->assertSame(['token' => 'valid-token-123', 'password' => 'NewSecurePassword123!'], $payload);
     }
 
     /**
@@ -1538,13 +1514,39 @@ class AdminClientTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Verification token cannot be empty.');
 
-        $client->verifyEmail($emptyToken);
+        $client->verifyEmail($emptyToken, 'NewSecurePassword123!');
     }
 
     /**
      * @return array<string, array{string}>
      */
     public static function provideEmptyVerificationTokens(): array
+    {
+        return [
+            'empty string' => [''],
+            'whitespace only' => ['   '],
+            'tabs and newlines' => [" \t\n "],
+        ];
+    }
+
+    /**
+     * @dataProvider provideEmptyVerificationPasswords
+     */
+    public function testVerifyEmailEmptyPasswordThrowsException(string $emptyPassword): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Password cannot be empty.');
+
+        $client->verifyEmail('valid-token-123', $emptyPassword);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function provideEmptyVerificationPasswords(): array
     {
         return [
             'empty string' => [''],
@@ -1579,7 +1581,7 @@ class AdminClientTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('The verification token is invalid or has expired.');
 
-        $client->verifyEmail('invalid-token');
+        $client->verifyEmail('invalid-token', 'NewSecurePassword123!');
     }
 
     public function testListProjectJobs(): void

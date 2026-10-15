@@ -66,8 +66,7 @@ interface AdminClientInterface
      */
     public function register(
         RegisterDto|array|string $orgNameOrData,
-        ?string $email = null,
-        ?string $password = null
+        ?string $email = null
     ): RegisterResponseDto;
 
     /**
@@ -84,15 +83,18 @@ interface AdminClientInterface
     public function resendVerificationEmail(string $email): void;
 
     /**
-     * Verify a user's email address using a verification token.
+     * Verify a user's email address using a verification token and set their password.
      *
      * @param string $token The verification token received via email.
+     * @param string $password The password to set for the account.
      *
-     * @throws \InvalidArgumentException When the token is empty or whitespace.
+     * @return AuthTokenDto The authentication token issued upon successful verification.
+     *
+     * @throws \InvalidArgumentException When the token or password is empty or whitespace.
      * @throws ValidationException When the token is invalid or expired (HTTP 422).
      * @throws KinetiException
      */
-    public function verifyEmail(string $token): void;
+    public function verifyEmail(string $token, #[\SensitiveParameter] string $password): AuthTokenDto;
 
     /**
      * @deprecated Organizations cannot be created directly. Organizations are single-tenant roots initialized during registration via register() and retrieved via getOrganization($id). This method will be removed in the next major version.
