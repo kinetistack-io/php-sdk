@@ -6,7 +6,6 @@ namespace KinetiStack\Sdk\Tests\Client;
 
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
-use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\KinetiClient;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -18,33 +17,36 @@ class SearchPaginationTest extends TestCase
     {
         $requests = [];
         $responses = [
-            // Page 1: 2 items (full page)
+            // Page 1: 2 items (full page), offset 0
             new MockResponse((string) json_encode([
                 'results' => [
                     ['external_id' => 'doc:1', 'title' => 'Document 1', 'content' => 'Content 1', 'chunk_index' => 0, 'score' => 0.95],
                     ['external_id' => 'doc:2', 'title' => 'Document 2', 'content' => 'Content 2', 'chunk_index' => 0, 'score' => 0.90],
                 ],
-                'total' => 5,
-                'page' => 1,
+                'total' => 2,
+                'has_more' => true,
+                'next_offset' => 2,
                 'limit' => 2,
             ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
-            // Page 2: 2 items (full page)
+            // Page 2: 2 items (full page), offset 2
             new MockResponse((string) json_encode([
                 'results' => [
                     ['external_id' => 'doc:3', 'title' => 'Document 3', 'content' => 'Content 3', 'chunk_index' => 0, 'score' => 0.85],
                     ['external_id' => 'doc:4', 'title' => 'Document 4', 'content' => 'Content 4', 'chunk_index' => 0, 'score' => 0.80],
                 ],
-                'total' => 5,
-                'page' => 2,
+                'total' => 2,
+                'has_more' => true,
+                'next_offset' => 4,
                 'limit' => 2,
             ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
-            // Page 3: 1 item (< limit of 2, marks last page)
+            // Page 3: 1 item (< limit of 2, marks last page), offset 4
             new MockResponse((string) json_encode([
                 'results' => [
                     ['external_id' => 'doc:5', 'title' => 'Document 5', 'content' => 'Content 5', 'chunk_index' => 0, 'score' => 0.75],
                 ],
-                'total' => 5,
-                'page' => 3,
+                'total' => 1,
+                'has_more' => false,
+                'next_offset' => null,
                 'limit' => 2,
             ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
         ];
@@ -75,16 +77,19 @@ class SearchPaginationTest extends TestCase
         // Assert exactly 3 network calls were executed
         $this->assertCount(3, $requests);
 
-        // Verify request payloads
-        $this->assertSame(1, $requests[0]['body']['page']);
+        // Verify request payloads: offset progression without page
+        $this->assertSame(0, $requests[0]['body']['offset']);
         $this->assertSame(2, $requests[0]['body']['limit']);
         $this->assertSame('renewable energy', $requests[0]['body']['query']);
+        $this->assertArrayNotHasKey('page', $requests[0]['body']);
 
-        $this->assertSame(2, $requests[1]['body']['page']);
+        $this->assertSame(2, $requests[1]['body']['offset']);
         $this->assertSame(2, $requests[1]['body']['limit']);
+        $this->assertArrayNotHasKey('page', $requests[1]['body']);
 
-        $this->assertSame(3, $requests[2]['body']['page']);
+        $this->assertSame(4, $requests[2]['body']['offset']);
         $this->assertSame(2, $requests[2]['body']['limit']);
+        $this->assertArrayNotHasKey('page', $requests[2]['body']);
 
         // Assert all 5 items were yielded in order
         $this->assertCount(5, $items);
@@ -95,23 +100,191 @@ class SearchPaginationTest extends TestCase
         $this->assertSame('doc:5', $items[4]->externalId);
     }
 
+    public function testSearchAllScenario2MultiPageOffsetIteration(): void
+    {
+        $requests = [];
+        $responses = [
+            // Page 1: 10 items, has_more: true, next_offset: 10, total: 10
+            new MockResponse((string) json_encode([
+                'results' => array_map(static fn (int $i): array => [
+                    'external_id' => "doc:{$i}",
+                    'title' => "Doc {$i}",
+                    'content' => "Content {$i}",
+                    'chunk_index' => 0,
+                    'score' => 0.9,
+                ], range(1, 10)),
+                'total' => 10,
+                'has_more' => true,
+                'next_offset' => 10,
+            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
+            // Page 2: 4 items, has_more: false, next_offset: null, total: 4
+            new MockResponse((string) json_encode([
+                'results' => array_map(static fn (int $i): array => [
+                    'external_id' => "doc:{$i}",
+                    'title' => "Doc {$i}",
+                    'content' => "Content {$i}",
+                    'chunk_index' => 0,
+                    'score' => 0.8,
+                ], range(11, 14)),
+                'total' => 4,
+                'has_more' => false,
+                'next_offset' => null,
+            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
+        ];
+
+        $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $response = array_shift($responses);
+            $this->assertNotNull($response, 'Unexpected extra network call made.');
+
+            return $response;
+        };
+
+        $client = new MockHttpClient($callback);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $query = SearchQueryDto::create('scenario 2')->withLimit(10);
+        $items = iterator_to_array($kineti->searchAll($query), false);
+
+        $this->assertCount(2, $requests);
+        $this->assertSame(0, $requests[0]['offset']);
+        $this->assertSame(10, $requests[0]['limit']);
+        $this->assertArrayNotHasKey('page', $requests[0]);
+
+        $this->assertSame(10, $requests[1]['offset']);
+        $this->assertSame(10, $requests[1]['limit']);
+        $this->assertArrayNotHasKey('page', $requests[1]);
+
+        $this->assertCount(14, $items);
+        $this->assertSame('doc:1', $items[0]->externalId);
+        $this->assertSame('doc:14', $items[13]->externalId);
+    }
+
+    public function testSearchAllScenario3RespectsMaxOffsetBoundary1000(): void
+    {
+        $requests = [];
+        $mockResponse = new MockResponse((string) json_encode([
+            'results' => [
+                ['external_id' => 'doc:1000', 'title' => 'Doc 1000', 'content' => 'Content', 'chunk_index' => 0, 'score' => 0.9],
+            ],
+            'total' => 1,
+            'has_more' => true,
+            'next_offset' => 1050, // Exceeds backend max offset (1000)
+        ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
+
+        $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            return $mockResponse;
+        };
+
+        $client = new MockHttpClient($callback);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $query = SearchQueryDto::create('boundary test')->withOffset(950)->withLimit(50);
+        $items = iterator_to_array($kineti->searchAll($query), false);
+
+        // First request at offset 950 was executed
+        $this->assertCount(1, $requests);
+        $this->assertSame(950, $requests[0]['offset']);
+        $this->assertCount(1, $items);
+        // Did not dispatch subsequent request at offset 1050
+
+        // Test starting with offset exceeding 1000 returns immediately
+        $excessiveQuery = SearchQueryDto::create('excessive')->withOffset(1001);
+        $itemsExcessive = iterator_to_array($kineti->searchAll($excessiveQuery), false);
+        $this->assertCount(0, $itemsExcessive);
+        // No additional request dispatched
+        $this->assertCount(1, $requests);
+    }
+
+    public function testSearchAllInfiniteLoopPreventionWhenOffsetDoesNotAdvance(): void
+    {
+        $requests = [];
+        $mockResponse = new MockResponse((string) json_encode([
+            'results' => [
+                ['external_id' => 'doc:1', 'title' => 'Doc 1', 'content' => 'Content', 'chunk_index' => 0, 'score' => 0.9],
+                ['external_id' => 'doc:2', 'title' => 'Doc 2', 'content' => 'Content', 'chunk_index' => 0, 'score' => 0.8],
+            ],
+            'total' => 2,
+            'has_more' => true,
+            'next_offset' => 0, // Malformed: next_offset <= current offset (0)
+        ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
+
+        $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            return $mockResponse;
+        };
+
+        $client = new MockHttpClient($callback);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $items = iterator_to_array($kineti->searchAll(SearchQueryDto::create('infinite loop test')->withLimit(2)), false);
+
+        // Loop halts after first page rather than repeating offset 0
+        $this->assertCount(1, $requests);
+        $this->assertCount(2, $items);
+    }
+
+    public function testSearchAllFallbackGracefullyForLegacyPayloadWithoutTopKMetadata(): void
+    {
+        $requests = [];
+        $responses = [
+            // Page 1: 2 items, limit 2, total 3 (omits has_more and next_offset)
+            new MockResponse((string) json_encode([
+                'results' => [
+                    ['external_id' => 'doc:1', 'title' => 'Doc 1', 'content' => 'C1', 'chunk_index' => 0, 'score' => 0.9],
+                    ['external_id' => 'doc:2', 'title' => 'Doc 2', 'content' => 'C2', 'chunk_index' => 0, 'score' => 0.8],
+                ],
+                'total' => 3,
+                'limit' => 2,
+            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
+            // Page 2: 1 item, limit 2, total 3 (omits has_more and next_offset)
+            new MockResponse((string) json_encode([
+                'results' => [
+                    ['external_id' => 'doc:3', 'title' => 'Doc 3', 'content' => 'C3', 'chunk_index' => 0, 'score' => 0.7],
+                ],
+                'total' => 3,
+                'limit' => 2,
+            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
+        ];
+
+        $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $response = array_shift($responses);
+            $this->assertNotNull($response, 'Unexpected extra network call made.');
+
+            return $response;
+        };
+
+        $client = new MockHttpClient($callback);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $query = SearchQueryDto::create('legacy payload')->withLimit(2);
+        $items = iterator_to_array($kineti->searchAll($query), false);
+
+        // Fallback advances by offset + limit
+        $this->assertCount(2, $requests);
+        $this->assertSame(0, $requests[0]['offset']);
+        $this->assertSame(2, $requests[1]['offset']);
+        $this->assertCount(3, $items);
+    }
+
     public function testSearchAllScenario1Yields1000Items(): void
     {
         $requests = [];
-        $totalItems = 1000;
         $limit = 100;
-        $totalPages = 10; // 10 pages of 100 items + 1 empty page to terminate
+        $totalPages = 10; // 10 pages of 100 items = 1000 items
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $limit, $totalPages): MockResponse {
             $body = json_decode((string) ($options['body'] ?? '{}'), true);
             $requests[] = $body;
-            $requestedPage = (int) ($body['page'] ?? 1);
+            $currentOffset = (int) ($body['offset'] ?? 0);
+            $pageIndex = (int) ($currentOffset / $limit) + 1;
 
             $results = [];
-            if ($requestedPage <= $totalPages) {
-                $start = ($requestedPage - 1) * $limit;
+            if ($pageIndex <= $totalPages) {
                 for ($i = 0; $i < $limit; $i++) {
-                    $index = $start + $i + 1;
+                    $index = $currentOffset + $i + 1;
                     $results[] = [
                         'external_id' => "doc:{$index}",
                         'title' => "Document {$index}",
@@ -122,10 +295,14 @@ class SearchPaginationTest extends TestCase
                 }
             }
 
+            $hasMore = $pageIndex < $totalPages;
+            $nextOffset = $hasMore ? $currentOffset + $limit : null;
+
             return new MockResponse((string) json_encode([
                 'results' => $results,
-                'total' => 1000,
-                'page' => $requestedPage,
+                'total' => count($results),
+                'has_more' => $hasMore,
+                'next_offset' => $nextOffset,
                 'limit' => $limit,
             ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
         };
@@ -145,11 +322,9 @@ class SearchPaginationTest extends TestCase
         }
 
         $this->assertSame(1000, $yieldedCount);
-        // 10 full pages + 1 final page returning 0 items (0 < 100)
-        $this->assertCount(11, $requests);
-        $this->assertSame(1, $requests[0]['page']);
-        $this->assertSame(10, $requests[9]['page']);
-        $this->assertSame(11, $requests[10]['page']);
+        $this->assertCount(10, $requests);
+        $this->assertSame(0, $requests[0]['offset']);
+        $this->assertSame(900, $requests[9]['offset']);
     }
 
     public function testScenario2SettingExplicitLimitsAndPageInSearch(): void
@@ -188,6 +363,7 @@ class SearchPaginationTest extends TestCase
         $this->assertSame('query', $capturedRequest['body']['query']);
         $this->assertSame(50, $capturedRequest['body']['limit']);
         $this->assertSame(2, $capturedRequest['body']['page']);
+        $this->assertSame(50, $capturedRequest['body']['offset']);
 
         $this->assertSame(2, $response->getPage());
         $this->assertSame(50, $response->getLimit());
@@ -202,12 +378,13 @@ class SearchPaginationTest extends TestCase
                 ['external_id' => 'doc:2', 'title' => 'Doc 2', 'content' => 'Content 2', 'chunk_index' => 0, 'score' => 0.92],
             ],
             'total' => 2,
-            'page' => 1,
+            'has_more' => false,
+            'next_offset' => null,
             'limit' => 10,
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = $options;
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
             return $mockResponse;
         };
 
@@ -219,6 +396,7 @@ class SearchPaginationTest extends TestCase
 
         // Terminated immediately after page 1 because 2 < 10
         $this->assertCount(1, $requests);
+        $this->assertSame(0, $requests[0]['offset']);
         $this->assertCount(2, $items);
     }
 
@@ -228,12 +406,13 @@ class SearchPaginationTest extends TestCase
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [],
             'total' => 0,
-            'page' => 1,
+            'has_more' => false,
+            'next_offset' => null,
             'limit' => 10,
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = $options;
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
             return $mockResponse;
         };
 
@@ -243,6 +422,7 @@ class SearchPaginationTest extends TestCase
         $items = iterator_to_array($kineti->searchAll('empty results'), false);
 
         $this->assertCount(1, $requests);
+        $this->assertSame(0, $requests[0]['offset']);
         $this->assertEmpty($items);
     }
 
@@ -254,6 +434,8 @@ class SearchPaginationTest extends TestCase
                 ['external_id' => 'doc:1', 'title' => 'Doc 1', 'content' => 'Content', 'chunk_index' => 0, 'score' => 0.9],
             ],
             'total' => 1,
+            'has_more' => false,
+            'next_offset' => null,
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
@@ -268,32 +450,80 @@ class SearchPaginationTest extends TestCase
 
         $this->assertCount(1, $requests);
         $this->assertSame('plain string query', $requests[0]['query']);
-        $this->assertSame(1, $requests[0]['page']);
+        $this->assertSame(0, $requests[0]['offset']);
         $this->assertSame(10, $requests[0]['limit']);
+        $this->assertArrayNotHasKey('page', $requests[0]);
         $this->assertCount(1, $items);
     }
 
-    public function testSearchAllCustomStartingPageAndLimit(): void
+    public function testSearchAllCustomStartingOffsetAndLimit(): void
     {
         $requests = [];
         $responses = [
-            // Starting at page 3, returns 2 items (limit 2)
+            // Starting at offset 20, returns 2 items
+            new MockResponse((string) json_encode([
+                'results' => [
+                    ['external_id' => 'doc:21', 'title' => 'Doc 21', 'content' => 'C21', 'chunk_index' => 0, 'score' => 0.8],
+                    ['external_id' => 'doc:22', 'title' => 'Doc 22', 'content' => 'C22', 'chunk_index' => 0, 'score' => 0.7],
+                ],
+                'total' => 2,
+                'has_more' => true,
+                'next_offset' => 22,
+                'limit' => 2,
+            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
+            // Offset 22: 1 item (< limit 2, terminates)
+            new MockResponse((string) json_encode([
+                'results' => [
+                    ['external_id' => 'doc:23', 'title' => 'Doc 23', 'content' => 'C23', 'chunk_index' => 0, 'score' => 0.6],
+                ],
+                'total' => 1,
+                'has_more' => false,
+                'next_offset' => null,
+                'limit' => 2,
+            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
+        ];
+
+        $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $response = array_shift($responses);
+            $this->assertNotNull($response, 'Unexpected extra network call made.');
+
+            return $response;
+        };
+
+        $client = new MockHttpClient($callback);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $query = SearchQueryDto::create('starting offset')->withOffset(20)->withLimit(2);
+        $items = iterator_to_array($kineti->searchAll($query), false);
+
+        $this->assertCount(2, $requests);
+        $this->assertSame(20, $requests[0]['offset']);
+        $this->assertSame(2, $requests[0]['limit']);
+        $this->assertArrayNotHasKey('page', $requests[0]);
+
+        $this->assertSame(22, $requests[1]['offset']);
+        $this->assertSame(2, $requests[1]['limit']);
+        $this->assertArrayNotHasKey('page', $requests[1]);
+
+        $this->assertCount(3, $items);
+        $this->assertSame('doc:21', $items[0]->externalId);
+        $this->assertSame('doc:22', $items[1]->externalId);
+        $this->assertSame('doc:23', $items[2]->externalId);
+    }
+
+    public function testSearchAllStartingPageFallbackComputesOffset(): void
+    {
+        $requests = [];
+        $responses = [
+            // Fallback: page 3 with limit 2 starts at offset (3-1)*2 = 4
             new MockResponse((string) json_encode([
                 'results' => [
                     ['external_id' => 'doc:5', 'title' => 'Doc 5', 'content' => 'C5', 'chunk_index' => 0, 'score' => 0.8],
-                    ['external_id' => 'doc:6', 'title' => 'Doc 6', 'content' => 'C6', 'chunk_index' => 0, 'score' => 0.7],
                 ],
-                'total' => 7,
-                'page' => 3,
-                'limit' => 2,
-            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
-            // Page 4: 1 item (< limit 2, terminates)
-            new MockResponse((string) json_encode([
-                'results' => [
-                    ['external_id' => 'doc:7', 'title' => 'Doc 7', 'content' => 'C7', 'chunk_index' => 0, 'score' => 0.6],
-                ],
-                'total' => 7,
-                'page' => 4,
+                'total' => 1,
+                'has_more' => false,
+                'next_offset' => null,
                 'limit' => 2,
             ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
         ];
@@ -309,66 +539,15 @@ class SearchPaginationTest extends TestCase
         $client = new MockHttpClient($callback);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
 
-        $query = SearchQueryDto::create('starting offset')->withPage(3)->withLimit(2);
+        $query = SearchQueryDto::create('page fallback')->withPage(3)->withLimit(2);
         $items = iterator_to_array($kineti->searchAll($query), false);
 
-        $this->assertCount(2, $requests);
-        $this->assertSame(3, $requests[0]['page']);
+        $this->assertCount(1, $requests);
+        $this->assertSame(4, $requests[0]['offset']);
         $this->assertSame(2, $requests[0]['limit']);
-        $this->assertSame(4, $requests[1]['page']);
-        $this->assertSame(2, $requests[1]['limit']);
+        $this->assertArrayNotHasKey('page', $requests[0]);
 
-        $this->assertCount(3, $items);
+        $this->assertCount(1, $items);
         $this->assertSame('doc:5', $items[0]->externalId);
-        $this->assertSame('doc:6', $items[1]->externalId);
-        $this->assertSame('doc:7', $items[2]->externalId);
-    }
-
-    public function testSearchAllClearsInputOffsetToPreventStaticOffsetAcrossPages(): void
-    {
-        $requests = [];
-        $responses = [
-            new MockResponse((string) json_encode([
-                'results' => [
-                    ['external_id' => 'doc:1', 'title' => 'Doc 1', 'content' => 'C1', 'chunk_index' => 0, 'score' => 0.9],
-                    ['external_id' => 'doc:2', 'title' => 'Doc 2', 'content' => 'C2', 'chunk_index' => 0, 'score' => 0.8],
-                ],
-                'total' => 3,
-                'page' => 1,
-                'limit' => 2,
-            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
-            new MockResponse((string) json_encode([
-                'results' => [
-                    ['external_id' => 'doc:3', 'title' => 'Doc 3', 'content' => 'C3', 'chunk_index' => 0, 'score' => 0.7],
-                ],
-                'total' => 3,
-                'page' => 2,
-                'limit' => 2,
-            ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
-        ];
-
-        $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
-            $response = array_shift($responses);
-            $this->assertNotNull($response, 'Unexpected extra network call made.');
-
-            return $response;
-        };
-
-        $client = new MockHttpClient($callback);
-        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
-
-        // Given a query with an offset set
-        $query = SearchQueryDto::create('solar energy')->withOffset(20)->withLimit(2);
-        $items = iterator_to_array($kineti->searchAll($query), false);
-
-        $this->assertCount(2, $requests);
-        // Verify page-based iteration occurs without offset being sent
-        $this->assertSame(1, $requests[0]['page']);
-        $this->assertArrayNotHasKey('offset', $requests[0]);
-        $this->assertSame(2, $requests[1]['page']);
-        $this->assertArrayNotHasKey('offset', $requests[1]);
-
-        $this->assertCount(3, $items);
     }
 }

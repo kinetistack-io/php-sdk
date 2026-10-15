@@ -559,4 +559,111 @@ class SearchResultDtoTest extends TestCase
         $this->assertSame('en', $fromArrayResponse->getFacets()['language'][0]->value);
         $this->assertSame(38, $fromArrayResponse->getFacets()['language'][0]->count);
     }
+
+    public function testSearchResponseDtoTopKPaginationScenario1(): void
+    {
+        $payload = [
+            'results' => [
+                ['external_id' => 'doc:1', 'title' => 'Doc 1', 'content' => 'Content 1', 'chunk_index' => 0, 'score' => 0.9],
+            ],
+            'total' => 10,
+            'has_more' => true,
+            'next_offset' => 10,
+        ];
+
+        $dto = SearchResponseDto::fromArray($payload);
+
+        $this->assertSame(10, $dto->total);
+        $this->assertTrue($dto->hasMore);
+        $this->assertTrue($dto->hasMore());
+        $this->assertSame(10, $dto->nextOffset);
+        $this->assertSame(10, $dto->getNextOffset());
+        $this->assertTrue($dto->isHasMorePresent());
+
+        $array = $dto->toArray();
+        $this->assertArrayHasKey('has_more', $array);
+        $this->assertTrue($array['has_more']);
+        $this->assertArrayHasKey('next_offset', $array);
+        $this->assertSame(10, $array['next_offset']);
+    }
+
+    public function testSearchResponseDtoTopKPaginationDefaultsAndOmission(): void
+    {
+        $dto = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+        ]);
+
+        $this->assertFalse($dto->hasMore);
+        $this->assertFalse($dto->hasMore());
+        $this->assertNull($dto->nextOffset);
+        $this->assertNull($dto->getNextOffset());
+        $this->assertFalse($dto->isHasMorePresent());
+
+        $array = $dto->toArray();
+        $this->assertArrayNotHasKey('has_more', $array);
+        $this->assertArrayNotHasKey('next_offset', $array);
+    }
+
+    public function testSearchResponseDtoTopKPaginationCamelCaseAndFalseHasMore(): void
+    {
+        $dto = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 0,
+            'hasMore' => false,
+            'nextOffset' => null,
+        ]);
+
+        $this->assertFalse($dto->hasMore);
+        $this->assertNull($dto->nextOffset);
+        $this->assertTrue($dto->isHasMorePresent());
+
+        $array = $dto->toArray();
+        $this->assertArrayHasKey('has_more', $array);
+        $this->assertFalse($array['has_more']);
+        $this->assertArrayNotHasKey('next_offset', $array);
+
+        // CamelCase with truthy values
+        $camelDto = SearchResponseDto::fromArray([
+            'results' => [],
+            'total' => 50,
+            'hasMore' => true,
+            'nextOffset' => 50,
+        ]);
+        $this->assertTrue($camelDto->hasMore);
+        $this->assertSame(50, $camelDto->nextOffset);
+        $this->assertTrue($camelDto->isHasMorePresent());
+    }
+
+    public function testSearchResponseDtoConstructorDefaults(): void
+    {
+        $dto = new SearchResponseDto(
+            results: [],
+            total: 5,
+            hasMore: true,
+            nextOffset: 25,
+        );
+
+        $this->assertTrue($dto->hasMore);
+        $this->assertSame(25, $dto->nextOffset);
+        $this->assertTrue($dto->isHasMorePresent());
+        $this->assertSame(25, $dto->toArray()['next_offset']);
+        $this->assertTrue($dto->toArray()['has_more']);
+
+        // Explicit hasMorePresent = false override
+        $explicitFalseDto = new SearchResponseDto(
+            results: [],
+            total: 5,
+            hasMore: true,
+            nextOffset: 25,
+            hasMorePresent: false,
+        );
+        $this->assertFalse($explicitFalseDto->isHasMorePresent());
+
+        // Default empty constructor has false presence
+        $emptyDto = new SearchResponseDto();
+        $this->assertFalse($emptyDto->isHasMorePresent());
+        $this->assertFalse($emptyDto->hasMore);
+        $this->assertNull($emptyDto->nextOffset);
+    }
 }

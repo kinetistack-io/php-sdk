@@ -19,6 +19,9 @@ class SearchQueryDto
         public readonly ?bool $synthesizeAnswer = null,
         public readonly ?SearchFilterDto $filters = null,
         public readonly ?bool $stream = null,
+        /**
+         * @deprecated Use $offset instead. Backend vector search uses top-K offset pagination.
+         */
         public readonly ?int $page = null,
         public readonly ?int $offset = null,
         public readonly ?FacetRequestDto $facets = null,
@@ -51,6 +54,9 @@ class SearchQueryDto
         return $this->cloneWith(['limit' => $limit]);
     }
 
+    /**
+     * @deprecated Use withOffset() instead. Backend vector search uses top-K offset pagination.
+     */
     public function withPage(?int $page): self
     {
         return $this->cloneWith(['page' => $page]);
@@ -66,6 +72,9 @@ class SearchQueryDto
         return $this->withLimit($limit);
     }
 
+    /**
+     * @deprecated Use setOffset() or withOffset() instead. Backend vector search uses top-K offset pagination.
+     */
     public function setPage(?int $page): self
     {
         return $this->withPage($page);
@@ -76,6 +85,9 @@ class SearchQueryDto
         return $this->withOffset($offset);
     }
 
+    /**
+     * @deprecated Use getOffset() instead. Backend vector search uses top-K offset pagination.
+     */
     public function getPage(): ?int
     {
         return $this->page;

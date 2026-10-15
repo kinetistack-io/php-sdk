@@ -402,6 +402,10 @@ class KinetiClient
             $query = SearchQueryDto::create($query);
         }
 
+        if ($query->offset === null && $query->page !== null && $query->page > 1) {
+            $query = $query->withOffset(($query->page - 1) * max(1, $query->limit ?? 10));
+        }
+
         $response = $this->transport->request('POST', '/api/v1/search/query', [
             'json' => $query->toArray(),
         ]);
@@ -426,25 +430,41 @@ class KinetiClient
             $query = SearchQueryDto::create($query);
         }
 
-        $page = $query->page ?? 1;
         $limit = max(1, $query->limit ?? 10);
-        $currentQuery = $query->withPage($page)->withLimit($limit)->withOffset(null);
+        $offset = max(0, $query->offset ?? ($query->page !== null && $query->page > 1 ? ($query->page - 1) * $limit : 0));
+
+        if ($offset > 1000) {
+            return;
+        }
+
+        $baseQuery = $query->withPage(null)->withLimit($limit);
 
         while (true) {
-            $response = $this->search($currentQuery);
+            $response = $this->search($baseQuery->withOffset($offset));
 
-            $count = 0;
+            $count = count($response->results);
             foreach ($response->results as $result) {
                 yield $result;
-                $count++;
+            }
+
+            if ($count === 0) {
+                break;
+            }
+
+            if ($response->hasMorePresent && !$response->hasMore) {
+                break;
             }
 
             if ($count < $limit) {
                 break;
             }
 
-            $page++;
-            $currentQuery = $currentQuery->withPage($page);
+            $nextOffset = $response->nextOffset ?? ($offset + $limit);
+            if ($nextOffset <= $offset || $nextOffset > 1000) {
+                break;
+            }
+
+            $offset = $nextOffset;
         }
     }
 

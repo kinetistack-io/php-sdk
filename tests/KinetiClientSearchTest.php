@@ -317,4 +317,38 @@ class KinetiClientSearchTest extends TestCase
         $this->assertArrayHasKey('facets', $requestBody);
         $this->assertSame(['fields' => ['type', 'language']], $requestBody['facets']);
     }
+
+    public function testSearchResponseWithTopKMetadata(): void
+    {
+        $payload = [
+            'results' => [
+                [
+                    'external_id' => 'node:101:en',
+                    'title' => 'Top-K Result',
+                    'content' => 'Top-K Content',
+                    'chunk_index' => 0,
+                    'score' => 0.95,
+                ],
+            ],
+            'total' => 1,
+            'has_more' => true,
+            'next_offset' => 10,
+        ];
+        $mockResponse = new MockResponse((string) json_encode($payload, JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $response = $kineti->search(SearchQueryDto::create('top k search')->withOffset(0)->withLimit(10));
+
+        $this->assertInstanceOf(SearchResponseDto::class, $response);
+        $this->assertSame(1, $response->total);
+        $this->assertTrue($response->hasMore);
+        $this->assertTrue($response->hasMore());
+        $this->assertSame(10, $response->nextOffset);
+        $this->assertSame(10, $response->getNextOffset());
+        $this->assertTrue($response->isHasMorePresent());
+    }
 }

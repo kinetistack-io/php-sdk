@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `hasMore` (`bool`) and `nextOffset` (`?int`) properties and serialization/deserialization support to `SearchResponseDto` along with `hasMore()`, `getNextOffset()`, and `isHasMorePresent()` helper methods (PHPSDK-46).
+
+### Changed
+- Refactored `KinetiClient::searchAll()` to paginate via `offset` instead of `page` following backend top-K semantics, omitting `page` from outgoing requests, enforcing strictly forward offset progression to prevent infinite loops, and halting at the backend boundary `offset <= 1000` (PHPSDK-46).
+
+### Deprecated
+- Marked `SearchQueryDto::$page`, `withPage()`, `setPage()`, and `getPage()` as deprecated in favor of `withOffset()`, `setOffset()`, and `getOffset()` (PHPSDK-46).
+
 ## [1.0.10] - 2026-10-03
 
 ### Added
