@@ -131,6 +131,11 @@ interface AdminClientInterface
     public function updateOrganization(string $id, array $data): OrganizationDto;
 
     /**
+     * @throws KinetiException
+     */
+    public function deleteOrganization(string $id): void;
+
+    /**
      * @param array<string, mixed>|string $nameOrData
      * @param array<string, mixed>|null $settings
      * @throws KinetiException

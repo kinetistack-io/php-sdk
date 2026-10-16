@@ -64,16 +64,7 @@ class AdminClient implements AdminClientInterface
         $clone->analyticsClient = null;
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
-        if ($this->httpClient instanceof TransportInterface) {
-            $clone->transport = $this->httpClient->withAuthHeaderValue($authHeaderValue);
-        } else {
-            $clone->transport = $this->createTransport(
-                $this->apiHost,
-                $jwtToken,
-                $this->httpClient,
-                $this->options
-            );
-        }
+        $clone->transport = $this->transport->withAuthHeaderValue($authHeaderValue);
 
         return $clone;
     }
@@ -298,7 +289,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getOrganization(string $id): OrganizationDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/admin/organizations/%s', urlencode($id)));
+        $response = $this->transport->request('GET', sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -321,7 +312,7 @@ class AdminClient implements AdminClientInterface
 
         $response = $this->transport->request(
             'PATCH',
-            sprintf('/api/v1/admin/organizations/%s', urlencode($id)),
+            sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')),
             [
                 'headers' => [
                     'Content-Type' => 'application/merge-patch+json',
@@ -334,6 +325,16 @@ class AdminClient implements AdminClientInterface
         $resData = $response->toArray();
 
         return OrganizationDto::fromArray($resData);
+    }
+
+    /**
+     * Soft-delete an organization and deactivate its associated resources.
+     *
+     * @throws KinetiException
+     */
+    public function deleteOrganization(string $id): void
+    {
+        $this->transport->request('DELETE', sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')));
     }
 
     /**
@@ -413,7 +414,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getProject(string $id): ProjectDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/admin/projects/%s', urlencode($id)));
+        $response = $this->transport->request('GET', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -436,7 +437,7 @@ class AdminClient implements AdminClientInterface
 
         $response = $this->transport->request(
             'PATCH',
-            sprintf('/api/v1/admin/projects/%s', urlencode($id)),
+            sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')),
             [
                 'headers' => [
                     'Content-Type' => 'application/merge-patch+json',
@@ -458,7 +459,7 @@ class AdminClient implements AdminClientInterface
      */
     public function deleteProject(string $id): void
     {
-        $this->transport->request('DELETE', sprintf('/api/v1/admin/projects/%s', urlencode($id)));
+        $this->transport->request('DELETE', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
     }
 
     /**
@@ -508,11 +509,7 @@ class AdminClient implements AdminClientInterface
             unset($payload['dailyTokenQuotaOverride']);
         }
 
-        if (trim($projectId) === '') {
-            throw new \InvalidArgumentException('Project ID cannot be empty.');
-        }
-
-        $path = sprintf('/api/v1/admin/projects/%s/api-keys', urlencode($projectId));
+        $path = sprintf('/api/v1/admin/projects/%s/api-keys', $this->encodePathSegment($projectId, 'Project ID'));
 
         $response = $this->transport->request('POST', $path, [
             'json' => $payload,
@@ -535,11 +532,7 @@ class AdminClient implements AdminClientInterface
      */
     public function listApiKeys(?string $projectId = null, array $options = []): array
     {
-        if ($projectId === null || trim($projectId) === '') {
-            throw new \InvalidArgumentException('Project ID cannot be empty.');
-        }
-
-        $path = sprintf('/api/v1/admin/projects/%s/api-keys', urlencode($projectId));
+        $path = sprintf('/api/v1/admin/projects/%s/api-keys', $this->encodePathSegment($projectId, 'Project ID'));
 
         $requestOptions = [];
         if (!empty($options)) {
@@ -567,15 +560,11 @@ class AdminClient implements AdminClientInterface
      */
     public function getApiKey(string $projectId, string $keyId): ApiKeyDto
     {
-        if (trim($projectId) === '') {
-            throw new \InvalidArgumentException('Project ID cannot be empty.');
-        }
-
-        if (trim($keyId) === '') {
-            throw new \InvalidArgumentException('API key ID cannot be empty.');
-        }
-
-        $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s', rawurlencode($projectId), rawurlencode($keyId));
+        $path = sprintf(
+            '/api/v1/admin/projects/%s/api-keys/%s',
+            $this->encodePathSegment($projectId, 'Project ID'),
+            $this->encodePathSegment($keyId, 'API key ID')
+        );
         $response = $this->transport->request('GET', $path);
 
         /** @var array<string, mixed> $data */
@@ -594,15 +583,11 @@ class AdminClient implements AdminClientInterface
      */
     public function revokeApiKey(string $projectIdOrKeyId, ?string $keyId = null): void
     {
-        if (trim($projectIdOrKeyId) === '') {
-            throw new \InvalidArgumentException('Project ID cannot be empty.');
-        }
-
-        if ($keyId === null || trim($keyId) === '') {
-            throw new \InvalidArgumentException('API key ID cannot be empty.');
-        }
-
-        $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s', urlencode($projectIdOrKeyId), urlencode($keyId));
+        $path = sprintf(
+            '/api/v1/admin/projects/%s/api-keys/%s',
+            $this->encodePathSegment($projectIdOrKeyId, 'Project ID'),
+            $this->encodePathSegment($keyId, 'API key ID')
+        );
 
         $this->transport->request('DELETE', $path);
     }
@@ -615,15 +600,11 @@ class AdminClient implements AdminClientInterface
      */
     public function rotateApiKey(string $projectId, string $keyId): ApiKeyCreatedDto
     {
-        if (trim($projectId) === '') {
-            throw new \InvalidArgumentException('Project ID cannot be empty.');
-        }
-
-        if (trim($keyId) === '') {
-            throw new \InvalidArgumentException('API key ID cannot be empty.');
-        }
-
-        $path = sprintf('/api/v1/admin/projects/%s/api-keys/%s/rotate', urlencode($projectId), urlencode($keyId));
+        $path = sprintf(
+            '/api/v1/admin/projects/%s/api-keys/%s/rotate',
+            $this->encodePathSegment($projectId, 'Project ID'),
+            $this->encodePathSegment($keyId, 'API key ID')
+        );
         $response = $this->transport->request('POST', $path);
 
         /** @var array<string, mixed> $data */
@@ -719,7 +700,7 @@ class AdminClient implements AdminClientInterface
      */
     public function listProjectJobs(string $projectId, int $page = 1, array $options = []): array
     {
-        $path = sprintf('/api/v1/admin/projects/%s/jobs', urlencode($projectId));
+        $path = sprintf('/api/v1/admin/projects/%s/jobs', $this->encodePathSegment($projectId, 'Project ID'));
         $query = array_merge(['page' => $page], $options);
         $response = $this->transport->request('GET', $path, ['query' => $query]);
 
@@ -737,7 +718,7 @@ class AdminClient implements AdminClientInterface
      */
     public function retryJob(string $jobId): JobDto
     {
-        $path = sprintf('/api/v1/admin/jobs/%s/retry', urlencode($jobId));
+        $path = sprintf('/api/v1/admin/jobs/%s/retry', $this->encodePathSegment($jobId, 'Job ID'));
         $response = $this->transport->request('POST', $path);
 
         /** @var array<string, mixed> $data */
@@ -753,7 +734,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getJob(string $jobId): JobDto
     {
-        $path = sprintf('/api/v1/admin/jobs/%s', urlencode($jobId));
+        $path = sprintf('/api/v1/admin/jobs/%s', $this->encodePathSegment($jobId, 'Job ID'));
         $response = $this->transport->request('GET', $path);
 
         /** @var array<string, mixed> $data */
@@ -792,7 +773,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getUser(string $id): UserDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/admin/users/%s', urlencode($id)));
+        $response = $this->transport->request('GET', sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -831,7 +812,7 @@ class AdminClient implements AdminClientInterface
     {
         $response = $this->transport->request(
             'PATCH',
-            sprintf('/api/v1/admin/users/%s', urlencode($id)),
+            sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')),
             [
                 'headers' => [
                     'Content-Type' => 'application/merge-patch+json',
@@ -853,7 +834,7 @@ class AdminClient implements AdminClientInterface
      */
     public function deleteUser(string $id): void
     {
-        $this->transport->request('DELETE', sprintf('/api/v1/admin/users/%s', urlencode($id)));
+        $this->transport->request('DELETE', sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')));
     }
 
     /**
@@ -865,7 +846,7 @@ class AdminClient implements AdminClientInterface
      */
     public function listProjectMembers(string $projectId, array $options = []): array
     {
-        $path = sprintf('/api/v1/admin/projects/%s/members', urlencode($projectId));
+        $path = sprintf('/api/v1/admin/projects/%s/members', $this->encodePathSegment($projectId, 'Project ID'));
         $requestOptions = [];
         if (!empty($options)) {
             $requestOptions['query'] = $options;
@@ -893,7 +874,7 @@ class AdminClient implements AdminClientInterface
      */
     public function assignProjectMember(string $projectId, array $payload): UserProjectAssignmentDto
     {
-        $path = sprintf('/api/v1/admin/projects/%s/members', urlencode($projectId));
+        $path = sprintf('/api/v1/admin/projects/%s/members', $this->encodePathSegment($projectId, 'Project ID'));
 
         if (isset($payload['userId']) && !isset($payload['user_id'])) {
             $payload['user_id'] = $payload['userId'];
@@ -917,7 +898,11 @@ class AdminClient implements AdminClientInterface
      */
     public function removeProjectMember(string $projectId, string $userId): void
     {
-        $path = sprintf('/api/v1/admin/projects/%s/members/%s', urlencode($projectId), urlencode($userId));
+        $path = sprintf(
+            '/api/v1/admin/projects/%s/members/%s',
+            $this->encodePathSegment($projectId, 'Project ID'),
+            $this->encodePathSegment($userId, 'User ID')
+        );
         $this->transport->request('DELETE', $path);
     }
 
@@ -1035,10 +1020,19 @@ class AdminClient implements AdminClientInterface
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
         if ($httpClient instanceof TransportInterface) {
-            return $jwtToken !== '' ? $httpClient->withAuthHeaderValue($authHeaderValue) : $httpClient;
+            return $httpClient->withAuthHeaderValue($authHeaderValue);
         }
 
         return new HttpTransport($apiHost, 'Authorization', $authHeaderValue, $httpClient, $options);
+    }
+
+    private function encodePathSegment(?string $value, string $name = 'ID'): string
+    {
+        if ($value === null || trim($value) === '') {
+            throw new \InvalidArgumentException(sprintf('%s cannot be empty.', $name));
+        }
+
+        return rawurlencode($value);
     }
 
     /**

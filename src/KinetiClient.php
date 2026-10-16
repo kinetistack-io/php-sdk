@@ -270,7 +270,7 @@ class KinetiClient
 
     public function getJob(string $jobId): JobDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/jobs/%s', urlencode($jobId)));
+        $response = $this->transport->request('GET', sprintf('/api/v1/jobs/%s', $this->encodePathSegment($jobId, 'jobId')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -361,13 +361,9 @@ class KinetiClient
      */
     public function deleteDocument(string $externalId): bool
     {
-        if (trim($externalId) === '') {
-            throw new \InvalidArgumentException('externalId cannot be empty.');
-        }
-
         $response = $this->transport->request(
             'DELETE',
-            sprintf('/api/v1/documents/%s', rawurlencode($externalId))
+            sprintf('/api/v1/documents/%s', $this->encodePathSegment($externalId, 'externalId'))
         );
 
         return $response->getStatusCode() === 204;
@@ -556,5 +552,14 @@ class KinetiClient
         $clean = str_replace(["\r", "\n", "\0"], '', $value);
 
         return addcslashes($clean, "\\\"");
+    }
+
+    private function encodePathSegment(string $value, string $name = 'ID'): string
+    {
+        if (trim($value) === '') {
+            throw new \InvalidArgumentException(sprintf('%s cannot be empty.', $name));
+        }
+
+        return rawurlencode($value);
     }
 }

@@ -14,6 +14,7 @@ use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\KinetiClient;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -286,6 +287,47 @@ class KinetiClientTest extends TestCase
         $this->assertInstanceOf(JobDto::class, $result);
         $this->assertTrue($result->isCompleted());
         $this->assertSame('abc', $result->jobId);
+    }
+
+    #[DataProvider('provideEmptyJobIds')]
+    public function testGetJobEmptyJobIdThrowsException(string $emptyJobId): void
+    {
+        $client = new MockHttpClient([]);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('jobId cannot be empty.');
+
+        $kineti->getJob($emptyJobId);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function provideEmptyJobIds(): array
+    {
+        return [
+            'empty string' => [''],
+            'whitespace only' => ['   '],
+            'tabs and newlines' => [" \t\n "],
+        ];
+    }
+
+    public function testGetJobRawUrlEncodeSpecialCharacters(): void
+    {
+        $responseBody = json_encode([
+            'job_id' => 'job 42/special',
+            'status' => 'completed',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody);
+        $client = new MockHttpClient([$mockResponse]);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $result = $kineti->getJob('job 42/special');
+        $this->assertSame('job 42/special', $result->jobId);
+        $this->assertStringEndsWith('/api/v1/jobs/job%2042%2Fspecial', $mockResponse->getRequestUrl());
+        $this->assertStringNotContainsString('+', $mockResponse->getRequestUrl());
     }
 
     public function testWaitForJobSuccessWithCallback(): void

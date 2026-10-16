@@ -50,16 +50,7 @@ class AnalyticsClient implements AnalyticsClientInterface
         $clone->jwtToken = $jwtToken;
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
-        if ($this->apiHost !== null) {
-            $clone->transport = $clone->createTransport(
-                $this->apiHost,
-                $jwtToken,
-                $this->httpClient,
-                $this->options
-            );
-        } else {
-            $clone->transport = $this->transport->withAuthHeaderValue($authHeaderValue);
-        }
+        $clone->transport = $this->transport->withAuthHeaderValue($authHeaderValue);
 
         return $clone;
     }
@@ -118,7 +109,7 @@ class AnalyticsClient implements AnalyticsClientInterface
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
         if ($httpClient instanceof TransportInterface) {
-            return $jwtToken !== '' ? $httpClient->withAuthHeaderValue($authHeaderValue) : $httpClient;
+            return $httpClient->withAuthHeaderValue($authHeaderValue);
         }
 
         return new HttpTransport($apiHost, 'Authorization', $authHeaderValue, $httpClient, $options);

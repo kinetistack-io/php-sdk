@@ -141,6 +141,39 @@ class AdminClientTest extends TestCase
         $transport = $adminCleared->getTransport();
         $this->assertInstanceOf(SymfonyTransport::class, $transport);
         $this->assertSame('', $transport->getAuthHeaderValue());
+
+        // Subsequent requests on the cleared client omit Authorization header
+        $mockResponse3 = new MockResponse(json_encode(['id' => 'org-1', 'name' => 'Org One'], JSON_THROW_ON_ERROR));
+        $client3 = new MockHttpClient([$mockResponse3]);
+        $customTransport3 = new SymfonyTransport('https://api.test', 'Authorization', 'Bearer initial-token', $client3);
+        $admin3 = new AdminClient('https://api.test', 'initial-token', $customTransport3);
+        $admin3Cleared = $admin3->withToken('');
+        $admin3Cleared->getOrganization('org-1');
+        $headers = $mockResponse3->getRequestOptions()['headers'] ?? [];
+        foreach ($headers as $h) {
+            $this->assertStringStartsNotWith('authorization:', strtolower((string) $h));
+        }
+    }
+
+    public function testWithTokenEmptyClearsAuthHeaderOnStandardHttpClient(): void
+    {
+        $responseBody = json_encode(['id' => 'org-1', 'name' => 'Org 1'], JSON_THROW_ON_ERROR);
+        $mockResponse1 = new MockResponse($responseBody);
+        $mockResponse2 = new MockResponse($responseBody);
+        $httpClient = new MockHttpClient([$mockResponse1, $mockResponse2]);
+
+        $admin = new AdminClient('https://api.test', 'initial-token', $httpClient);
+        $cleared = $admin->withToken('');
+
+        $cleared->getOrganization('org-1');
+        $clearedHeaders = $mockResponse1->getRequestOptions()['headers'] ?? [];
+        foreach ($clearedHeaders as $h) {
+            $this->assertStringStartsNotWith('authorization:', strtolower((string) $h));
+        }
+
+        // Original instance retains its Bearer token
+        $admin->getOrganization('org-1');
+        $this->assertContains('Authorization: Bearer initial-token', $mockResponse2->getRequestOptions()['headers']);
     }
 
     public function testLogin(): void
@@ -551,6 +584,39 @@ class AdminClientTest extends TestCase
         $this->assertArrayHasKey('monthly_quota_cap', $body3);
         $this->assertNull($body3['monthly_quota_cap']);
         $this->assertArrayNotHasKey('monthlyQuotaCap', $body3);
+    }
+
+    public function testDeleteOrganization(): void
+    {
+        $mockResponse = new MockResponse('', ['http_code' => 204]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $admin->deleteOrganization('org-42');
+        $this->assertSame('DELETE', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/organizations/org-42', $mockResponse->getRequestUrl());
+    }
+
+    public function testDeleteOrganizationNotFoundThrowsNotFoundException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:not-found',
+            'title' => 'Not Found',
+            'status' => 404,
+            'detail' => 'Organization not found.',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 404,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(NotFoundException::class);
+        $this->expectExceptionMessage('Organization not found.');
+
+        $admin->deleteOrganization('org-nonexistent');
     }
 
     public function testCreateProject(): void
@@ -1021,6 +1087,227 @@ class AdminClientTest extends TestCase
         $this->expectExceptionMessage('API key ID cannot be empty.');
 
         $admin->rotateApiKey('proj-123', $emptyKeyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testGetOrganizationEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Organization ID cannot be empty.');
+
+        $admin->getOrganization($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testUpdateOrganizationEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Organization ID cannot be empty.');
+
+        $admin->updateOrganization($emptyId, ['name' => 'Test']);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testDeleteOrganizationEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Organization ID cannot be empty.');
+
+        $admin->deleteOrganization($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testGetProjectEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->getProject($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testUpdateProjectEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->updateProject($emptyId, ['name' => 'Test']);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testDeleteProjectEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->deleteProject($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testListProjectJobsEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->listProjectJobs($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testRetryJobEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Job ID cannot be empty.');
+
+        $admin->retryJob($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testGetJobEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Job ID cannot be empty.');
+
+        $admin->getJob($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testGetUserEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('User ID cannot be empty.');
+
+        $admin->getUser($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testUpdateUserEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('User ID cannot be empty.');
+
+        $admin->updateUser($emptyId, ['email' => 'a@b.com']);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testDeleteUserEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('User ID cannot be empty.');
+
+        $admin->deleteUser($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testListProjectMembersEmptyProjectIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->listProjectMembers($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testAssignProjectMemberEmptyProjectIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->assignProjectMember($emptyId, ['user_id' => 'u1']);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testRemoveProjectMemberEmptyProjectIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->removeProjectMember($emptyId, 'u1');
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testRemoveProjectMemberEmptyUserIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('User ID cannot be empty.');
+
+        $admin->removeProjectMember('p1', $emptyId);
+    }
+
+    public function testRawUrlEncodePathSegments(): void
+    {
+        $responses = [
+            new MockResponse(json_encode(['id' => 'org 42/special', 'name' => 'Org'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['id' => 'proj 42/special', 'name' => 'Proj', 'domain' => 'd.com'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'job 42/special', 'status' => 'completed'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['id' => 'user 42/special', 'email' => 'u@t.com', 'roles' => []], JSON_THROW_ON_ERROR)),
+        ];
+
+        $httpClient = new MockHttpClient($responses);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $admin->getOrganization('org 42/special');
+        $this->assertStringEndsWith('/api/v1/admin/organizations/org%2042%2Fspecial', $responses[0]->getRequestUrl());
+        $this->assertStringNotContainsString('+', $responses[0]->getRequestUrl());
+
+        $admin->getProject('proj 42/special');
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj%2042%2Fspecial', $responses[1]->getRequestUrl());
+        $this->assertStringNotContainsString('+', $responses[1]->getRequestUrl());
+
+        $admin->getJob('job 42/special');
+        $this->assertStringEndsWith('/api/v1/admin/jobs/job%2042%2Fspecial', $responses[2]->getRequestUrl());
+        $this->assertStringNotContainsString('+', $responses[2]->getRequestUrl());
+
+        $admin->getUser('user 42/special');
+        $this->assertStringEndsWith('/api/v1/admin/users/user%2042%2Fspecial', $responses[3]->getRequestUrl());
+        $this->assertStringNotContainsString('+', $responses[3]->getRequestUrl());
     }
 
     /**

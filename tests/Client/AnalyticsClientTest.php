@@ -232,6 +232,50 @@ class AnalyticsClientTest extends TestCase
         $this->assertContains('Authorization: Bearer new-refreshed-token', $mockResponse->getRequestOptions()['headers']);
     }
 
+    public function testWithTokenEmptyClearsAuthHeaderOnHostAndTransport(): void
+    {
+        $responseBody = json_encode(['data' => []], JSON_THROW_ON_ERROR);
+
+        // 1. Initialized via API host + token
+        $mockResponse1 = new MockResponse($responseBody);
+        $mockResponse2 = new MockResponse($responseBody);
+        $httpClient1 = new MockHttpClient([$mockResponse1, $mockResponse2]);
+        $client1 = new AnalyticsClient('https://api.test', 'initial-token', $httpClient1);
+
+        $cleared1 = $client1->withToken('');
+        $this->assertNotSame($client1, $cleared1);
+
+        $cleared1->getAnalytics();
+        $headers1 = $mockResponse1->getRequestOptions()['headers'] ?? [];
+        foreach ($headers1 as $h) {
+            $this->assertStringStartsNotWith('authorization:', strtolower((string) $h));
+        }
+
+        // Original client retains token
+        $client1->getAnalytics();
+        $this->assertContains('Authorization: Bearer initial-token', $mockResponse2->getRequestOptions()['headers']);
+
+        // 2. Initialized via TransportInterface
+        $mockResponse3 = new MockResponse($responseBody);
+        $mockResponse4 = new MockResponse($responseBody);
+        $httpClient2 = new MockHttpClient([$mockResponse3, $mockResponse4]);
+        $admin = new AdminClient('https://api.test', 'admin-token', $httpClient2);
+        $client2 = new AnalyticsClient($admin->getTransport());
+
+        $cleared2 = $client2->withToken('');
+        $this->assertNotSame($client2, $cleared2);
+
+        $cleared2->getAnalytics();
+        $headers2 = $mockResponse3->getRequestOptions()['headers'] ?? [];
+        foreach ($headers2 as $h) {
+            $this->assertStringStartsNotWith('authorization:', strtolower((string) $h));
+        }
+
+        // Original transport client retains token
+        $client2->getAnalytics();
+        $this->assertContains('Authorization: Bearer admin-token', $mockResponse4->getRequestOptions()['headers']);
+    }
+
     public function testAnalyticsClientConstructedWithTransportInterface(): void
     {
         $responseBody = json_encode([

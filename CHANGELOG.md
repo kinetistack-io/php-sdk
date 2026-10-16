@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `deleteOrganization(string $id): void` to `AdminClient` and `AdminClientInterface` (`DELETE /api/v1/admin/organizations/{id}`) for parity with the backend organization soft-deletion endpoint (PHPSDK-52).
+
+### Changed
+- Standardized URI path parameter encoding across `AdminClient` and `KinetiClient` to use RFC 3986 `rawurlencode()` (spaces encoded as `%20` instead of `+`) and enforce fast-fail validation rejecting null, empty, or whitespace-only IDs with `\InvalidArgumentException` across all 19 resource methods (PHPSDK-52).
+
+### Fixed
+- Fixed bearer token clearing in `AdminClient::withToken('')` and `AnalyticsClient::withToken('')` by delegating directly to `$this->transport->withAuthHeaderValue('')`, ensuring the `Authorization` header is omitted on subsequent requests across all transport types without triggering redundant client discovery or transport recreation (PHPSDK-52).
+- Fixed `createTransport()` in `AdminClient` and `AnalyticsClient` when passing a custom `TransportInterface` with an empty token so the auth header is properly cleared rather than returning the existing transport instance untouched (PHPSDK-52).
+
 ## [1.0.11] - 2026-10-16
 
 ### Security
