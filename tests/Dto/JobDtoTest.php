@@ -9,6 +9,7 @@ use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Enum\JobStatus;
+use KinetiStack\Sdk\Enum\JobType;
 use KinetiStack\Sdk\Enum\WebhookStatus;
 use PHPUnit\Framework\TestCase;
 
@@ -594,5 +595,222 @@ class JobDtoTest extends TestCase
 
         $this->assertNull($emptyResultDto->toVisionResponse());
         $this->assertNull($emptyResultDto->toDocumentResponse());
+    }
+
+    public function testJobTypeEnumCasesAndHelpers(): void
+    {
+        $this->assertSame('vision_single', JobType::VisionSingle->value);
+        $this->assertSame('vision_batch', JobType::VisionBatch->value);
+        $this->assertSame('document_ingest', JobType::DocumentIngest->value);
+
+        $this->assertTrue(JobType::VisionSingle->isVision());
+        $this->assertTrue(JobType::VisionSingle->isSingleVision());
+        $this->assertFalse(JobType::VisionSingle->isDocument());
+        $this->assertFalse(JobType::VisionSingle->isBatch());
+
+        $this->assertTrue(JobType::VisionBatch->isVision());
+        $this->assertFalse(JobType::VisionBatch->isSingleVision());
+        $this->assertFalse(JobType::VisionBatch->isDocument());
+        $this->assertTrue(JobType::VisionBatch->isBatch());
+
+        $this->assertFalse(JobType::DocumentIngest->isVision());
+        $this->assertFalse(JobType::DocumentIngest->isSingleVision());
+        $this->assertTrue(JobType::DocumentIngest->isDocument());
+        $this->assertFalse(JobType::DocumentIngest->isBatch());
+    }
+
+    public function testJobDtoAcceptsJobTypeEnumAndResolvesString(): void
+    {
+        $dtoWithEnum = new JobDto(
+            jobId: 'type-enum-1',
+            status: JobStatus::Completed,
+            type: JobType::VisionSingle,
+        );
+
+        $this->assertSame('vision_single', $dtoWithEnum->type);
+        $this->assertSame(JobType::VisionSingle, $dtoWithEnum->getJobType());
+
+        $dtoWithString = new JobDto(
+            jobId: 'type-str-1',
+            status: JobStatus::Completed,
+            type: 'document_ingest',
+        );
+
+        $this->assertSame('document_ingest', $dtoWithString->type);
+        $this->assertSame(JobType::DocumentIngest, $dtoWithString->getJobType());
+
+        $dtoWithUnknown = new JobDto(
+            jobId: 'type-unknown-1',
+            status: JobStatus::Completed,
+            type: 'custom_future_type',
+        );
+
+        $this->assertSame('custom_future_type', $dtoWithUnknown->type);
+        $this->assertNull($dtoWithUnknown->getJobType());
+
+        $dtoWithNull = new JobDto(
+            jobId: 'type-null-1',
+            status: JobStatus::Completed,
+        );
+
+        $this->assertNull($dtoWithNull->type);
+        $this->assertNull($dtoWithNull->getJobType());
+    }
+
+    public function testJobDtoFromArrayHandlesJobTypeAndString(): void
+    {
+        $fromEnum = JobDto::fromArray([
+            'job_id' => 'enum-array-1',
+            'type' => JobType::DocumentIngest,
+        ]);
+        $this->assertSame('document_ingest', $fromEnum->type);
+        $this->assertSame(JobType::DocumentIngest, $fromEnum->getJobType());
+
+        $fromString = JobDto::fromArray([
+            'job_id' => 'str-array-1',
+            'type' => 'vision_single',
+        ]);
+        $this->assertSame('vision_single', $fromString->type);
+        $this->assertSame(JobType::VisionSingle, $fromString->getJobType());
+    }
+
+    public function testToVisionResponseGuardsAgainstTypeMismatchAndBatchType(): void
+    {
+        $visionPayload = [
+            'alt_text' => 'Alpine mountains',
+            'tags' => ['nature', 'mountain'],
+        ];
+
+        // Valid vision job matches and hydrates
+        $validDto = new JobDto(
+            jobId: 'vision-valid-1',
+            status: JobStatus::Completed,
+            type: JobType::VisionSingle,
+            result: $visionPayload,
+        );
+        $this->assertInstanceOf(VisionResponseDto::class, $validDto->toVisionResponse());
+
+        // Document job with vision payload must NOT hydrate to vision response
+        $docJobWithVisionPayload = new JobDto(
+            jobId: 'cross-doc-1',
+            status: JobStatus::Completed,
+            type: 'document_ingest',
+            result: $visionPayload,
+        );
+        $this->assertNull($docJobWithVisionPayload->toVisionResponse());
+
+        // Document job with JobType enum must NOT hydrate to vision response
+        $docJobWithEnum = new JobDto(
+            jobId: 'cross-doc-2',
+            status: JobStatus::Completed,
+            type: JobType::DocumentIngest,
+            result: $visionPayload,
+        );
+        $this->assertNull($docJobWithEnum->toVisionResponse());
+
+        // Batch job type must NOT hydrate to single vision response
+        $batchJobWithType = new JobDto(
+            jobId: 'batch-vision-1',
+            status: JobStatus::Completed,
+            type: JobType::VisionBatch,
+            result: $visionPayload,
+        );
+        $this->assertNull($batchJobWithType->toVisionResponse());
+
+        // Generic 'document' type must NOT hydrate to vision response
+        $genericDocJob = new JobDto(
+            jobId: 'generic-doc-1',
+            status: JobStatus::Completed,
+            type: 'document',
+            result: $visionPayload,
+        );
+        $this->assertNull($genericDocJob->toVisionResponse());
+    }
+
+    public function testToDocumentResponseGuardsAgainstTypeMismatchAndBatchType(): void
+    {
+        $docPayload = [
+            'document_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'external_id' => 'article:100',
+            'chunks_generated' => 3,
+        ];
+
+        // Valid document job matches and hydrates
+        $validDto = new JobDto(
+            jobId: 'doc-valid-1',
+            status: JobStatus::Completed,
+            type: JobType::DocumentIngest,
+            result: $docPayload,
+        );
+        $this->assertInstanceOf(DocumentResponseDto::class, $validDto->toDocumentResponse());
+
+        // Vision job with document payload must NOT hydrate to document response
+        $visionJobWithDocPayload = new JobDto(
+            jobId: 'cross-vision-1',
+            status: JobStatus::Completed,
+            type: 'vision_single',
+            result: $docPayload,
+        );
+        $this->assertNull($visionJobWithDocPayload->toDocumentResponse());
+
+        // Vision job with JobType enum must NOT hydrate to document response
+        $visionJobWithEnum = new JobDto(
+            jobId: 'cross-vision-2',
+            status: JobStatus::Completed,
+            type: JobType::VisionSingle,
+            result: $docPayload,
+        );
+        $this->assertNull($visionJobWithEnum->toDocumentResponse());
+
+        // Batch job type must NOT hydrate to document response
+        $batchJobWithType = new JobDto(
+            jobId: 'batch-vision-2',
+            status: JobStatus::Completed,
+            type: JobType::VisionBatch,
+            result: $docPayload,
+        );
+        $this->assertNull($batchJobWithType->toDocumentResponse());
+
+        // Generic 'vision' type must NOT hydrate to document response
+        $genericVisionJob = new JobDto(
+            jobId: 'generic-vision-1',
+            status: JobStatus::Completed,
+            type: 'vision',
+            result: $docPayload,
+        );
+        $this->assertNull($genericVisionJob->toDocumentResponse());
+    }
+
+    public function testToVisionResponseAndToDocumentResponseGuardAgainstUntypedPayloadCrossHydration(): void
+    {
+        // Untyped job with document payload should NOT cross-hydrate to VisionResponseDto
+        $docPayloadJob = new JobDto(
+            jobId: 'untyped-doc-1',
+            status: JobStatus::Completed,
+            type: null,
+            result: [
+                'document_id' => 'doc-uuid-1234',
+                'external_id' => 'doc-ext-1',
+                'chunks_generated' => 5,
+            ],
+        );
+
+        $this->assertNull($docPayloadJob->toVisionResponse());
+        $this->assertInstanceOf(DocumentResponseDto::class, $docPayloadJob->toDocumentResponse());
+
+        // Untyped job with vision payload should NOT cross-hydrate to DocumentResponseDto
+        $visionPayloadJob = new JobDto(
+            jobId: 'untyped-vision-1',
+            status: JobStatus::Completed,
+            type: null,
+            result: [
+                'alt_text' => 'A photo of the ocean',
+                'caption' => 'Pacific waves crashing against cliffs',
+                'tags' => ['ocean', 'water'],
+            ],
+        );
+
+        $this->assertNull($visionPayloadJob->toDocumentResponse());
+        $this->assertInstanceOf(VisionResponseDto::class, $visionPayloadJob->toVisionResponse());
     }
 }

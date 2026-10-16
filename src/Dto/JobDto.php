@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Dto;
 
 use KinetiStack\Sdk\Enum\JobStatus;
+use KinetiStack\Sdk\Enum\JobType;
 use KinetiStack\Sdk\Enum\WebhookStatus;
 
 class JobDto
@@ -22,14 +23,17 @@ class JobDto
      */
     public readonly ?array $result;
 
+    public readonly ?string $type;
+
     /**
+     * @param JobType|string|null $type
      * @param array<string, mixed>|list<mixed>|null $results
      * @param array<string, mixed>|list<mixed>|null $result Alias for $results
      */
     public function __construct(
         public readonly string $jobId,
         public readonly JobStatus $status,
-        public readonly ?string $type = null,
+        JobType|string|null $type = null,
         public readonly ?int $totalImages = null,
         public readonly ?int $processedImages = null,
         public readonly ?WebhookStatus $webhookStatus = null,
@@ -43,6 +47,7 @@ class JobDto
         public readonly ?int $tokensConsumed = null,
         ?array $result = null,
     ) {
+        $this->type = $type instanceof JobType ? $type->value : $type;
         $resolvedResults = $results ?? $result;
         $this->results = $resolvedResults;
         $this->result = $resolvedResults;
@@ -106,10 +111,13 @@ class JobDto
             $tokensConsumed = self::extractTokensConsumed($resultsData);
         }
 
+        $rawType = $data['type'] ?? null;
+        $type = $rawType instanceof JobType ? $rawType->value : self::extractNullableString($rawType);
+
         return new self(
             self::extractString($data['job_id'] ?? $data['jobId'] ?? ''),
             $status,
-            self::extractNullableString($data['type'] ?? null),
+            $type,
             self::extractNullableInt($data['total_images'] ?? $data['totalImages'] ?? null),
             self::extractNullableInt($data['processed_images'] ?? $data['processedImages'] ?? null),
             $webhookStatus,
@@ -237,20 +245,37 @@ class JobDto
         );
     }
 
+    public function getJobType(): ?JobType
+    {
+        return $this->type !== null ? JobType::tryFrom($this->type) : null;
+    }
+
     public function toVisionResponse(): ?VisionResponseDto
     {
+        if ($this->type !== null && !$this->isVisionType($this->type)) {
+            return null;
+        }
+
         if ($this->result === null || array_is_list($this->result) || empty($this->result)) {
             return null;
         }
 
         /** @var array<string, mixed> $data */
         $data = $this->result;
+
+        if ($this->isDocumentPayload($data)) {
+            return null;
+        }
 
         return VisionResponseDto::fromArray($data);
     }
 
     public function toDocumentResponse(): ?DocumentResponseDto
     {
+        if ($this->type !== null && !$this->isDocumentType($this->type)) {
+            return null;
+        }
+
         if ($this->result === null || array_is_list($this->result) || empty($this->result)) {
             return null;
         }
@@ -258,6 +283,50 @@ class JobDto
         /** @var array<string, mixed> $data */
         $data = $this->result;
 
+        if ($this->isVisionPayload($data)) {
+            return null;
+        }
+
         return DocumentResponseDto::fromArray($data);
+    }
+
+    private function isVisionType(string $type): bool
+    {
+        $enumType = JobType::tryFrom($type);
+        if ($enumType !== null) {
+            return $enumType->isSingleVision();
+        }
+
+        return str_starts_with($type, 'vision') && !str_contains($type, 'batch');
+    }
+
+    private function isDocumentType(string $type): bool
+    {
+        $enumType = JobType::tryFrom($type);
+        if ($enumType !== null) {
+            return $enumType->isDocument();
+        }
+
+        return str_starts_with($type, 'document') && !str_contains($type, 'batch');
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function isDocumentPayload(array $data): bool
+    {
+        return (isset($data['document_id']) || isset($data['documentId']))
+            && !isset($data['alt_text'])
+            && !isset($data['altText']);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function isVisionPayload(array $data): bool
+    {
+        return (isset($data['alt_text']) || isset($data['altText']))
+            && !isset($data['document_id'])
+            && !isset($data['documentId']);
     }
 }
