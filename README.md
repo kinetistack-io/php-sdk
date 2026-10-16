@@ -56,28 +56,36 @@ When `max_retries` is configured in `$options`, the SDK automatically retries tr
 
 If all retry attempts are exhausted, the corresponding typed exception (e.g., `RateLimitException` or `ServiceUnavailableException`) is thrown.
 
-### Synchronous Image Analysis
+### Image Analysis
 
 ```php
-// From a URL
-$response = $client->analyzeImage('https://example.com/image.jpg', [
-    'page_title' => 'Renewable Energy'
-]);
-echo $response->altText;
-if ($response->tokensConsumed !== null) {
-    echo "Tokens consumed: {$response->tokensConsumed}\n";
+use KinetiStack\Sdk\Dto\ContextHintsDto;
+
+// From a URL (returns an async JobDto)
+$job = $client->analyzeImage(
+    'https://example.com/image.jpg',
+    new ContextHintsDto(pageTitle: 'Renewable Energy')
+);
+
+// Wait for job completion and hydrate the typed vision response
+$completedJob = $client->waitForJob($job->jobId);
+$vision = $completedJob->toVisionResponse();
+
+echo $vision?->altText;
+if ($vision?->tokensConsumed !== null) {
+    echo "Tokens consumed: {$vision->tokensConsumed}\n";
 }
 
 // From a stream resource (memory-efficient for large files & remote stream wrappers)
 $stream = fopen('/path/to/image.jpg', 'rb');
-$response = $client->analyzeImageStream($stream, 'image.jpg');
+$job = $client->analyzeImageStream($stream, 'image.jpg');
 fclose($stream);
 
 // From a local file (uses streams internally)
-$response = $client->analyzeImageBinary('/path/to/image.jpg');
+$job = $client->analyzeImageBinary('/path/to/image.jpg');
 
 // From binary string content
-$response = $client->analyzeImageContent($binaryData, 'image.jpg');
+$job = $client->analyzeImageContent($binaryData, 'image.jpg');
 ```
 
 ### Batch Processing

@@ -12,7 +12,18 @@ class JobDto
     use ExtractsTokenUsageTrait;
 
     /**
+     * @var array<string, mixed>|list<mixed>|null
+     */
+    public readonly ?array $results;
+
+    /**
+     * @var array<string, mixed>|list<mixed>|null
+     */
+    public readonly ?array $result;
+
+    /**
      * @param array<string, mixed>|list<mixed>|null $results
+     * @param array<string, mixed>|list<mixed>|null $result Alias for $results
      */
     public function __construct(
         public readonly string $jobId,
@@ -21,7 +32,7 @@ class JobDto
         public readonly ?int $totalImages = null,
         public readonly ?int $processedImages = null,
         public readonly ?WebhookStatus $webhookStatus = null,
-        public readonly ?array $results = null,
+        ?array $results = null,
         public readonly ?string $createdAt = null,
         public readonly ?string $completedAt = null,
         public readonly ?string $pollUrl = null,
@@ -29,7 +40,11 @@ class JobDto
         public readonly ?string $externalId = null,
         public readonly ?int $chunksGenerated = null,
         public readonly ?int $tokensConsumed = null,
+        ?array $result = null,
     ) {
+        $resolvedResults = $results ?? $result;
+        $this->results = $resolvedResults;
+        $this->result = $resolvedResults;
     }
 
     /**
@@ -50,7 +65,7 @@ class JobDto
             $webhookStatus = WebhookStatus::tryFrom($rawWebhookStatus);
         }
 
-        $rawResults = $data['results'] ?? null;
+        $rawResults = $data['results'] ?? $data['result'] ?? null;
         $results = null;
         if (is_array($rawResults)) {
             if (array_is_list($rawResults) && (empty($rawResults) || is_array($rawResults[0]) || $rawResults[0] instanceof BatchJobItemResultDto)) {
@@ -209,5 +224,29 @@ class JobDto
                 : ($item instanceof BatchJobItemResultDto ? $item : throw new \UnexpectedValueException('Invalid item result')),
             $this->results
         );
+    }
+
+    public function toVisionResponse(): ?VisionResponseDto
+    {
+        if ($this->result === null || array_is_list($this->result) || empty($this->result)) {
+            return null;
+        }
+
+        /** @var array<string, mixed> $data */
+        $data = $this->result;
+
+        return VisionResponseDto::fromArray($data);
+    }
+
+    public function toDocumentResponse(): ?DocumentResponseDto
+    {
+        if ($this->result === null || array_is_list($this->result) || empty($this->result)) {
+            return null;
+        }
+
+        /** @var array<string, mixed> $data */
+        $data = $this->result;
+
+        return DocumentResponseDto::fromArray($data);
     }
 }

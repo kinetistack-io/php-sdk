@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests\Dto;
 
 use KinetiStack\Sdk\Dto\BatchJobItemResultDto;
+use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\JobDto;
+use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Enum\WebhookStatus;
 use PHPUnit\Framework\TestCase;
@@ -443,5 +445,150 @@ class JobDtoTest extends TestCase
         ]);
         $this->assertNull($fromNull->tokensConsumed);
         $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
+    }
+
+    public function testToVisionResponseReturnsHydratedDto(): void
+    {
+        $dto = new JobDto(
+            jobId: 'vision-job-1',
+            status: JobStatus::Completed,
+            result: [
+                'alt_text' => 'Solar panels',
+                'caption' => 'Rooftop solar panel installation',
+                'tags' => ['solar', 'energy', 'clean'],
+                'confidence_score' => 0.98,
+                'model_used' => 'qwen2-vl',
+                'tokens_consumed' => 42,
+            ],
+        );
+
+        $vision = $dto->toVisionResponse();
+
+        $this->assertInstanceOf(VisionResponseDto::class, $vision);
+        $this->assertSame('Solar panels', $vision->altText);
+        $this->assertSame('Rooftop solar panel installation', $vision->caption);
+        $this->assertSame(['solar', 'energy', 'clean'], $vision->tags);
+        $this->assertSame(0.98, $vision->confidenceScore);
+        $this->assertSame('qwen2-vl', $vision->modelUsed);
+        $this->assertSame(42, $vision->tokensConsumed);
+
+        $this->assertSame($dto->results, $dto->result);
+    }
+
+    public function testToVisionResponseAndToDocumentResponseReturnNullWhenResultIsNull(): void
+    {
+        $pendingDto = new JobDto(
+            jobId: 'pending-job-1',
+            status: JobStatus::Pending,
+            result: null,
+        );
+
+        $this->assertNull($pendingDto->toVisionResponse());
+        $this->assertNull($pendingDto->toDocumentResponse());
+
+        $completedWithoutResult = new JobDto(
+            jobId: 'empty-job-1',
+            status: JobStatus::Completed,
+            results: null,
+        );
+
+        $this->assertNull($completedWithoutResult->toVisionResponse());
+        $this->assertNull($completedWithoutResult->toDocumentResponse());
+    }
+
+    public function testToDocumentResponseReturnsHydratedDto(): void
+    {
+        $dto = new JobDto(
+            jobId: 'doc-job-1',
+            status: JobStatus::Completed,
+            result: [
+                'document_id' => '550e8400-e29b-41d4-a716-446655440000',
+                'external_id' => 'node:42:en',
+                'chunks_generated' => 4,
+                'status' => 'indexed',
+                'tokens_consumed' => 120,
+            ],
+        );
+
+        $document = $dto->toDocumentResponse();
+
+        $this->assertInstanceOf(DocumentResponseDto::class, $document);
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $document->documentId);
+        $this->assertSame('node:42:en', $document->externalId);
+        $this->assertSame(4, $document->chunksGenerated);
+        $this->assertSame('indexed', $document->status);
+        $this->assertSame(120, $document->tokensConsumed);
+    }
+
+    public function testConstructorAcceptsResultAndResultsAliases(): void
+    {
+        $payload = ['alt_text' => 'Solar panels', 'caption' => 'Panels', 'tags' => ['solar']];
+
+        $dtoWithResult = new JobDto(
+            jobId: 'alias-1',
+            status: JobStatus::Completed,
+            result: $payload,
+        );
+        $this->assertSame($payload, $dtoWithResult->result);
+        $this->assertSame($payload, $dtoWithResult->results);
+
+        $dtoWithResults = new JobDto(
+            jobId: 'alias-2',
+            status: JobStatus::Completed,
+            results: $payload,
+        );
+        $this->assertSame($payload, $dtoWithResults->result);
+        $this->assertSame($payload, $dtoWithResults->results);
+    }
+
+    public function testFromArrayAcceptsResultOrResultsKey(): void
+    {
+        $fromSingleResult = JobDto::fromArray([
+            'job_id' => 'job-single-1',
+            'status' => 'completed',
+            'result' => [
+                'alt_text' => 'Solar panels',
+                'tags' => ['solar'],
+            ],
+        ]);
+        $this->assertNotNull($fromSingleResult->result);
+        $this->assertSame('Solar panels', $fromSingleResult->toVisionResponse()?->altText);
+
+        $fromResults = JobDto::fromArray([
+            'job_id' => 'job-single-2',
+            'status' => 'completed',
+            'results' => [
+                'alt_text' => 'Wind turbines',
+                'tags' => ['wind'],
+            ],
+        ]);
+        $this->assertNotNull($fromResults->result);
+        $this->assertSame('Wind turbines', $fromResults->toVisionResponse()?->altText);
+    }
+
+    public function testToVisionResponseAndToDocumentResponseReturnNullForBatchAndEmptyResults(): void
+    {
+        // Batch job payload (list of item results)
+        $batchDto = new JobDto(
+            jobId: 'batch-1',
+            status: JobStatus::Completed,
+            results: [
+                ['external_id' => 'img-1', 'alt_text' => 'First image'],
+                ['external_id' => 'img-2', 'alt_text' => 'Second image'],
+            ],
+        );
+
+        $this->assertNull($batchDto->toVisionResponse());
+        $this->assertNull($batchDto->toDocumentResponse());
+
+        // Empty array result
+        $emptyResultDto = new JobDto(
+            jobId: 'empty-1',
+            status: JobStatus::Completed,
+            result: [],
+        );
+
+        $this->assertNull($emptyResultDto->toVisionResponse());
+        $this->assertNull($emptyResultDto->toDocumentResponse());
     }
 }
