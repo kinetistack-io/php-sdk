@@ -7,10 +7,9 @@ namespace KinetiStack\Sdk\Tests;
 use KinetiStack\Sdk\Dto\FacetBucketDto;
 use KinetiStack\Sdk\Dto\FacetRequestDto;
 use KinetiStack\Sdk\Dto\RagSynthesisDto;
-use KinetiStack\Sdk\Dto\SearchFilterDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
-use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
+use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\RateLimitException;
@@ -96,8 +95,10 @@ class KinetiClientSearchTest extends TestCase
         $this->assertNull($response->synthesis->fallbackReason);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertTrue($requestBody['synthesize_answer']);
         $this->assertSame('en', $requestBody['locale']);
+        $this->assertIsArray($requestBody['filters']);
         $this->assertSame(['authenticated'], $requestBody['filters']['permissions']);
     }
 
@@ -140,6 +141,7 @@ class KinetiClientSearchTest extends TestCase
         $kineti->search($query);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertSame('renewable tech', $requestBody['query']);
         $this->assertSame(10, $requestBody['limit']);
         $this->assertSame('da', $requestBody['locale']);
@@ -147,6 +149,7 @@ class KinetiClientSearchTest extends TestCase
         $this->assertSame(0.70, $requestBody['min_score']);
         $this->assertTrue($requestBody['distinct_documents']);
         $this->assertTrue($requestBody['synthesize_answer']);
+        $this->assertIsArray($requestBody['filters']);
         $this->assertSame('article', $requestBody['filters']['bundle']);
 
         // Minimal query omits null keys
@@ -172,6 +175,7 @@ class KinetiClientSearchTest extends TestCase
 
         $this->assertInstanceOf(SearchResponseDto::class, $response);
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertSame('simple string query', $requestBody['query']);
     }
 
@@ -314,6 +318,7 @@ class KinetiClientSearchTest extends TestCase
         /** @var array{body: string} $requestOptions */
         $requestOptions = $mockResponse->getRequestOptions();
         $requestBody = json_decode($requestOptions['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertArrayHasKey('facets', $requestBody);
         $this->assertSame(['fields' => ['type', 'language']], $requestBody['facets']);
     }

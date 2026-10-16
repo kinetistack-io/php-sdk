@@ -69,18 +69,40 @@ class ImageInputDto
      */
     public static function fromArray(array $data): self
     {
-        $externalId = (string) ($data['external_id'] ?? $data['externalId'] ?? '');
-        $imageUrl = isset($data['image_url']) ? (string) $data['image_url'] : (isset($data['imageUrl']) ? (string) $data['imageUrl'] : null);
+        $rawExternalId = $data['external_id'] ?? $data['externalId'] ?? null;
+        if ($rawExternalId === null || (!is_scalar($rawExternalId) && !$rawExternalId instanceof \Stringable)) {
+            throw new \InvalidArgumentException('external_id must be a string.');
+        }
+        $externalId = (string) $rawExternalId;
+
+        $rawImageUrl = $data['image_url'] ?? $data['imageUrl'] ?? null;
+        $imageUrl = null;
+        if ($rawImageUrl !== null) {
+            if (!is_scalar($rawImageUrl) && !$rawImageUrl instanceof \Stringable) {
+                throw new \InvalidArgumentException('image_url must be a string.');
+            }
+            $imageUrl = (string) $rawImageUrl;
+        }
 
         $rawHints = $data['context_hints'] ?? $data['contextHints'] ?? null;
         $contextHints = null;
         if ($rawHints instanceof ContextHintsDto) {
             $contextHints = $rawHints;
         } elseif (is_array($rawHints) && !empty($rawHints)) {
+            /** @var array<string, mixed> $rawHints */
             $contextHints = ContextHintsDto::fromArray($rawHints);
+        } elseif ($rawHints !== null && !is_array($rawHints)) {
+            throw new \InvalidArgumentException('context_hints must be an array or ContextHintsDto.');
         }
 
-        $imageBase64 = isset($data['image_base64']) ? (string) $data['image_base64'] : (isset($data['imageBase64']) ? (string) $data['imageBase64'] : null);
+        $rawBase64 = $data['image_base64'] ?? $data['imageBase64'] ?? null;
+        $imageBase64 = null;
+        if ($rawBase64 !== null) {
+            if (!is_scalar($rawBase64) && !$rawBase64 instanceof \Stringable) {
+                throw new \InvalidArgumentException('image_base64 must be a string.');
+            }
+            $imageBase64 = (string) $rawBase64;
+        }
 
         return new self(
             externalId: $externalId,

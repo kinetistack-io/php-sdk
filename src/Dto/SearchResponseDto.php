@@ -9,6 +9,7 @@ namespace KinetiStack\Sdk\Dto;
  */
 class SearchResponseDto implements \Countable, \IteratorAggregate
 {
+    use ExtractsResponseDataTrait;
     use ExtractsTokenUsageTrait;
 
     /**
@@ -101,29 +102,32 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
             }
         }
 
-        /** @var list<array<string, mixed>> $rawResults */
-        $rawResults = array_values($rawList ?? []);
+        $rawResults = is_array($rawList) ? array_values($rawList) : [];
 
-        $results = array_map(
-            static fn (array $item): SearchResultItemDto => SearchResultItemDto::fromArray($item),
-            $rawResults
-        );
+        $results = [];
+        foreach ($rawResults as $item) {
+            if (is_array($item)) {
+                /** @var array<string, mixed> $item */
+                $results[] = SearchResultItemDto::fromArray($item);
+            }
+        }
 
-        $total = (int) (
-            $data['total']
+        $totalRaw = $data['total']
             ?? $data['totalItems']
             ?? $data['hydra:totalItems']
-            ?? count($results)
-        );
+            ?? count($results);
+        $total = self::extractInt($totalRaw, count($results));
 
         $synthesis = null;
         if (isset($data['synthesis']) && is_array($data['synthesis'])) {
-            $synthesis = RagSynthesisDto::fromArray($data['synthesis']);
+            /** @var array<string, mixed> $synthData */
+            $synthData = $data['synthesis'];
+            $synthesis = RagSynthesisDto::fromArray($synthData);
         }
 
-        $page = isset($data['page']) ? (int) $data['page'] : null;
+        $page = self::extractNullableInt($data['page'] ?? null);
         $limitValue = $data['limit'] ?? $data['itemsPerPage'] ?? $data['per_page'] ?? null;
-        $limit = $limitValue !== null ? (int) $limitValue : null;
+        $limit = self::extractNullableInt($limitValue);
 
         /** @var array<string, list<FacetBucketDto>> $facets */
         $facets = [];
@@ -133,6 +137,7 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
                     $fieldBuckets = [];
                     foreach ($buckets as $bucket) {
                         if (is_array($bucket)) {
+                            /** @var array<string, mixed> $bucket */
                             $fieldBuckets[] = FacetBucketDto::fromArray($bucket);
                         }
                     }
@@ -144,14 +149,9 @@ class SearchResponseDto implements \Countable, \IteratorAggregate
         $tokensConsumed = self::extractTokensConsumed($data);
 
         $hasMorePresent = array_key_exists('has_more', $data) || array_key_exists('hasMore', $data);
-        $hasMore = $hasMorePresent ? (bool) ($data['has_more'] ?? $data['hasMore']) : false;
+        $hasMore = $hasMorePresent ? self::extractBool($data['has_more'] ?? $data['hasMore'] ?? false) : false;
 
-        $nextOffset = null;
-        if (isset($data['next_offset']) && is_numeric($data['next_offset'])) {
-            $nextOffset = (int) $data['next_offset'];
-        } elseif (isset($data['nextOffset']) && is_numeric($data['nextOffset'])) {
-            $nextOffset = (int) $data['nextOffset'];
-        }
+        $nextOffset = self::extractNullableInt($data['next_offset'] ?? $data['nextOffset'] ?? null);
 
         return new self($results, $total, $synthesis, $page, $limit, $facets, $tokensConsumed, $hasMore, $nextOffset, $hasMorePresent);
     }

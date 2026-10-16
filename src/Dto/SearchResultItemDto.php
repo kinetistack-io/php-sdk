@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class SearchResultItemDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param array<string, mixed>|null $metadata
      */
@@ -52,21 +54,15 @@ class SearchResultItemDto
      */
     public static function fromArray(array $data): self
     {
-        $externalId = (string) ($data['external_id'] ?? $data['externalId'] ?? '');
-        $title = (string) ($data['title'] ?? '');
-        $content = (string) ($data['content'] ?? $data['snippet'] ?? '');
-        $chunkIndex = (int) ($data['chunk_index'] ?? $data['chunkIndex'] ?? 0);
-        $score = (float) ($data['score'] ?? 0.0);
-
         /** @var array<string, mixed>|null $metadata */
         $metadata = isset($data['metadata']) && is_array($data['metadata']) ? $data['metadata'] : null;
 
         return new self(
-            $externalId,
-            $title,
-            $content,
-            $chunkIndex,
-            $score,
+            self::extractString($data['external_id'] ?? $data['externalId'] ?? ''),
+            self::extractString($data['title'] ?? ''),
+            self::extractString($data['content'] ?? $data['snippet'] ?? ''),
+            self::extractInt($data['chunk_index'] ?? $data['chunkIndex'] ?? 0),
+            self::extractFloat($data['score'] ?? 0.0),
             $metadata
         );
     }

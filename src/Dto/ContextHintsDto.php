@@ -37,7 +37,13 @@ class ContextHintsDto
         if (is_string($taxonomy)) {
             $taxonomyList = [$taxonomy];
         } elseif (is_array($taxonomy)) {
-            $taxonomyList = array_values(array_map('strval', $taxonomy));
+            $taxonomyList = [];
+            foreach ($taxonomy as $item) {
+                if (!is_scalar($item) && !$item instanceof \Stringable) {
+                    throw new \InvalidArgumentException('Taxonomy items must be scalar values.');
+                }
+                $taxonomyList[] = (string) $item;
+            }
         }
 
         return new self($this->pageTitle, $taxonomyList, $this->surroundingText, $this->custom);
@@ -107,23 +113,41 @@ class ContextHintsDto
      */
     public static function fromArray(array $data): self
     {
-        $pageTitle = isset($data['page_title']) && is_string($data['page_title'])
-            ? $data['page_title']
-            : (isset($data['pageTitle']) && is_string($data['pageTitle']) ? $data['pageTitle'] : null);
+        $rawTitle = $data['page_title'] ?? $data['pageTitle'] ?? null;
+        $pageTitle = null;
+        if ($rawTitle !== null) {
+            if (!is_scalar($rawTitle) && !$rawTitle instanceof \Stringable) {
+                throw new \InvalidArgumentException('page_title must be a string.');
+            }
+            $pageTitle = (string) $rawTitle;
+        }
 
         /** @var list<string>|null $taxonomy */
         $taxonomy = null;
         if (isset($data['taxonomy'])) {
             if (is_array($data['taxonomy'])) {
-                $taxonomy = array_values(array_map('strval', $data['taxonomy']));
-            } elseif (is_string($data['taxonomy'])) {
-                $taxonomy = [$data['taxonomy']];
+                $taxonomy = [];
+                foreach ($data['taxonomy'] as $item) {
+                    if (!is_scalar($item) && !$item instanceof \Stringable) {
+                        throw new \InvalidArgumentException('Taxonomy items must be scalar values.');
+                    }
+                    $taxonomy[] = (string) $item;
+                }
+            } elseif (is_scalar($data['taxonomy']) || $data['taxonomy'] instanceof \Stringable) {
+                $taxonomy = [(string) $data['taxonomy']];
+            } else {
+                throw new \InvalidArgumentException('taxonomy must be an array or scalar.');
             }
         }
 
-        $surroundingText = isset($data['surrounding_text']) && is_string($data['surrounding_text'])
-            ? $data['surrounding_text']
-            : (isset($data['surroundingText']) && is_string($data['surroundingText']) ? $data['surroundingText'] : null);
+        $rawSurrounding = $data['surrounding_text'] ?? $data['surroundingText'] ?? null;
+        $surroundingText = null;
+        if ($rawSurrounding !== null) {
+            if (!is_scalar($rawSurrounding) && !$rawSurrounding instanceof \Stringable) {
+                throw new \InvalidArgumentException('surrounding_text must be a string.');
+            }
+            $surroundingText = (string) $rawSurrounding;
+        }
 
         $custom = [];
         foreach ($data as $key => $value) {

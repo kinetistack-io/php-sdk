@@ -57,21 +57,59 @@ class DocumentDto
      */
     public static function fromArray(array $data): self
     {
+        $rawExternalId = $data['external_id'] ?? $data['externalId'] ?? null;
+        if ($rawExternalId !== null && !is_scalar($rawExternalId) && !$rawExternalId instanceof \Stringable) {
+            throw new \InvalidArgumentException('external_id must be a string.');
+        }
+        $externalId = (string) ($rawExternalId ?? '');
+
+        $rawTitle = $data['title'] ?? null;
+        if ($rawTitle !== null && !is_scalar($rawTitle) && !$rawTitle instanceof \Stringable) {
+            throw new \InvalidArgumentException('title must be a string.');
+        }
+        $title = (string) ($rawTitle ?? '');
+
+        $rawContent = $data['content'] ?? null;
+        if ($rawContent !== null && !is_scalar($rawContent) && !$rawContent instanceof \Stringable) {
+            throw new \InvalidArgumentException('content must be a string.');
+        }
+        $content = (string) ($rawContent ?? '');
+
+        $rawLocale = $data['locale'] ?? null;
+        if ($rawLocale !== null && !is_scalar($rawLocale) && !$rawLocale instanceof \Stringable) {
+            throw new \InvalidArgumentException('locale must be a string.');
+        }
+        $locale = (string) ($rawLocale ?? 'en');
+
         /** @var list<string>|null $permissions */
-        $permissions = isset($data['permissions']) && is_array($data['permissions'])
-            ? array_values(array_map('strval', $data['permissions']))
-            : null;
+        $permissions = null;
+        if (isset($data['permissions'])) {
+            if (!is_array($data['permissions'])) {
+                throw new \InvalidArgumentException('permissions must be an array.');
+            }
+            $permissions = [];
+            foreach ($data['permissions'] as $p) {
+                if (!is_scalar($p) && !$p instanceof \Stringable) {
+                    throw new \InvalidArgumentException('permissions items must be strings.');
+                }
+                $permissions[] = (string) $p;
+            }
+        }
 
         /** @var array<string, mixed>|null $metadata */
-        $metadata = isset($data['metadata']) && is_array($data['metadata'])
-            ? $data['metadata']
-            : null;
+        $metadata = null;
+        if (isset($data['metadata'])) {
+            if (!is_array($data['metadata'])) {
+                throw new \InvalidArgumentException('metadata must be an array.');
+            }
+            $metadata = $data['metadata'];
+        }
 
         return new self(
-            (string) ($data['external_id'] ?? $data['externalId'] ?? ''),
-            (string) ($data['title'] ?? ''),
-            (string) ($data['content'] ?? ''),
-            (string) ($data['locale'] ?? 'en'),
+            $externalId,
+            $title,
+            $content,
+            $locale,
             $permissions,
             $metadata,
         );

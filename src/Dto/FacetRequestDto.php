@@ -74,15 +74,16 @@ final class FacetRequestDto
         $filters = [];
         if (isset($data['filters']) && is_array($data['filters'])) {
             foreach ($data['filters'] as $field => $values) {
-                if (is_array($values)) {
-                    $fieldValues = [];
-                    foreach ($values as $value) {
-                        if (is_scalar($value) || $value instanceof \Stringable) {
-                            $fieldValues[] = (string) $value;
-                        }
-                    }
-                    $filters[(string) $field] = $fieldValues;
+                if (!is_array($values)) {
+                    continue;
                 }
+                $fieldValues = [];
+                foreach ($values as $value) {
+                    if (is_scalar($value) || $value instanceof \Stringable) {
+                        $fieldValues[] = (string) $value;
+                    }
+                }
+                $filters[(string) $field] = $fieldValues;
             }
         }
 

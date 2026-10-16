@@ -8,7 +8,7 @@ use KinetiStack\Sdk\Dto\ModuleDto;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Transport\TransportInterface;
 
-class ModuleClient
+class ModuleClient implements ModuleClientInterface
 {
     /**
      * @var list<ModuleDto>|null
@@ -57,6 +57,7 @@ class ModuleClient
         $modules = [];
         foreach ($rawModules as $item) {
             if (is_array($item)) {
+                /** @var array<string, mixed> $item */
                 $modules[] = ModuleDto::fromArray($item);
             }
         }

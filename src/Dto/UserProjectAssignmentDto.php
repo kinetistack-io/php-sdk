@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class UserProjectAssignmentDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $userId,
         public readonly string $projectId = '',
@@ -42,11 +44,12 @@ class UserProjectAssignmentDto
      */
     public static function fromArray(array $data, ?string $projectId = null): self
     {
-        $userId = (string) ($data['user_id'] ?? $data['userId'] ?? '');
-        $resolvedProjectId = (string) ($projectId ?? $data['project_id'] ?? $data['projectId'] ?? '');
-        $permission = (string) ($data['permission'] ?? 'member');
-        $assignedAt = (string) ($data['assigned_at'] ?? $data['assignedAt'] ?? '');
-        $email = isset($data['email']) && is_string($data['email']) ? $data['email'] : null;
+        $userId = self::extractString($data['user_id'] ?? $data['userId'] ?? null, '');
+        $extractedProjectId = self::extractString($data['project_id'] ?? $data['projectId'] ?? null, '');
+        $resolvedProjectId = $projectId ?? $extractedProjectId;
+        $permission = self::extractString($data['permission'] ?? null, 'member');
+        $assignedAt = self::extractString($data['assigned_at'] ?? $data['assignedAt'] ?? null, '');
+        $email = self::extractNullableString($data['email'] ?? null);
 
         return new self($userId, $resolvedProjectId, $permission, $assignedAt, $email);
     }

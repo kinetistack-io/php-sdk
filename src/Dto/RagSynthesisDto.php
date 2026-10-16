@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Dto;
 
 class RagSynthesisDto
 {
+    use ExtractsResponseDataTrait;
     use ExtractsTokenUsageTrait;
 
     /**
@@ -47,22 +48,10 @@ class RagSynthesisDto
      */
     public static function fromArray(array $data): self
     {
-        $answer = isset($data['answer']) && is_string($data['answer']) ? $data['answer'] : null;
-
-        /** @var list<string> $citations */
-        $citations = isset($data['citations']) && is_array($data['citations'])
-            ? array_values(array_map('strval', $data['citations']))
-            : [];
-
-        $successful = (bool) ($data['successful'] ?? true);
-
-        $fallbackReason = null;
-        if (isset($data['fallback_reason']) && is_string($data['fallback_reason'])) {
-            $fallbackReason = $data['fallback_reason'];
-        } elseif (isset($data['fallbackReason']) && is_string($data['fallbackReason'])) {
-            $fallbackReason = $data['fallbackReason'];
-        }
-
+        $answer = self::extractNullableString($data['answer'] ?? null);
+        $citations = self::extractStringList($data['citations'] ?? []);
+        $successful = self::extractBool($data['successful'] ?? true, true);
+        $fallbackReason = self::extractNullableString($data['fallback_reason'] ?? $data['fallbackReason'] ?? null);
         $tokensConsumed = self::extractTokensConsumed($data);
 
         return new self(

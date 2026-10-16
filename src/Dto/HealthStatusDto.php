@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class HealthStatusDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param array<string, string>|null $checks
      */
@@ -66,10 +68,17 @@ class HealthStatusDto
      */
     public static function fromArray(array $data): self
     {
-        $status = (string) ($data['status'] ?? '');
+        $status = self::extractString($data['status'] ?? null, '');
 
-        /** @var array<string, string>|null $checks */
-        $checks = isset($data['checks']) && is_array($data['checks']) ? $data['checks'] : null;
+        $checks = null;
+        if (isset($data['checks']) && is_array($data['checks'])) {
+            $checks = [];
+            foreach ($data['checks'] as $k => $v) {
+                if (is_scalar($v)) {
+                    $checks[(string) $k] = (string) $v;
+                }
+            }
+        }
 
         return new self($status, $checks);
     }

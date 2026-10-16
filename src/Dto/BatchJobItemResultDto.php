@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class BatchJobItemResultDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param string[] $tags
      */
@@ -25,12 +27,12 @@ class BatchJobItemResultDto
     public static function fromArray(array $data): self
     {
         return new self(
-            (string) ($data['external_id'] ?? $data['externalId'] ?? ''),
-            $data['alt_text'] ?? $data['altText'] ?? null,
-            $data['caption'] ?? null,
-            is_array($data['tags'] ?? null) ? $data['tags'] : [],
-            isset($data['confidence_score']) ? (float) $data['confidence_score'] : (isset($data['confidenceScore']) ? (float) $data['confidenceScore'] : null),
-            $data['error'] ?? null,
+            self::extractString($data['external_id'] ?? $data['externalId'] ?? ''),
+            self::extractNullableString($data['alt_text'] ?? $data['altText'] ?? null),
+            self::extractNullableString($data['caption'] ?? null),
+            self::extractStringList($data['tags'] ?? null),
+            self::extractNullableFloat($data['confidence_score'] ?? $data['confidenceScore'] ?? null),
+            self::extractNullableString($data['error'] ?? null),
         );
     }
 

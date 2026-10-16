@@ -9,6 +9,8 @@ namespace KinetiStack\Sdk\Dto;
  */
 class DocumentCollectionDto implements \Countable, \IteratorAggregate
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param list<DocumentSummaryDto> $items
      */
@@ -35,33 +37,39 @@ class DocumentCollectionDto implements \Countable, \IteratorAggregate
     public static function fromArray(array $data): self
     {
         if (array_is_list($data)) {
-            /** @var list<array<string, mixed>> $data */
-            $items = array_map(
-                static fn (array $item): DocumentSummaryDto => DocumentSummaryDto::fromArray($item),
-                $data
-            );
+            $items = [];
+            foreach ($data as $item) {
+                if (is_array($item)) {
+                    /** @var array<string, mixed> $item */
+                    $items[] = DocumentSummaryDto::fromArray($item);
+                }
+            }
 
             return new self($items, count($items));
         }
 
-        /** @var list<array<string, mixed>> $rawItems */
-        $rawItems = array_values($data['member']
+        $rawMember = $data['member']
             ?? $data['hydra:member']
             ?? $data['items']
             ?? $data['data']
-            ?? []);
+            ?? [];
 
-        $items = array_map(
-            static fn (array $item): DocumentSummaryDto => DocumentSummaryDto::fromArray($item),
-            $rawItems
-        );
+        $rawItems = is_array($rawMember) ? array_values($rawMember) : [];
 
-        $total = (int) (
-            $data['totalItems']
+        $items = [];
+        foreach ($rawItems as $item) {
+            if (is_array($item)) {
+                /** @var array<string, mixed> $item */
+                $items[] = DocumentSummaryDto::fromArray($item);
+            }
+        }
+
+        $totalRaw = $data['totalItems']
             ?? $data['hydra:totalItems']
             ?? $data['total']
-            ?? count($items)
-        );
+            ?? count($items);
+
+        $total = self::extractInt($totalRaw, count($items));
 
         return new self($items, $total);
     }

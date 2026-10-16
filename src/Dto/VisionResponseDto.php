@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Dto;
 
 class VisionResponseDto
 {
+    use ExtractsResponseDataTrait;
     use ExtractsTokenUsageTrait;
 
     /**
@@ -26,34 +27,12 @@ class VisionResponseDto
      */
     public static function fromArray(array $data): self
     {
-        $rawTags = $data['tags'] ?? [];
-        $tags = is_array($rawTags) ? array_values(array_map('strval', $rawTags)) : [];
-
-        $confidence = null;
-        if (isset($data['confidence_score'])) {
-            $confidence = (float) $data['confidence_score'];
-        } elseif (isset($data['confidenceScore'])) {
-            $confidence = (float) $data['confidenceScore'];
-        }
-
-        $caption = null;
-        if (isset($data['caption'])) {
-            $caption = (string) $data['caption'];
-        }
-
-        $modelUsed = null;
-        if (isset($data['model_used'])) {
-            $modelUsed = (string) $data['model_used'];
-        } elseif (isset($data['modelUsed'])) {
-            $modelUsed = (string) $data['modelUsed'];
-        }
-
         return new self(
-            (string) ($data['alt_text'] ?? $data['altText'] ?? ''),
-            $caption,
-            $tags,
-            $confidence,
-            $modelUsed,
+            self::extractString($data['alt_text'] ?? $data['altText'] ?? ''),
+            self::extractNullableString($data['caption'] ?? null),
+            self::extractStringList($data['tags'] ?? []),
+            self::extractNullableFloat($data['confidence_score'] ?? $data['confidenceScore'] ?? null),
+            self::extractNullableString($data['model_used'] ?? $data['modelUsed'] ?? null),
             self::extractTokensConsumed($data),
         );
     }

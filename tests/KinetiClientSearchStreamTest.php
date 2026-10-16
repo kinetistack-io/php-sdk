@@ -13,7 +13,6 @@ use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ServerException;
-use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\KinetiClient;
 use PHPUnit\Framework\TestCase;
@@ -61,6 +60,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertSame('solar energy benefits', $requestBody['query']);
         $this->assertSame(5, $requestBody['limit']);
         $this->assertSame('en', $requestBody['locale']);
@@ -92,6 +92,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->assertSame('Streamed successfully despite false.', $chunks[0]->text);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertTrue($requestBody['stream']);
     }
 
@@ -115,6 +116,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->assertSame('Quick answer.', $chunks[0]->text);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertSame('What is RAG?', $requestBody['query']);
         $this->assertTrue($requestBody['stream']);
     }

@@ -84,11 +84,13 @@ class JobDtoTest extends TestCase
         $this->assertSame(WebhookStatus::Delivered, $dto->webhookStatus);
         $this->assertNotNull($dto->results);
         $this->assertCount(1, $dto->results);
-        $this->assertSame('img-1', $dto->results[0]->externalId);
-        $this->assertSame('Tree', $dto->results[0]->altText);
-        $this->assertSame('Green tree', $dto->results[0]->caption);
-        $this->assertSame(['tree', 'green'], $dto->results[0]->tags);
-        $this->assertSame(0.98, $dto->results[0]->confidenceScore);
+        $itemResults = $dto->getItemResults();
+        $this->assertNotNull($itemResults);
+        $this->assertSame('img-1', $itemResults[0]->externalId);
+        $this->assertSame('Tree', $itemResults[0]->altText);
+        $this->assertSame('Green tree', $itemResults[0]->caption);
+        $this->assertSame(['tree', 'green'], $itemResults[0]->tags);
+        $this->assertSame(0.98, $itemResults[0]->confidenceScore);
         $this->assertTrue($dto->isCompleted());
         $this->assertFalse($dto->isFailed());
         $this->assertFalse($dto->isProcessing());
@@ -275,6 +277,7 @@ class JobDtoTest extends TestCase
 
         $array = $dto->toArray();
         $this->assertSame('vision_single', $array['type']);
+        $this->assertIsArray($array['results']);
         $this->assertSame('A cute sleeping kitten', $array['results']['alt_text']);
     }
 
@@ -316,6 +319,7 @@ class JobDtoTest extends TestCase
         $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $array['document_id']);
         $this->assertSame('node:42:en', $array['external_id']);
         $this->assertSame(4, $array['chunks_generated']);
+        $this->assertIsArray($array['results']);
         $this->assertSame('indexed', $array['results']['status']);
     }
 

@@ -9,6 +9,7 @@ use KinetiStack\Sdk\Enum\WebhookStatus;
 
 class JobDto
 {
+    use ExtractsResponseDataTrait;
     use ExtractsTokenUsageTrait;
 
     /**
@@ -55,7 +56,7 @@ class JobDto
         $rawStatus = $data['status'] ?? 'pending';
         $status = $rawStatus instanceof JobStatus
             ? $rawStatus
-            : (JobStatus::tryFrom((string) $rawStatus) ?? JobStatus::Pending);
+            : (is_string($rawStatus) ? (JobStatus::tryFrom($rawStatus) ?? JobStatus::Pending) : JobStatus::Pending);
 
         $rawWebhookStatus = $data['webhook_status'] ?? $data['webhookStatus'] ?? null;
         $webhookStatus = null;
@@ -72,6 +73,7 @@ class JobDto
                 $results = array_map(
                     static function (mixed $resultData): mixed {
                         if (is_array($resultData) && (isset($resultData['external_id']) || isset($resultData['externalId']) || isset($resultData['alt_text']) || isset($resultData['altText']) || isset($resultData['error']))) {
+                            /** @var array<string, mixed> $resultData */
                             return BatchJobItemResultDto::fromArray($resultData);
                         }
                         return $resultData;
@@ -83,36 +85,38 @@ class JobDto
             }
         }
 
-        $documentId = isset($data['document_id']) ? (string) $data['document_id'] : (isset($data['documentId']) ? (string) $data['documentId'] : null);
-        $externalId = isset($data['external_id']) ? (string) $data['external_id'] : (isset($data['externalId']) ? (string) $data['externalId'] : null);
-        $chunksGenerated = isset($data['chunks_generated']) ? (int) $data['chunks_generated'] : (isset($data['chunksGenerated']) ? (int) $data['chunksGenerated'] : null);
+        $documentId = self::extractNullableString($data['document_id'] ?? $data['documentId'] ?? null);
+        $externalId = self::extractNullableString($data['external_id'] ?? $data['externalId'] ?? null);
+        $chunksGenerated = self::extractNullableInt($data['chunks_generated'] ?? $data['chunksGenerated'] ?? null);
 
         if ($documentId === null && is_array($results) && isset($results['document_id'])) {
-            $documentId = (string) $results['document_id'];
+            $documentId = self::extractNullableString($results['document_id']);
         }
         if ($externalId === null && is_array($results) && isset($results['external_id'])) {
-            $externalId = (string) $results['external_id'];
+            $externalId = self::extractNullableString($results['external_id']);
         }
         if ($chunksGenerated === null && is_array($results) && isset($results['chunks_generated'])) {
-            $chunksGenerated = (int) $results['chunks_generated'];
+            $chunksGenerated = self::extractNullableInt($results['chunks_generated']);
         }
 
         $tokensConsumed = self::extractTokensConsumed($data);
         if ($tokensConsumed === null && is_array($results)) {
-            $tokensConsumed = self::extractTokensConsumed($results);
+            /** @var array<string, mixed> $resultsData */
+            $resultsData = $results;
+            $tokensConsumed = self::extractTokensConsumed($resultsData);
         }
 
         return new self(
-            (string) ($data['job_id'] ?? $data['jobId'] ?? ''),
+            self::extractString($data['job_id'] ?? $data['jobId'] ?? ''),
             $status,
-            isset($data['type']) ? (string) $data['type'] : null,
-            isset($data['total_images']) ? (int) $data['total_images'] : (isset($data['totalImages']) ? (int) $data['totalImages'] : null),
-            isset($data['processed_images']) ? (int) $data['processed_images'] : (isset($data['processedImages']) ? (int) $data['processedImages'] : null),
+            self::extractNullableString($data['type'] ?? null),
+            self::extractNullableInt($data['total_images'] ?? $data['totalImages'] ?? null),
+            self::extractNullableInt($data['processed_images'] ?? $data['processedImages'] ?? null),
             $webhookStatus,
             $results,
-            $data['created_at'] ?? $data['createdAt'] ?? null,
-            $data['completed_at'] ?? $data['completedAt'] ?? null,
-            $data['poll_url'] ?? $data['pollUrl'] ?? null,
+            self::extractNullableString($data['created_at'] ?? $data['createdAt'] ?? null),
+            self::extractNullableString($data['completed_at'] ?? $data['completedAt'] ?? null),
+            self::extractNullableString($data['poll_url'] ?? $data['pollUrl'] ?? null),
             $documentId,
             $externalId,
             $chunksGenerated,
@@ -219,9 +223,16 @@ class JobDto
         }
 
         return array_map(
-            static fn (mixed $item): BatchJobItemResultDto => is_array($item)
-                ? BatchJobItemResultDto::fromArray($item)
-                : ($item instanceof BatchJobItemResultDto ? $item : throw new \UnexpectedValueException('Invalid item result')),
+            static function (mixed $item): BatchJobItemResultDto {
+                if ($item instanceof BatchJobItemResultDto) {
+                    return $item;
+                }
+                if (is_array($item)) {
+                    /** @var array<string, mixed> $item */
+                    return BatchJobItemResultDto::fromArray($item);
+                }
+                throw new \UnexpectedValueException('Invalid item result');
+            },
             $this->results
         );
     }

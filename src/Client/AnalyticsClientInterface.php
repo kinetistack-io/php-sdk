@@ -9,6 +9,12 @@ use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Transport\TransportInterface;
 
+/**
+ * Base interface defining usage analytics and metrics retrieval operations.
+ *
+ * Downstream consumers should typically type-hint against the public facade interface
+ * {@see \KinetiStack\Sdk\AnalyticsClientInterface}.
+ */
 interface AnalyticsClientInterface
 {
     public function withToken(#[\SensitiveParameter] string $jwtToken): static;

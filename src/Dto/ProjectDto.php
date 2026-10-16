@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class ProjectDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param array<string, mixed>|null $settings
      */
@@ -72,23 +74,14 @@ class ProjectDto
      */
     public static function fromArray(array $data): self
     {
-        $id = (string) ($data['id'] ?? '');
-        $name = (string) ($data['name'] ?? '');
-        $domain = (string) ($data['domain'] ?? '');
-        $webhookUrl = isset($data['webhook_url']) && is_string($data['webhook_url'])
-            ? $data['webhook_url']
-            : (isset($data['webhookUrl']) && is_string($data['webhookUrl']) ? $data['webhookUrl'] : null);
+        $id = self::extractString($data['id'] ?? '');
+        $name = self::extractString($data['name'] ?? '');
+        $domain = self::extractString($data['domain'] ?? '');
+        $webhookUrl = self::extractNullableString($data['webhook_url'] ?? $data['webhookUrl'] ?? null);
         /** @var array<string, mixed>|null $settings */
         $settings = isset($data['settings']) && is_array($data['settings']) ? $data['settings'] : null;
-        $createdAt = isset($data['created_at']) && is_string($data['created_at'])
-            ? $data['created_at']
-            : (isset($data['createdAt']) && is_string($data['createdAt']) ? $data['createdAt'] : null);
-        $monthlyQuotaCap = null;
-        if (isset($data['monthly_quota_cap']) && is_numeric($data['monthly_quota_cap'])) {
-            $monthlyQuotaCap = (int) $data['monthly_quota_cap'];
-        } elseif (isset($data['monthlyQuotaCap']) && is_numeric($data['monthlyQuotaCap'])) {
-            $monthlyQuotaCap = (int) $data['monthlyQuotaCap'];
-        }
+        $createdAt = self::extractNullableString($data['created_at'] ?? $data['createdAt'] ?? null);
+        $monthlyQuotaCap = self::extractNullableInt($data['monthly_quota_cap'] ?? $data['monthlyQuotaCap'] ?? null);
 
         return new self($id, $name, $domain, $webhookUrl, $settings, $createdAt, $monthlyQuotaCap);
     }

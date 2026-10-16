@@ -14,11 +14,11 @@ trait ExtractsTokenUsageTrait
      */
     private static function extractTokensConsumed(array $data): ?int
     {
-        if (isset($data['tokens_consumed'])) {
+        if (isset($data['tokens_consumed']) && is_numeric($data['tokens_consumed'])) {
             return (int) $data['tokens_consumed'];
         }
 
-        if (isset($data['tokensConsumed'])) {
+        if (isset($data['tokensConsumed']) && is_numeric($data['tokensConsumed'])) {
             return (int) $data['tokensConsumed'];
         }
 
@@ -31,7 +31,7 @@ trait ExtractsTokenUsageTrait
                     ?? $data['usage']['tokens']
                     ?? null;
 
-                return $usageVal !== null ? (int) $usageVal : null;
+                return $usageVal !== null && is_numeric($usageVal) ? (int) $usageVal : null;
             }
 
             if (is_numeric($data['usage'])) {

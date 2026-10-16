@@ -341,6 +341,7 @@ class AdminClientUserTest extends TestCase
         /** @var string $body */
         $body = $mockResponse->getRequestOptions()['body'];
         $sentPayload = json_decode($body, true);
+        $this->assertIsArray($sentPayload);
         $this->assertSame('user-456', $sentPayload['user_id']);
         $this->assertArrayNotHasKey('userId', $sentPayload);
         $this->assertSame('manager', $sentPayload['permission']);

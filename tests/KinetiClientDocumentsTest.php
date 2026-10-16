@@ -7,7 +7,6 @@ namespace KinetiStack\Sdk\Tests;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
-use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\DocumentSummaryDto;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Enum\JobStatus;
@@ -62,6 +61,7 @@ class KinetiClientDocumentsTest extends TestCase
         $this->assertContains('X-Kineti-Key: test-api-key', $requestHeaders);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertSame('node:42:en', $requestBody['external_id']);
         $this->assertSame('Sample Article', $requestBody['title']);
         $this->assertSame('Detailed body content for indexing.', $requestBody['content']);

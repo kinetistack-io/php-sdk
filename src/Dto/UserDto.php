@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class UserDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param list<string> $roles
      */
@@ -62,23 +64,21 @@ class UserDto
      */
     public static function fromArray(array $data): self
     {
-        $id = (string) ($data['id'] ?? '');
-        $email = (string) ($data['email'] ?? '');
+        $id = self::extractString($data['id'] ?? null, '');
+        $email = self::extractString($data['email'] ?? null, '');
 
         /** @var list<string> $roles */
         $roles = [];
         if (isset($data['roles']) && is_array($data['roles'])) {
-            $roles = array_values(array_map('strval', $data['roles']));
+            $roles = self::extractStringList($data['roles']);
         } elseif (isset($data['role']) && is_string($data['role']) && trim($data['role']) !== '') {
             $roles = [trim($data['role'])];
         }
 
-        $mustChangePassword = (bool) ($data['must_change_password'] ?? $data['mustChangePassword'] ?? false);
-        $isVerified = (bool) ($data['is_verified'] ?? $data['isVerified'] ?? false);
-        $deletedAt = isset($data['deleted_at']) && is_string($data['deleted_at'])
-            ? $data['deleted_at']
-            : (isset($data['deletedAt']) && is_string($data['deletedAt']) ? $data['deletedAt'] : null);
-        $createdAt = (string) ($data['created_at'] ?? $data['createdAt'] ?? '');
+        $mustChangePassword = self::extractBool($data['must_change_password'] ?? $data['mustChangePassword'] ?? null, false);
+        $isVerified = self::extractBool($data['is_verified'] ?? $data['isVerified'] ?? null, false);
+        $deletedAt = self::extractNullableString($data['deleted_at'] ?? $data['deletedAt'] ?? null);
+        $createdAt = self::extractString($data['created_at'] ?? $data['createdAt'] ?? null, '');
 
         return new self(
             $id,

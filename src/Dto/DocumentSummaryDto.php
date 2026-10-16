@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class DocumentSummaryDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param list<string>|null $permissions
      * @param array<string, mixed>|null $metadata
@@ -78,7 +80,7 @@ class DocumentSummaryDto
     {
         /** @var list<string>|null $permissions */
         $permissions = isset($data['permissions']) && is_array($data['permissions'])
-            ? array_values(array_map('strval', $data['permissions']))
+            ? self::extractStringList($data['permissions'])
             : null;
 
         /** @var array<string, mixed>|null $metadata */
@@ -86,24 +88,19 @@ class DocumentSummaryDto
             ? $data['metadata']
             : null;
 
-        $chunkCount = isset($data['chunk_count'])
-            ? (int) $data['chunk_count']
-            : (isset($data['chunkCount']) ? (int) $data['chunkCount'] : null);
-
-        $chunksGenerated = isset($data['chunks_generated'])
-            ? (int) $data['chunks_generated']
-            : (isset($data['chunksGenerated']) ? (int) $data['chunksGenerated'] : $chunkCount);
+        $chunkCount = self::extractNullableInt($data['chunk_count'] ?? $data['chunkCount'] ?? null);
+        $chunksGenerated = self::extractNullableInt($data['chunks_generated'] ?? $data['chunksGenerated'] ?? null, $chunkCount);
 
         return new self(
-            isset($data['id']) ? (string) $data['id'] : null,
-            (string) ($data['external_id'] ?? $data['externalId'] ?? ''),
-            (string) ($data['title'] ?? ''),
-            (string) ($data['locale'] ?? 'en'),
+            self::extractNullableString($data['id'] ?? null),
+            self::extractString($data['external_id'] ?? $data['externalId'] ?? ''),
+            self::extractString($data['title'] ?? ''),
+            self::extractString($data['locale'] ?? null, 'en'),
             $permissions,
             $metadata,
             $chunkCount,
             $chunksGenerated,
-            isset($data['status']) ? (string) $data['status'] : null,
+            self::extractNullableString($data['status'] ?? null),
             self::parseDateTime($data['created_at'] ?? $data['createdAt'] ?? null),
             self::parseDateTime($data['updated_at'] ?? $data['updatedAt'] ?? null),
         );

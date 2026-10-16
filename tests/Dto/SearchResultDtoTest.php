@@ -9,8 +9,8 @@ use KinetiStack\Sdk\Dto\FacetRequestDto;
 use KinetiStack\Sdk\Dto\RagSynthesisDto;
 use KinetiStack\Sdk\Dto\SearchFilterDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
-use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
+use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Tests\FixtureTrait;
 use PHPUnit\Framework\TestCase;
 
@@ -134,6 +134,7 @@ class SearchResultDtoTest extends TestCase
         $this->assertSame(0.75, $array['min_score']);
         $this->assertTrue($array['distinct_documents']);
         $this->assertTrue($array['synthesize_answer']);
+        $this->assertIsArray($array['filters']);
         $this->assertSame(['public'], $array['filters']['permissions']);
         $this->assertSame('article', $array['filters']['bundle']);
 
@@ -332,6 +333,7 @@ class SearchResultDtoTest extends TestCase
 
         $array = $response->toArray();
         $this->assertSame(2, $array['total']);
+        $this->assertIsArray($array['results']);
         $this->assertCount(2, $array['results']);
         $this->assertArrayHasKey('synthesis', $array);
     }

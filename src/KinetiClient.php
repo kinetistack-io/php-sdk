@@ -8,7 +8,6 @@ use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
-use KinetiStack\Sdk\Dto\DocumentResponseDto;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\JobDto;
@@ -18,7 +17,6 @@ use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
-use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
@@ -29,7 +27,7 @@ use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class KinetiClient
+class KinetiClient implements KinetiClientInterface
 {
     public const MAX_BATCH_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB (10485760 bytes)
     public const DEFAULT_POLL_INTERVAL_SECONDS = 2;

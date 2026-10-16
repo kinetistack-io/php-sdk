@@ -27,6 +27,12 @@ use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\TransportInterface;
 
+/**
+ * Base interface defining administrative operations for organization, project, user, and API key management.
+ *
+ * Downstream consumers should typically type-hint against the public facade interface
+ * {@see \KinetiStack\Sdk\AdminClientInterface}.
+ */
 interface AdminClientInterface
 {
     public function withToken(#[\SensitiveParameter] string $jwtToken): static;

@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Dto;
 
 class DocumentResponseDto
 {
+    use ExtractsResponseDataTrait;
     use ExtractsTokenUsageTrait;
 
     public function __construct(
@@ -42,10 +43,10 @@ class DocumentResponseDto
     public static function fromArray(array $data): self
     {
         return new self(
-            (string) ($data['document_id'] ?? $data['documentId'] ?? ''),
-            (string) ($data['external_id'] ?? $data['externalId'] ?? ''),
-            (int) ($data['chunks_generated'] ?? $data['chunksGenerated'] ?? 0),
-            (string) ($data['status'] ?? 'indexed'),
+            self::extractString($data['document_id'] ?? $data['documentId'] ?? ''),
+            self::extractString($data['external_id'] ?? $data['externalId'] ?? ''),
+            self::extractInt($data['chunks_generated'] ?? $data['chunksGenerated'] ?? 0),
+            self::extractString($data['status'] ?? null, 'indexed'),
             self::extractTokensConsumed($data),
         );
     }

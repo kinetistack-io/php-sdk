@@ -11,7 +11,6 @@ use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
-use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\RegisterDto;
@@ -24,7 +23,6 @@ use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\NotFoundException;
-use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\SymfonyTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -834,6 +832,7 @@ class AdminClientTest extends TestCase
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys', $mockCreateResponse->getRequestUrl());
 
         $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
         $this->assertSame(25000, $requestBody['daily_token_quota_override'] ?? null);
 
         // 2. List API keys
@@ -875,6 +874,7 @@ class AdminClientTest extends TestCase
 
         $this->assertSame(15000, $createdKey->dailyTokenQuotaOverride);
         $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
         $this->assertSame(15000, $requestBody['daily_token_quota_override']);
         $this->assertArrayNotHasKey('dailyTokenQuotaOverride', $requestBody);
     }
@@ -899,6 +899,7 @@ class AdminClientTest extends TestCase
 
         $this->assertNull($createdKey->dailyTokenQuotaOverride);
         $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
         $this->assertArrayHasKey('daily_token_quota_override', $requestBody);
         $this->assertNull($requestBody['daily_token_quota_override']);
         $this->assertArrayNotHasKey('dailyTokenQuotaOverride', $requestBody);
@@ -1893,7 +1894,9 @@ class AdminClientTest extends TestCase
         $this->assertSame(5, $jobs[0]->processedImages);
         $this->assertNotNull($jobs[0]->results);
         $this->assertCount(1, $jobs[0]->results);
-        $this->assertSame('Sample alt text', $jobs[0]->results[0]->altText);
+        $itemResults = $jobs[0]->getItemResults();
+        $this->assertNotNull($itemResults);
+        $this->assertSame('Sample alt text', $itemResults[0]->altText);
 
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertSame('https://api.test/api/v1/admin/projects/proj-123/jobs?page=2', $mockResponse->getRequestUrl());
@@ -1963,7 +1966,9 @@ class AdminClientTest extends TestCase
         $this->assertSame(4, $job->processedImages);
         $this->assertNotNull($job->results);
         $this->assertCount(1, $job->results);
-        $this->assertSame('Job alt text', $job->results[0]->altText);
+        $itemResults = $job->getItemResults();
+        $this->assertNotNull($itemResults);
+        $this->assertSame('Job alt text', $itemResults[0]->altText);
 
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertSame('https://api.test/api/v1/admin/jobs/00000000-0000-0000-0000-000000000003', $mockResponse->getRequestUrl());

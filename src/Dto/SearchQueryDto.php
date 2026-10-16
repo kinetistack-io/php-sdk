@@ -41,12 +41,20 @@ class SearchQueryDto
      */
     private function cloneWith(array $overrides): self
     {
-        /** @var array<string, mixed> $vars */
-        $vars = get_object_vars($this);
-        /** @var array<string, mixed> $merged */
-        $merged = array_merge($vars, $overrides);
-
-        return new self(...$merged);
+        return new self(
+            array_key_exists('query', $overrides) ? (is_string($overrides['query']) ? $overrides['query'] : $this->query) : $this->query,
+            array_key_exists('limit', $overrides) ? (is_int($overrides['limit']) ? $overrides['limit'] : null) : $this->limit,
+            array_key_exists('locale', $overrides) ? (is_string($overrides['locale']) ? $overrides['locale'] : null) : $this->locale,
+            array_key_exists('userRoles', $overrides) ? (is_array($overrides['userRoles']) ? array_values(array_filter($overrides['userRoles'], 'is_string')) : null) : $this->userRoles,
+            array_key_exists('minScore', $overrides) ? (is_float($overrides['minScore']) || is_int($overrides['minScore']) ? (float) $overrides['minScore'] : null) : $this->minScore,
+            array_key_exists('distinctDocuments', $overrides) ? (is_bool($overrides['distinctDocuments']) ? $overrides['distinctDocuments'] : null) : $this->distinctDocuments,
+            array_key_exists('synthesizeAnswer', $overrides) ? (is_bool($overrides['synthesizeAnswer']) ? $overrides['synthesizeAnswer'] : null) : $this->synthesizeAnswer,
+            array_key_exists('filters', $overrides) ? ($overrides['filters'] instanceof SearchFilterDto ? $overrides['filters'] : null) : $this->filters,
+            array_key_exists('stream', $overrides) ? (is_bool($overrides['stream']) ? $overrides['stream'] : null) : $this->stream,
+            array_key_exists('page', $overrides) ? (is_int($overrides['page']) ? $overrides['page'] : null) : $this->page,
+            array_key_exists('offset', $overrides) ? (is_int($overrides['offset']) ? $overrides['offset'] : null) : $this->offset,
+            array_key_exists('facets', $overrides) ? ($overrides['facets'] instanceof FacetRequestDto ? $overrides['facets'] : null) : $this->facets,
+        );
     }
 
     public function withLimit(?int $limit): self
@@ -117,7 +125,13 @@ class SearchQueryDto
         if (is_string($userRoles)) {
             $rolesList = [$userRoles];
         } elseif (is_array($userRoles)) {
-            $rolesList = array_values(array_map('strval', $userRoles));
+            $rolesList = [];
+            foreach ($userRoles as $role) {
+                if (!is_string($role) && !is_int($role)) {
+                    throw new \InvalidArgumentException('Each user role must be a string.');
+                }
+                $rolesList[] = (string) $role;
+            }
         }
 
         return $this->cloneWith(['userRoles' => $rolesList]);
@@ -253,33 +267,118 @@ class SearchQueryDto
      */
     public static function fromArray(array $data): self
     {
-        $query = (string) ($data['query'] ?? '');
-        $limit = isset($data['limit']) ? (int) $data['limit'] : null;
-        $page = isset($data['page']) ? (int) $data['page'] : null;
-        $offset = isset($data['offset']) ? (int) $data['offset'] : null;
-        $locale = isset($data['locale']) && is_string($data['locale']) ? $data['locale'] : null;
+        $rawQuery = $data['query'] ?? '';
+        if (!is_scalar($rawQuery) && !$rawQuery instanceof \Stringable) {
+            throw new \InvalidArgumentException('query must be a string.');
+        }
+        $query = (string) $rawQuery;
+
+        $rawLimit = $data['limit'] ?? null;
+        $limit = null;
+        if ($rawLimit !== null) {
+            if (!is_int($rawLimit) && !is_numeric($rawLimit)) {
+                throw new \InvalidArgumentException('limit must be an integer.');
+            }
+            $limit = (int) $rawLimit;
+        }
+
+        $rawPage = $data['page'] ?? null;
+        $page = null;
+        if ($rawPage !== null) {
+            if (!is_int($rawPage) && !is_numeric($rawPage)) {
+                throw new \InvalidArgumentException('page must be an integer.');
+            }
+            $page = (int) $rawPage;
+        }
+
+        $rawOffset = $data['offset'] ?? null;
+        $offset = null;
+        if ($rawOffset !== null) {
+            if (!is_int($rawOffset) && !is_numeric($rawOffset)) {
+                throw new \InvalidArgumentException('offset must be an integer.');
+            }
+            $offset = (int) $rawOffset;
+        }
+
+        $rawLocale = $data['locale'] ?? null;
+        $locale = null;
+        if ($rawLocale !== null) {
+            if (!is_scalar($rawLocale) && !$rawLocale instanceof \Stringable) {
+                throw new \InvalidArgumentException('locale must be a string.');
+            }
+            $locale = (string) $rawLocale;
+        }
 
         /** @var list<string>|null $userRoles */
         $userRoles = null;
-        if (isset($data['user_roles']) && is_array($data['user_roles'])) {
-            $userRoles = array_values(array_map('strval', $data['user_roles']));
-        } elseif (isset($data['userRoles']) && is_array($data['userRoles'])) {
-            $userRoles = array_values(array_map('strval', $data['userRoles']));
+        $rawRoles = $data['user_roles'] ?? $data['userRoles'] ?? null;
+        if ($rawRoles !== null) {
+            if (!is_array($rawRoles)) {
+                throw new \InvalidArgumentException('user_roles must be an array.');
+            }
+            $userRoles = [];
+            foreach ($rawRoles as $role) {
+                if (!is_scalar($role) && !$role instanceof \Stringable) {
+                    throw new \InvalidArgumentException('user_roles items must be strings.');
+                }
+                $userRoles[] = (string) $role;
+            }
         }
 
-        $minScore = ($val = $data['min_score'] ?? $data['minScore'] ?? null) !== null ? (float) $val : null;
-        $distinctDocuments = ($val = $data['distinct_documents'] ?? $data['distinctDocuments'] ?? null) !== null ? (bool) $val : null;
-        $synthesizeAnswer = ($val = $data['synthesize_answer'] ?? $data['synthesizeAnswer'] ?? null) !== null ? (bool) $val : null;
-        $stream = ($val = $data['stream'] ?? null) !== null ? (bool) $val : null;
+        $rawMinScore = $data['min_score'] ?? $data['minScore'] ?? null;
+        $minScore = null;
+        if ($rawMinScore !== null) {
+            if (!is_float($rawMinScore) && !is_numeric($rawMinScore)) {
+                throw new \InvalidArgumentException('min_score must be a float.');
+            }
+            $minScore = (float) $rawMinScore;
+        }
+
+        $rawDistinct = $data['distinct_documents'] ?? $data['distinctDocuments'] ?? null;
+        $distinctDocuments = null;
+        if ($rawDistinct !== null) {
+            if (!is_scalar($rawDistinct)) {
+                throw new \InvalidArgumentException('distinct_documents must be a boolean.');
+            }
+            $distinctDocuments = (bool) $rawDistinct;
+        }
+
+        $rawSynth = $data['synthesize_answer'] ?? $data['synthesizeAnswer'] ?? null;
+        $synthesizeAnswer = null;
+        if ($rawSynth !== null) {
+            if (!is_scalar($rawSynth)) {
+                throw new \InvalidArgumentException('synthesize_answer must be a boolean.');
+            }
+            $synthesizeAnswer = (bool) $rawSynth;
+        }
+
+        $rawStream = $data['stream'] ?? null;
+        $stream = null;
+        if ($rawStream !== null) {
+            if (!is_scalar($rawStream)) {
+                throw new \InvalidArgumentException('stream must be a boolean.');
+            }
+            $stream = (bool) $rawStream;
+        }
 
         $filters = null;
-        if (isset($data['filters']) && is_array($data['filters'])) {
-            $filters = SearchFilterDto::fromArray($data['filters']);
+        if (isset($data['filters'])) {
+            if (!is_array($data['filters'])) {
+                throw new \InvalidArgumentException('filters must be an array.');
+            }
+            /** @var array<string, mixed> $filtersData */
+            $filtersData = $data['filters'];
+            $filters = SearchFilterDto::fromArray($filtersData);
         }
 
         $facets = null;
-        if (isset($data['facets']) && is_array($data['facets'])) {
-            $facets = FacetRequestDto::fromArray($data['facets']);
+        if (isset($data['facets'])) {
+            if (!is_array($data['facets'])) {
+                throw new \InvalidArgumentException('facets must be an array.');
+            }
+            /** @var array<string, mixed> $facetsData */
+            $facetsData = $data['facets'];
+            $facets = FacetRequestDto::fromArray($facetsData);
         }
 
         return new self(

@@ -125,10 +125,11 @@ class SseParser
 
         if (is_array($decoded)) {
             if (isset($decoded['error'])) {
-                $errorMsg = is_string($decoded['error'])
+                $rawMsg = is_string($decoded['error'])
                     ? $decoded['error']
                     : ($decoded['message'] ?? 'Server error during stream');
-                throw new ServerException((string) $errorMsg);
+                $errorMsg = is_scalar($rawMsg) ? (string) $rawMsg : 'Server error during stream';
+                throw new ServerException($errorMsg);
             }
 
             if (isset($decoded['chunk']) && is_string($decoded['chunk'])) {

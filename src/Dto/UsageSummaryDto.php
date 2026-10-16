@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class UsageSummaryDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $projectId,
         public readonly string $projectName,
@@ -34,12 +36,18 @@ class UsageSummaryDto
      */
     public static function fromArray(array $data): self
     {
+        $projectId = self::extractString($data['project_id'] ?? $data['projectId'] ?? null, '');
+        $projectName = self::extractString($data['project_name'] ?? $data['projectName'] ?? null, '');
+        $service = self::extractString($data['service'] ?? null, '');
+        $totalTokens = self::extractInt($data['total_tokens'] ?? $data['totalTokens'] ?? null, 0);
+        $requestCount = self::extractInt($data['request_count'] ?? $data['requestCount'] ?? null, 0);
+
         return new self(
-            (string) ($data['project_id'] ?? $data['projectId'] ?? ''),
-            (string) ($data['project_name'] ?? $data['projectName'] ?? ''),
-            (string) ($data['service'] ?? ''),
-            (int) ($data['total_tokens'] ?? $data['totalTokens'] ?? 0),
-            (int) ($data['request_count'] ?? $data['requestCount'] ?? 0),
+            $projectId,
+            $projectName,
+            $service,
+            $totalTokens,
+            $requestCount,
         );
     }
 }

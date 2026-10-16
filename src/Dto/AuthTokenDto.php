@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class AuthTokenDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         #[\SensitiveParameter]
         public readonly string $token,
@@ -38,10 +40,8 @@ class AuthTokenDto
      */
     public static function fromArray(array $data): self
     {
-        $token = (string) ($data['token'] ?? '');
-        $refreshToken = isset($data['refresh_token']) && is_string($data['refresh_token'])
-            ? $data['refresh_token']
-            : (isset($data['refreshToken']) && is_string($data['refreshToken']) ? $data['refreshToken'] : null);
+        $token = self::extractString($data['token'] ?? null, '');
+        $refreshToken = self::extractNullableString($data['refresh_token'] ?? $data['refreshToken'] ?? null);
 
         return new self($token, $refreshToken);
     }

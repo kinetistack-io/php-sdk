@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Dto;
 
 class RagStreamChunkDto implements \Stringable
 {
+    use ExtractsResponseDataTrait;
     use ExtractsTokenUsageTrait;
 
     public readonly string $chunk;
@@ -75,18 +76,11 @@ class RagStreamChunkDto implements \Stringable
      */
     public static function fromArray(array $data): self
     {
-        $text = (string) ($data['chunk'] ?? $data['text'] ?? '');
-        $isDone = (bool) ($data['is_done'] ?? $data['done'] ?? false);
-
-        /** @var list<string> $citations */
-        $citations = isset($data['citations']) && is_array($data['citations'])
-            ? array_values(array_map('strval', $data['citations']))
-            : [];
-
+        $text = self::extractString($data['chunk'] ?? $data['text'] ?? '');
+        $isDone = self::extractBool($data['is_done'] ?? $data['done'] ?? false);
+        $citations = self::extractStringList($data['citations'] ?? []);
         /** @var array<string, mixed> $metadata */
-        $metadata = isset($data['metadata']) && is_array($data['metadata'])
-            ? $data['metadata']
-            : [];
+        $metadata = self::extractArray($data['metadata'] ?? []);
 
         $tokensConsumed = self::extractTokensConsumed($data);
         if ($tokensConsumed === null && !empty($metadata)) {
@@ -98,7 +92,7 @@ class RagStreamChunkDto implements \Stringable
             isDone: $isDone,
             citations: $citations,
             metadata: $metadata,
-            chunk: isset($data['chunk']) && is_string($data['chunk']) ? $data['chunk'] : null,
+            chunk: self::extractNullableString($data['chunk'] ?? null),
             tokensConsumed: $tokensConsumed,
         );
     }

@@ -481,7 +481,8 @@ class AdminClient implements AdminClientInterface
     ): ApiKeyCreatedDto {
         $projectId = '';
         if (is_array($projectOrData)) {
-            $projectId = (string) ($projectOrData['project_id'] ?? $projectOrData['projectId'] ?? '');
+            $rawProj = $projectOrData['project_id'] ?? $projectOrData['projectId'] ?? '';
+            $projectId = is_scalar($rawProj) ? (string) $rawProj : '';
             $payload = $projectOrData;
             unset($payload['project_id'], $payload['projectId']);
         } elseif (is_array($nameOrData)) {

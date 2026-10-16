@@ -80,7 +80,7 @@ class RateLimitInfoDto
         foreach ($headers as $name => $values) {
             $nameLower = strtolower(trim((string) $name));
             $first = is_array($values) ? reset($values) : $values;
-            if ($first === false || $first === null) {
+            if (!is_scalar($first)) {
                 continue;
             }
             $raw = trim((string) $first);

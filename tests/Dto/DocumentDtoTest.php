@@ -267,6 +267,7 @@ class DocumentDtoTest extends TestCase
 
         $array = $collection->toArray();
         $this->assertSame(2, $array['total']);
+        $this->assertIsArray($array['items']);
         $this->assertCount(2, $array['items']);
     }
 }

@@ -31,7 +31,13 @@ class SearchFilterDto
         if (is_string($permissions)) {
             $permissionsList = [$permissions];
         } elseif (is_array($permissions)) {
-            $permissionsList = array_values(array_map('strval', $permissions));
+            $permissionsList = [];
+            foreach ($permissions as $p) {
+                if (!is_scalar($p) && !$p instanceof \Stringable) {
+                    throw new \InvalidArgumentException('Permission items must be scalar values.');
+                }
+                $permissionsList[] = (string) $p;
+            }
         }
 
         return new self($this->locale, $permissionsList, $this->custom);
@@ -91,12 +97,29 @@ class SearchFilterDto
      */
     public static function fromArray(array $data): self
     {
-        $locale = isset($data['locale']) && is_string($data['locale']) ? $data['locale'] : null;
+        $rawLocale = $data['locale'] ?? null;
+        $locale = null;
+        if ($rawLocale !== null) {
+            if (!is_scalar($rawLocale) && !$rawLocale instanceof \Stringable) {
+                throw new \InvalidArgumentException('locale must be a string.');
+            }
+            $locale = (string) $rawLocale;
+        }
 
         /** @var list<string>|null $permissions */
-        $permissions = isset($data['permissions']) && is_array($data['permissions'])
-            ? array_values(array_map('strval', $data['permissions']))
-            : null;
+        $permissions = null;
+        if (isset($data['permissions'])) {
+            if (!is_array($data['permissions'])) {
+                throw new \InvalidArgumentException('permissions must be an array.');
+            }
+            $permissions = [];
+            foreach ($data['permissions'] as $p) {
+                if (!is_scalar($p) && !$p instanceof \Stringable) {
+                    throw new \InvalidArgumentException('permissions items must be strings.');
+                }
+                $permissions[] = (string) $p;
+            }
+        }
 
         $custom = [];
         foreach ($data as $key => $value) {

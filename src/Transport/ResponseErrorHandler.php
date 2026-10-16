@@ -12,7 +12,6 @@ use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
-use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
@@ -57,9 +56,11 @@ final class ResponseErrorHandler
         $violations = [];
         foreach ($rawViolations as $violation) {
             if (is_array($violation)) {
+                $prop = $violation['propertyPath'] ?? '';
+                $msg = $violation['message'] ?? '';
                 $violations[] = [
-                    'propertyPath' => (string) ($violation['propertyPath'] ?? ''),
-                    'message' => (string) ($violation['message'] ?? ''),
+                    'propertyPath' => is_scalar($prop) ? (string) $prop : '',
+                    'message' => is_scalar($msg) ? (string) $msg : '',
                 ];
             }
         }

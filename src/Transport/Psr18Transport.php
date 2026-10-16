@@ -77,10 +77,14 @@ class Psr18Transport implements TransportInterface
             $url .= (str_contains($url, '?') ? '&' : '?') . $qs;
         }
 
+        /** @var array<string, mixed> $defaultHeaders */
+        $defaultHeaders = is_array($this->defaultOptions['headers'] ?? null) ? $this->defaultOptions['headers'] : [];
+        /** @var array<string, mixed> $optionHeaders */
+        $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
         $headers = array_merge(
             ['Accept' => 'application/json'],
-            $this->defaultOptions['headers'] ?? [],
-            $options['headers'] ?? []
+            $defaultHeaders,
+            $optionHeaders
         );
 
         $hasAuth = false;
@@ -179,7 +183,12 @@ class Psr18Transport implements TransportInterface
             }
 
             foreach ($headers as $name => $value) {
-                $request = $request->withHeader((string) $name, $value);
+                if (is_string($value) || (is_array($value) && array_is_list($value))) {
+                    /** @var string|list<string> $value */
+                    $request = $request->withHeader((string) $name, $value);
+                } elseif (is_scalar($value)) {
+                    $request = $request->withHeader((string) $name, (string) $value);
+                }
             }
 
             try {
@@ -230,9 +239,11 @@ class Psr18Transport implements TransportInterface
 
     public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
     {
+        /** @var array<string, mixed> $optionHeaders */
+        $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
         $options['headers'] = array_merge(
             ['Accept' => 'text/event-stream'],
-            $options['headers'] ?? []
+            $optionHeaders
         );
 
         return $this->request($method, $path, $options);

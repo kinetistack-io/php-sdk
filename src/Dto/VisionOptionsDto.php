@@ -87,13 +87,32 @@ class VisionOptionsDto
      */
     public static function fromArray(array $data): self
     {
-        $language = isset($data['language']) && is_string($data['language']) ? $data['language'] : 'en';
-        $includeTags = isset($data['include_tags'])
-            ? (bool) $data['include_tags']
-            : (isset($data['includeTags']) ? (bool) $data['includeTags'] : true);
-        $maxLength = isset($data['max_length'])
-            ? (int) $data['max_length']
-            : (isset($data['maxLength']) ? (int) $data['maxLength'] : 150);
+        $rawLanguage = $data['language'] ?? null;
+        $language = 'en';
+        if ($rawLanguage !== null) {
+            if (!is_scalar($rawLanguage) && !$rawLanguage instanceof \Stringable) {
+                throw new \InvalidArgumentException('language must be a string.');
+            }
+            $language = (string) $rawLanguage;
+        }
+
+        $rawIncludeTags = $data['include_tags'] ?? $data['includeTags'] ?? null;
+        $includeTags = true;
+        if ($rawIncludeTags !== null) {
+            if (!is_scalar($rawIncludeTags)) {
+                throw new \InvalidArgumentException('include_tags must be a boolean.');
+            }
+            $includeTags = (bool) $rawIncludeTags;
+        }
+
+        $rawMaxLength = $data['max_length'] ?? $data['maxLength'] ?? null;
+        $maxLength = 150;
+        if ($rawMaxLength !== null) {
+            if (!is_int($rawMaxLength) && !is_numeric($rawMaxLength)) {
+                throw new \InvalidArgumentException('max_length must be an integer.');
+            }
+            $maxLength = (int) $rawMaxLength;
+        }
 
         $custom = [];
         foreach ($data as $key => $value) {

@@ -123,9 +123,12 @@ class KinetiClientTest extends TestCase
         $this->assertSame('/api/v1/jobs/00000000-0000-0000-0000-000000000001', $result->pollUrl);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
         $this->assertSame('http://example.com/img.jpg', $requestBody['image_url']);
+        $this->assertIsArray($requestBody['context_hints']);
         $this->assertSame('Test', $requestBody['context_hints']['page_title']);
         $this->assertSame(['Sample'], $requestBody['context_hints']['taxonomy']);
+        $this->assertIsArray($requestBody['options']);
         $this->assertSame('nl', $requestBody['options']['language']);
         $this->assertSame(120, $requestBody['options']['max_length']);
     }
@@ -154,7 +157,10 @@ class KinetiClientTest extends TestCase
         $this->assertStringEndsWith('/api/v1/jobs/batch-images', $mockResponse->getRequestUrl());
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
+        $this->assertIsArray($requestBody['images']);
         $this->assertCount(1, $requestBody['images']);
+        $this->assertIsArray($requestBody['images'][0]);
         $this->assertSame('media:1', $requestBody['images'][0]['external_id']);
         $this->assertSame('http://example.com/1.jpg', $requestBody['images'][0]['image_url']);
         $this->assertArrayNotHasKey('image_base64', $requestBody['images'][0]);
@@ -183,11 +189,15 @@ class KinetiClientTest extends TestCase
         $this->assertSame(JobStatus::Pending, $result->status);
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
+        $this->assertIsArray($requestBody['images']);
         $this->assertCount(1, $requestBody['images']);
+        $this->assertIsArray($requestBody['images'][0]);
         $this->assertSame('media:2', $requestBody['images'][0]['external_id']);
         $this->assertSame($base64Data, $requestBody['images'][0]['image_base64']);
         $this->assertArrayNotHasKey('image_url', $requestBody['images'][0]);
         $this->assertSame(['tag' => 'v1'], $requestBody['images'][0]['context_hints']);
+        $this->assertIsArray($requestBody['options']);
         $this->assertSame('https://example.com/webhook', $requestBody['options']['webhook_url']);
     }
 
@@ -264,7 +274,7 @@ class KinetiClientTest extends TestCase
         $this->assertSame(JobStatus::Pending, $result->status);
         $this->assertSame('/api/v1/jobs/content-job-123', $result->pollUrl);
 
-        $headersStr = is_array($capturedHeaders) ? implode("\n", $capturedHeaders) : '';
+        $headersStr = is_array($capturedHeaders) ? implode("\n", array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', $capturedHeaders)) : '';
         $this->assertStringContainsString('multipart/form-data', $headersStr);
         $this->assertStringContainsString('filename="test.png"', $capturedBody);
         $this->assertStringContainsString('binary-data', $capturedBody);
@@ -387,7 +397,7 @@ class KinetiClientTest extends TestCase
         $this->assertSame(JobStatus::Pending, $result->status);
         $this->assertSame('/api/v1/jobs/stream-job-123', $result->pollUrl);
 
-        $headersStr = is_array($capturedHeaders) ? implode("\n", $capturedHeaders) : '';
+        $headersStr = is_array($capturedHeaders) ? implode("\n", array_map(static fn (mixed $v): string => is_scalar($v) ? (string) $v : '', $capturedHeaders)) : '';
         $this->assertStringContainsString('multipart/form-data', $headersStr);
 
         $this->assertStringContainsString('filename="stream.png"', $capturedBody);

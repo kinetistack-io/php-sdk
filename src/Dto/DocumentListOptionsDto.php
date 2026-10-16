@@ -243,24 +243,98 @@ class DocumentListOptionsDto
      */
     public static function fromArray(array $data): self
     {
-        $page = isset($data['page']) ? (int) $data['page'] : null;
-        $itemsPerPage = isset($data['itemsPerPage'])
-            ? (int) $data['itemsPerPage']
-            : (isset($data['items_per_page'])
-                ? (int) $data['items_per_page']
-                : (isset($data['limit']) ? (int) $data['limit'] : null));
+        $rawPage = $data['page'] ?? null;
+        $page = null;
+        if ($rawPage !== null) {
+            if (!is_int($rawPage) && !is_numeric($rawPage)) {
+                throw new \InvalidArgumentException('page must be an integer.');
+            }
+            $page = (int) $rawPage;
+        }
 
-        $locale = isset($data['locale']) && is_string($data['locale']) ? $data['locale'] : null;
-        $externalId = isset($data['external_id']) && is_string($data['external_id'])
-            ? $data['external_id']
-            : (isset($data['externalId']) && is_string($data['externalId']) ? $data['externalId'] : null);
+        $rawLimit = $data['itemsPerPage'] ?? $data['items_per_page'] ?? $data['limit'] ?? null;
+        $itemsPerPage = null;
+        if ($rawLimit !== null) {
+            if (!is_int($rawLimit) && !is_numeric($rawLimit)) {
+                throw new \InvalidArgumentException('itemsPerPage must be an integer.');
+            }
+            $itemsPerPage = (int) $rawLimit;
+        }
 
+        $rawLocale = $data['locale'] ?? null;
+        $locale = null;
+        if ($rawLocale !== null) {
+            if (!is_scalar($rawLocale) && !$rawLocale instanceof \Stringable) {
+                throw new \InvalidArgumentException('locale must be a string.');
+            }
+            $locale = (string) $rawLocale;
+        }
+
+        $rawExternalId = $data['external_id'] ?? $data['externalId'] ?? null;
+        $externalId = null;
+        if ($rawExternalId !== null) {
+            if (!is_scalar($rawExternalId) && !$rawExternalId instanceof \Stringable) {
+                throw new \InvalidArgumentException('external_id must be a string.');
+            }
+            $externalId = (string) $rawExternalId;
+        }
+
+        $rawCreatedAt = $data['created_at'] ?? $data['createdAt'] ?? null;
         /** @var string|array<string, string>|null $createdAt */
-        $createdAt = $data['created_at'] ?? $data['createdAt'] ?? null;
+        $createdAt = null;
+        if ($rawCreatedAt !== null) {
+            if (is_scalar($rawCreatedAt) || $rawCreatedAt instanceof \Stringable) {
+                $createdAt = (string) $rawCreatedAt;
+            } elseif (is_array($rawCreatedAt)) {
+                $createdAt = [];
+                foreach ($rawCreatedAt as $k => $v) {
+                    if (!is_scalar($v) && !$v instanceof \Stringable) {
+                        throw new \InvalidArgumentException('created_at filter values must be scalar strings.');
+                    }
+                    $createdAt[(string) $k] = (string) $v;
+                }
+            } else {
+                throw new \InvalidArgumentException('created_at must be a string or array.');
+            }
+        }
+
+        $rawUpdatedAt = $data['updated_at'] ?? $data['updatedAt'] ?? null;
         /** @var string|array<string, string>|null $updatedAt */
-        $updatedAt = $data['updated_at'] ?? $data['updatedAt'] ?? null;
+        $updatedAt = null;
+        if ($rawUpdatedAt !== null) {
+            if (is_scalar($rawUpdatedAt) || $rawUpdatedAt instanceof \Stringable) {
+                $updatedAt = (string) $rawUpdatedAt;
+            } elseif (is_array($rawUpdatedAt)) {
+                $updatedAt = [];
+                foreach ($rawUpdatedAt as $k => $v) {
+                    if (!is_scalar($v) && !$v instanceof \Stringable) {
+                        throw new \InvalidArgumentException('updated_at filter values must be scalar strings.');
+                    }
+                    $updatedAt[(string) $k] = (string) $v;
+                }
+            } else {
+                throw new \InvalidArgumentException('updated_at must be a string or array.');
+            }
+        }
+
+        $rawOrder = $data['order'] ?? null;
         /** @var string|array<string, string>|null $order */
-        $order = $data['order'] ?? null;
+        $order = null;
+        if ($rawOrder !== null) {
+            if (is_scalar($rawOrder) || $rawOrder instanceof \Stringable) {
+                $order = (string) $rawOrder;
+            } elseif (is_array($rawOrder)) {
+                $order = [];
+                foreach ($rawOrder as $k => $v) {
+                    if (!is_scalar($v) && !$v instanceof \Stringable) {
+                        throw new \InvalidArgumentException('order values must be scalar strings.');
+                    }
+                    $order[(string) $k] = (string) $v;
+                }
+            } else {
+                throw new \InvalidArgumentException('order must be a string or array.');
+            }
+        }
 
         $custom = [];
         $knownKeys = [

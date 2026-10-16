@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class OrganizationDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $id,
         public readonly string $name,
@@ -56,19 +58,12 @@ class OrganizationDto
      */
     public static function fromArray(array $data): self
     {
-        $id = (string) ($data['id'] ?? '');
-        $name = (string) ($data['name'] ?? '');
-        $billingTier = (string) ($data['billing_tier'] ?? $data['billingTier'] ?? 'free');
-        $createdAt = isset($data['created_at']) && is_string($data['created_at'])
-            ? $data['created_at']
-            : (isset($data['createdAt']) && is_string($data['createdAt']) ? $data['createdAt'] : null);
-        $monthlyQuotaCap = null;
-        if (isset($data['monthly_quota_cap']) && is_numeric($data['monthly_quota_cap'])) {
-            $monthlyQuotaCap = (int) $data['monthly_quota_cap'];
-        } elseif (isset($data['monthlyQuotaCap']) && is_numeric($data['monthlyQuotaCap'])) {
-            $monthlyQuotaCap = (int) $data['monthlyQuotaCap'];
-        }
-
-        return new self($id, $name, $billingTier, $createdAt, $monthlyQuotaCap);
+        return new self(
+            self::extractString($data['id'] ?? ''),
+            self::extractString($data['name'] ?? ''),
+            self::extractString($data['billing_tier'] ?? $data['billingTier'] ?? null, 'free'),
+            self::extractNullableString($data['created_at'] ?? $data['createdAt'] ?? null),
+            self::extractNullableInt($data['monthly_quota_cap'] ?? $data['monthlyQuotaCap'] ?? null)
+        );
     }
 }

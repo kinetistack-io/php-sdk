@@ -122,10 +122,14 @@ class SymfonyTransport implements TransportInterface
 
         unset($mergedOptions['pause_handler'], $mergedOptions['retry_strategy'], $mergedOptions['max_retries']);
 
+        /** @var array<string, mixed> $defaultHeaders */
+        $defaultHeaders = is_array($this->defaultOptions['headers'] ?? null) ? $this->defaultOptions['headers'] : [];
+        /** @var array<string, mixed> $optionHeaders */
+        $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
         $headers = array_merge(
             ['Accept' => 'application/json'],
-            $this->defaultOptions['headers'] ?? [],
-            $options['headers'] ?? []
+            $defaultHeaders,
+            $optionHeaders
         );
 
         $hasAuth = false;
@@ -166,9 +170,11 @@ class SymfonyTransport implements TransportInterface
     public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
     {
         $options['buffer'] = false;
+        /** @var array<string, mixed> $streamHeaders */
+        $streamHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
         $options['headers'] = array_merge(
             ['Accept' => 'text/event-stream'],
-            $options['headers'] ?? []
+            $streamHeaders
         );
 
         return $this->request($method, $path, $options);

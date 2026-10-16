@@ -39,8 +39,17 @@ class RegisterDto
      */
     public static function fromArray(array $data): self
     {
-        $orgName = (string) ($data['org_name'] ?? $data['orgName'] ?? $data['name'] ?? '');
-        $email = (string) ($data['email'] ?? '');
+        $rawOrgName = $data['org_name'] ?? $data['orgName'] ?? $data['name'] ?? null;
+        if ($rawOrgName !== null && !is_scalar($rawOrgName) && !$rawOrgName instanceof \Stringable) {
+            throw new \InvalidArgumentException('org_name must be a string.');
+        }
+        $orgName = (string) ($rawOrgName ?? '');
+
+        $rawEmail = $data['email'] ?? null;
+        if ($rawEmail !== null && !is_scalar($rawEmail) && !$rawEmail instanceof \Stringable) {
+            throw new \InvalidArgumentException('email must be a string.');
+        }
+        $email = (string) ($rawEmail ?? '');
 
         return new self($orgName, $email);
     }

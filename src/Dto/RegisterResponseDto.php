@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class RegisterResponseDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $message,
         public readonly string $email,
@@ -38,8 +40,8 @@ class RegisterResponseDto
      */
     public static function fromArray(array $data): self
     {
-        $message = (string) ($data['message'] ?? '');
-        $email = (string) ($data['email'] ?? '');
+        $message = self::extractString($data['message'] ?? null, '');
+        $email = self::extractString($data['email'] ?? null, '');
 
         return new self($message, $email);
     }

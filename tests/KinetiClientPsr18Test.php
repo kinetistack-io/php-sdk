@@ -12,8 +12,6 @@ use KinetiStack\Sdk\Dto\DocumentDto;
 use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\JobDto;
-use KinetiStack\Sdk\Dto\SearchQueryDto;
-use KinetiStack\Sdk\Dto\VisionOptionsDto;
 use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\HttpTransport;

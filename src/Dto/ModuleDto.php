@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class ModuleDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $identifier,
         public readonly string $label,
@@ -66,10 +68,10 @@ class ModuleDto
     public static function fromArray(array $data): self
     {
         return new self(
-            (string) ($data['identifier'] ?? ''),
-            (string) ($data['label'] ?? ''),
-            (string) ($data['status'] ?? ''),
-            (bool) ($data['accessible'] ?? false),
+            self::extractString($data['identifier'] ?? null, ''),
+            self::extractString($data['label'] ?? null, ''),
+            self::extractString($data['status'] ?? null, ''),
+            self::extractBool($data['accessible'] ?? null, false),
         );
     }
 }

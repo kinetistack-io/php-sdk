@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests\Transport;
 
 use GuzzleHttp\Client;
-use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
@@ -19,12 +18,10 @@ use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\Psr18Transport;
-use KinetiStack\Sdk\Transport\ResponseErrorHandler;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
-use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\StreamInterface;
 
 class Psr18TransportTest extends TestCase

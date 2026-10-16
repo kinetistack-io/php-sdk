@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class ApiKeyDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $id,
         public readonly string $name,
@@ -89,37 +91,21 @@ class ApiKeyDto
      */
     public static function fromArray(array $data): self
     {
-        $id = (string) ($data['id'] ?? '');
-        $name = (string) ($data['name'] ?? '');
+        $id = self::extractString($data['id'] ?? '');
+        $name = self::extractString($data['name'] ?? '');
         if (trim($name) === '') {
             $name = 'API Key';
         }
-        $tokenSuffix = (string) ($data['token_suffix'] ?? $data['tokenSuffix'] ?? '');
-        $scope = (string) ($data['scope'] ?? 'all');
-        $rateLimitPerMinute = isset($data['rate_limit_per_minute'])
-            ? (int) $data['rate_limit_per_minute']
-            : (isset($data['rateLimitPerMinute']) ? (int) $data['rateLimitPerMinute'] : null);
-        $expiresAt = isset($data['expires_at']) && is_string($data['expires_at'])
-            ? $data['expires_at']
-            : (isset($data['expiresAt']) && is_string($data['expiresAt']) ? $data['expiresAt'] : null);
-        $createdAt = isset($data['created_at']) && is_string($data['created_at'])
-            ? $data['created_at']
-            : (isset($data['createdAt']) && is_string($data['createdAt']) ? $data['createdAt'] : null);
-        $revokedAt = isset($data['revoked_at']) && is_string($data['revoked_at'])
-            ? $data['revoked_at']
-            : (isset($data['revokedAt']) && is_string($data['revokedAt']) ? $data['revokedAt'] : null);
-        $gracePeriodUntil = isset($data['grace_period_until']) && is_string($data['grace_period_until'])
-            ? $data['grace_period_until']
-            : (isset($data['gracePeriodUntil']) && is_string($data['gracePeriodUntil']) ? $data['gracePeriodUntil'] : null);
-        $dailyTokenQuotaOverride = isset($data['daily_token_quota_override'])
-            ? (int) $data['daily_token_quota_override']
-            : (isset($data['dailyTokenQuotaOverride']) ? (int) $data['dailyTokenQuotaOverride'] : null);
-        $tokensConsumedToday = isset($data['tokens_consumed_today'])
-            ? (int) $data['tokens_consumed_today']
-            : (isset($data['tokensConsumedToday']) ? (int) $data['tokensConsumedToday'] : null);
-        $requestsToday = isset($data['requests_today'])
-            ? (int) $data['requests_today']
-            : (isset($data['requestsToday']) ? (int) $data['requestsToday'] : null);
+        $tokenSuffix = self::extractString($data['token_suffix'] ?? $data['tokenSuffix'] ?? '');
+        $scope = self::extractString($data['scope'] ?? null, 'all');
+        $rateLimitPerMinute = self::extractNullableInt($data['rate_limit_per_minute'] ?? $data['rateLimitPerMinute'] ?? null);
+        $expiresAt = self::extractNullableString($data['expires_at'] ?? $data['expiresAt'] ?? null);
+        $createdAt = self::extractNullableString($data['created_at'] ?? $data['createdAt'] ?? null);
+        $revokedAt = self::extractNullableString($data['revoked_at'] ?? $data['revokedAt'] ?? null);
+        $gracePeriodUntil = self::extractNullableString($data['grace_period_until'] ?? $data['gracePeriodUntil'] ?? null);
+        $dailyTokenQuotaOverride = self::extractNullableInt($data['daily_token_quota_override'] ?? $data['dailyTokenQuotaOverride'] ?? null);
+        $tokensConsumedToday = self::extractNullableInt($data['tokens_consumed_today'] ?? $data['tokensConsumedToday'] ?? null);
+        $requestsToday = self::extractNullableInt($data['requests_today'] ?? $data['requestsToday'] ?? null);
 
         return new self(
             $id,

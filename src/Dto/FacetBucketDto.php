@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 final class FacetBucketDto
 {
+    use ExtractsResponseDataTrait;
+
     public function __construct(
         public readonly string $value = '',
         public readonly int $count = 0,
@@ -28,8 +30,8 @@ final class FacetBucketDto
      */
     public static function fromArray(array $data): self
     {
-        $value = (string) ($data['value'] ?? '');
-        $count = (int) ($data['count'] ?? 0);
+        $value = self::extractString($data['value'] ?? null, '');
+        $count = self::extractInt($data['count'] ?? null, 0);
 
         return new self($value, $count);
     }

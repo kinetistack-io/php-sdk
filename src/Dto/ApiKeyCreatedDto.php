@@ -64,7 +64,7 @@ class ApiKeyCreatedDto extends ApiKeyDto
             $base->id,
             $base->name,
             $base->tokenSuffix,
-            (string) ($data['token'] ?? ''),
+            self::extractString($data['token'] ?? null, ''),
             $base->scope,
             $base->rateLimitPerMinute,
             $base->expiresAt,

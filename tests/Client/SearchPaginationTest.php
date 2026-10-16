@@ -15,6 +15,7 @@ class SearchPaginationTest extends TestCase
 {
     public function testSearchAllAutoPaginatesAcrossThreePages(): void
     {
+        /** @var list<array{method: string, url: string, body: array<string, mixed>}> $requests */
         $requests = [];
         $responses = [
             // Page 1: 2 items (full page), offset 0
@@ -52,10 +53,11 @@ class SearchPaginationTest extends TestCase
         ];
 
         $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $body = json_decode((string) ($options['body'] ?? '{}'), true);
             $requests[] = [
                 'method' => $method,
                 'url' => $url,
-                'body' => json_decode((string) ($options['body'] ?? '{}'), true),
+                'body' => is_array($body) ? $body : [],
             ];
             $response = array_shift($responses);
             $this->assertNotNull($response, 'Unexpected extra network call made.');
@@ -102,6 +104,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllScenario2MultiPageOffsetIteration(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $responses = [
             // Page 1: 10 items, has_more: true, next_offset: 10, total: 10
@@ -133,7 +136,11 @@ class SearchPaginationTest extends TestCase
         ];
 
         $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             $response = array_shift($responses);
             $this->assertNotNull($response, 'Unexpected extra network call made.');
 
@@ -162,6 +169,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllScenario3RespectsMaxOffsetBoundary1000(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [
@@ -173,7 +181,11 @@ class SearchPaginationTest extends TestCase
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             return $mockResponse;
         };
 
@@ -199,6 +211,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllInfiniteLoopPreventionWhenOffsetDoesNotAdvance(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [
@@ -211,7 +224,11 @@ class SearchPaginationTest extends TestCase
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             return $mockResponse;
         };
 
@@ -227,6 +244,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllFallbackGracefullyForLegacyPayloadWithoutTopKMetadata(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $responses = [
             // Page 1: 2 items, limit 2, total 3 (omits has_more and next_offset)
@@ -249,7 +267,11 @@ class SearchPaginationTest extends TestCase
         ];
 
         $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             $response = array_shift($responses);
             $this->assertNotNull($response, 'Unexpected extra network call made.');
 
@@ -271,14 +293,21 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllScenario1Yields1000Items(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $limit = 100;
         $totalPages = 10; // 10 pages of 100 items = 1000 items
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $limit, $totalPages): MockResponse {
             $body = json_decode((string) ($options['body'] ?? '{}'), true);
-            $requests[] = $body;
-            $currentOffset = (int) ($body['offset'] ?? 0);
+            if (is_array($body)) {
+                /** @var array<string, mixed> $body */
+                $requests[] = $body;
+            } else {
+                $body = [];
+            }
+            $rawOffset = $body['offset'] ?? 0;
+            $currentOffset = is_numeric($rawOffset) ? (int) $rawOffset : 0;
             $pageIndex = (int) ($currentOffset / $limit) + 1;
 
             $results = [];
@@ -329,6 +358,7 @@ class SearchPaginationTest extends TestCase
 
     public function testScenario2SettingExplicitLimitsAndPageInSearch(): void
     {
+        /** @var array{method: string, url: string, body: array<string, mixed>}|null $capturedRequest */
         $capturedRequest = null;
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [
@@ -340,10 +370,11 @@ class SearchPaginationTest extends TestCase
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$capturedRequest, $mockResponse): MockResponse {
+            $body = json_decode((string) ($options['body'] ?? '{}'), true);
             $capturedRequest = [
                 'method' => $method,
                 'url' => $url,
-                'body' => json_decode((string) ($options['body'] ?? '{}'), true),
+                'body' => is_array($body) ? $body : [],
             ];
             return $mockResponse;
         };
@@ -371,6 +402,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllSinglePageWhenResultsFewerThanLimit(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [
@@ -384,7 +416,11 @@ class SearchPaginationTest extends TestCase
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             return $mockResponse;
         };
 
@@ -402,6 +438,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllEmptyResults(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [],
@@ -412,7 +449,11 @@ class SearchPaginationTest extends TestCase
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             return $mockResponse;
         };
 
@@ -428,6 +469,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllAcceptsStringQuery(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $mockResponse = new MockResponse((string) json_encode([
             'results' => [
@@ -439,7 +481,11 @@ class SearchPaginationTest extends TestCase
         ], JSON_THROW_ON_ERROR), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
 
         $callback = function (string $method, string $url, array $options) use (&$requests, $mockResponse): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             return $mockResponse;
         };
 
@@ -458,6 +504,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllCustomStartingOffsetAndLimit(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $responses = [
             // Starting at offset 20, returns 2 items
@@ -484,7 +531,11 @@ class SearchPaginationTest extends TestCase
         ];
 
         $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             $response = array_shift($responses);
             $this->assertNotNull($response, 'Unexpected extra network call made.');
 
@@ -514,6 +565,7 @@ class SearchPaginationTest extends TestCase
 
     public function testSearchAllStartingPageFallbackComputesOffset(): void
     {
+        /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $responses = [
             // Fallback: page 3 with limit 2 starts at offset (3-1)*2 = 4
@@ -529,7 +581,11 @@ class SearchPaginationTest extends TestCase
         ];
 
         $callback = function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
-            $requests[] = json_decode((string) ($options['body'] ?? '{}'), true);
+            $decoded = json_decode((string) ($options['body'] ?? '{}'), true);
+            if (is_array($decoded)) {
+                /** @var array<string, mixed> $decoded */
+                $requests[] = $decoded;
+            }
             $response = array_shift($responses);
             $this->assertNotNull($response, 'Unexpected extra network call made.');
 
