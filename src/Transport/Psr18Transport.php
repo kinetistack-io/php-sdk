@@ -116,6 +116,12 @@ class Psr18Transport implements TransportInterface
             }
         } elseif (isset($mergedOptions['body'])) {
             $body = $mergedOptions['body'];
+            $isCallable = is_callable($body) && !is_string($body);
+            $bodyFactory = $isCallable ? $body : null;
+            if ($isCallable) {
+                $body = $body();
+            }
+
             if (is_string($body)) {
                 $stream = $this->streamFactory->createStream($body);
             } elseif (is_resource($body)) {
@@ -135,7 +141,9 @@ class Psr18Transport implements TransportInterface
             }
         }
 
-        $maxRetries = (int) ($mergedOptions['max_retries'] ?? 0);
+        $maxRetries = isset($mergedOptions['max_retries']) && is_numeric($mergedOptions['max_retries'])
+            ? (int) $mergedOptions['max_retries']
+            : 0;
         $attempts = 0;
 
         while (true) {
@@ -145,6 +153,25 @@ class Psr18Transport implements TransportInterface
             if ($stream !== null) {
                 if ($stream->isSeekable()) {
                     $stream->rewind();
+                } elseif (isset($bodyFactory)) {
+                    $recreated = $bodyFactory();
+                    if ($recreated instanceof \Traversable) {
+                        $temp = fopen('php://temp', 'w+b');
+                        if ($temp === false) {
+                            throw new TransportException('Failed to open temporary stream for request body.');
+                        }
+                        foreach ($recreated as $chunk) {
+                            fwrite($temp, (string) $chunk);
+                        }
+                        rewind($temp);
+                        $stream = $this->streamFactory->createStreamFromResource($temp);
+                    } elseif (is_resource($recreated)) {
+                        $stream = $this->streamFactory->createStreamFromResource($recreated);
+                    } elseif (is_string($recreated)) {
+                        $stream = $this->streamFactory->createStream($recreated);
+                    } elseif ($recreated instanceof StreamInterface) {
+                        $stream = $recreated;
+                    }
                 } elseif ($attempts > 1) {
                     throw new TransportException('Cannot retry request with non-seekable body stream.');
                 }

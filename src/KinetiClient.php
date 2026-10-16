@@ -22,6 +22,7 @@ use KinetiStack\Sdk\Dto\VisionResponseDto;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
+use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\SseParser;
 use KinetiStack\Sdk\Transport\TransportInterface;
@@ -499,13 +500,26 @@ class KinetiClient
     /**
      * @param resource $stream
      * @param array<string, string> $fields
-     * @return array{0: string, 1: \Generator<int, string>}
+     * @return array{0: string, 1: \Closure(): \Generator<int, string>}
      */
     private function createMultipartStreamPayload($stream, string $filename, array $fields): array
     {
         $boundary = bin2hex(random_bytes(16));
+        $invocations = 0;
 
-        $generator = function () use ($stream, $filename, $fields, $boundary) {
+        $generator = function () use ($stream, $filename, $fields, $boundary, &$invocations) {
+            $invocations++;
+            $meta = is_resource($stream) ? stream_get_meta_data($stream) : [];
+            $isSeekable = !empty($meta['seekable']);
+
+            if ($invocations > 1 && !$isSeekable) {
+                throw new TransportException('Cannot retry request with non-seekable body stream.');
+            }
+
+            if ($isSeekable) {
+                rewind($stream);
+            }
+
             foreach ($fields as $name => $content) {
                 $safeName = $this->sanitizeMultipartHeaderValue((string) $name);
                 yield "--{$boundary}\r\n";
@@ -519,7 +533,7 @@ class KinetiClient
             yield "Content-Type: application/octet-stream\r\n\r\n";
 
             while (!feof($stream)) {
-                $chunk = fread($stream, 8192);
+                $chunk = fread($stream, 65536);
                 if ($chunk !== false && $chunk !== '') {
                     yield $chunk;
                 }
@@ -530,7 +544,7 @@ class KinetiClient
 
         return [
             'multipart/form-data; boundary=' . $boundary,
-            $generator()
+            $generator,
         ];
     }
 

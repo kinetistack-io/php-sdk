@@ -9,6 +9,7 @@ use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\RateLimitException;
@@ -16,6 +17,7 @@ use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Exception\ValidationException;
+use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\Psr18Transport;
 use KinetiStack\Sdk\Transport\ResponseErrorHandler;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -478,5 +480,92 @@ class Psr18TransportTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertCount(1, $pausedDurations);
         $this->assertEqualsWithDelta(30.0, $pausedDurations[0], 2.0);
+    }
+
+    public function testCallableGeneratorBodyWithRetries(): void
+    {
+        $mock = new MockHandler([
+            new Response(503, ['Content-Type' => 'application/problem+json'], '{"title": "Service Unavailable"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "success"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => function (): void {
+            },
+        ]);
+
+        $bodyFactory = function () {
+            return (function () {
+                yield 'streamed-';
+                yield 'payload';
+            })();
+        };
+
+        $response = $transport->request('POST', '/v1/upload', [
+            'body' => $bodyFactory,
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['data' => 'success'], $response->toArray());
+    }
+
+    public function testAnalyzeImageStreamRetryWithPsr18(): void
+    {
+        $jobPayload = json_encode([
+            'job_id' => 'psr18-retry-job-456',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/psr18-retry-job-456',
+        ], JSON_THROW_ON_ERROR);
+
+        $mock = new MockHandler([
+            new Response(503, ['Content-Type' => 'application/problem+json'], '{"title": "Service Unavailable"}'),
+            new Response(202, ['Content-Type' => 'application/json'], $jobPayload),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => function (): void {
+            },
+        ]);
+
+        $kineti = new KinetiClient('https://api.test', 'test-key', $transport);
+
+        $stream = fopen('php://temp', 'w+b');
+        $this->assertIsResource($stream);
+        fwrite($stream, 'binary-image-data-psr18');
+        rewind($stream);
+
+        $job = $kineti->analyzeImageStream($stream, 'photo.jpg');
+
+        $this->assertInstanceOf(JobDto::class, $job);
+        $this->assertSame('psr18-retry-job-456', $job->jobId);
+        $this->assertSame('/api/v1/jobs/psr18-retry-job-456', $job->pollUrl);
+
+        fclose($stream);
+    }
+
+    public function testStringBodyMatchingFunctionNameIsNotExecutedAsCallable(): void
+    {
+        $capturedBody = null;
+        $mock = new MockHandler([
+            function ($request) use (&$capturedBody) {
+                $capturedBody = (string) $request->getBody();
+
+                return new Response(200, ['Content-Type' => 'application/json'], '{"ok": true}');
+            },
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $response = $transport->request('POST', '/v1/test', [
+            'body' => 'date',
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('date', $capturedBody);
     }
 }

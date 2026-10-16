@@ -468,13 +468,14 @@ class KinetiClientTest extends TestCase
 
         $refMethod = new \ReflectionMethod(KinetiClient::class, 'createMultipartStreamPayload');
 
-        /** @var array{0: string, 1: \Generator<int, string>} $result */
+        /** @var array{0: string, 1: (\Closure(): \Generator<int, string>)|\Generator<int, string>} $result */
         $result = $refMethod->invoke($kineti, $stream, 'file.jpg', [
             "bad\"\r\nHeader: value\r\nname" => 'field_value',
         ]);
 
         $body = '';
-        foreach ($result[1] as $chunk) {
+        $generator = is_callable($result[1]) ? $result[1]() : $result[1];
+        foreach ($generator as $chunk) {
             $body .= $chunk;
         }
 

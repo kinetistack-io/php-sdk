@@ -26,8 +26,9 @@ final class ResponseErrorHandler
      */
     public static function handleError(int $statusCode, array $headers, string $body): never
     {
+        $trimmedBody = trim($body);
         $content = [];
-        if (trim($body) !== '') {
+        if ($trimmedBody !== '') {
             try {
                 $decoded = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
                 if (is_array($decoded)) {
@@ -38,7 +39,18 @@ final class ResponseErrorHandler
             }
         }
 
-        $message = $content['detail'] ?? $content['title'] ?? ($body !== '' ? $body : 'Unknown error occurred');
+        $message = null;
+        if (isset($content['detail']) && is_string($content['detail']) && trim($content['detail']) !== '') {
+            $message = trim($content['detail']);
+        } elseif (isset($content['title']) && is_string($content['title']) && trim($content['title']) !== '') {
+            $message = trim($content['title']);
+        } elseif ($trimmedBody !== '' && !str_starts_with($trimmedBody, '{') && !str_starts_with($trimmedBody, '[')) {
+            $message = $trimmedBody;
+        }
+
+        if ($message === null || $message === '') {
+            $message = 'Unknown error occurred';
+        }
 
         $rawViolations = is_array($content['violations'] ?? null) ? $content['violations'] : [];
         /** @var array<int, array{propertyPath: string, message: string}> $violations */
@@ -79,7 +91,7 @@ final class ResponseErrorHandler
             ),
             500 => new ServerException($message),
             503 => new ServiceUnavailableException($message),
-            default => new KinetiException(sprintf('API Error %d: %s', $statusCode, $message)),
+            default => new KinetiException(sprintf('API Error %d: %s', $statusCode, $message), $statusCode),
         };
     }
 

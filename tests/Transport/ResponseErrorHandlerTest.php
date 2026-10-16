@@ -4,13 +4,21 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Transport;
 
+use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
+use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Exception\NotFoundException;
+use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\RateLimitException;
+use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
+use KinetiStack\Sdk\Exception\ServiceUnavailableException;
+use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\ResponseErrorHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ResponseErrorHandler::class)]
@@ -169,5 +177,128 @@ final class ResponseErrorHandlerTest extends TestCase
         $this->assertSame(60, $info->limit);
         $this->assertSame(50, $info->remaining);
         $this->assertNull($info->reset);
+    }
+
+    /**
+     * Scenario 2: Non-String detail in Error Payload & Exception Status Codes
+     *
+     * Given an error response with HTTP status 401 (or 418) and body {"detail": ["unexpected", "array"], "title": 123}
+     * When ResponseErrorHandler::handleError() processes the response
+     * Then it throws AuthenticationException with $e->getCode() === 401 (or KinetiException with $e->getCode() === 418)
+     * and a fallback string message instead of a fatal \TypeError.
+     */
+    public function testNonStringDetailOrTitleDoesNotThrowTypeErrorAndFallsBackToString(): void
+    {
+        $payload = json_encode([
+            'detail' => ['unexpected', 'array'],
+            'title' => 123,
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(401, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected AuthenticationException');
+        } catch (AuthenticationException $e) {
+            $this->assertSame(401, $e->getCode());
+            $this->assertSame('Unknown error occurred', $e->getMessage());
+        }
+
+        try {
+            $this->invokeErrorHandler(418, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected KinetiException');
+        } catch (KinetiException $e) {
+            $this->assertSame(418, $e->getCode());
+            $this->assertSame('API Error 418: Unknown error occurred', $e->getMessage());
+        }
+    }
+
+    /**
+     * @param class-string<\Throwable> $expectedClass
+     */
+    #[DataProvider('provideExceptionStatusCodeCases')]
+    public function testExceptionStatusCodesMatchExpectedHttpCodes(
+        int $statusCode,
+        string $body,
+        string $expectedClass,
+        int $expectedCode
+    ): void {
+        $this->expectException($expectedClass);
+        $this->expectExceptionCode($expectedCode);
+
+        ResponseErrorHandler::handleError($statusCode, ['Content-Type' => ['application/problem+json']], $body);
+    }
+
+    /**
+     * @return array<string, array{0: int, 1: string, 2: class-string<\Throwable>, 3: int}>
+     */
+    public static function provideExceptionStatusCodeCases(): array
+    {
+        return [
+            '401 Unauthorized' => [
+                401,
+                json_encode(['detail' => 'Invalid credentials'], JSON_THROW_ON_ERROR),
+                AuthenticationException::class,
+                401,
+            ],
+            '403 Forbidden without module' => [
+                403,
+                json_encode(['detail' => 'Forbidden resource'], JSON_THROW_ON_ERROR),
+                AuthorizationException::class,
+                403,
+            ],
+            '403 Service Module Disabled' => [
+                403,
+                json_encode(['detail' => 'Module disabled', 'module' => 'rag'], JSON_THROW_ON_ERROR),
+                ServiceModuleDisabledException::class,
+                403,
+            ],
+            '404 Not Found' => [
+                404,
+                json_encode(['detail' => 'Resource not found'], JSON_THROW_ON_ERROR),
+                NotFoundException::class,
+                404,
+            ],
+            '409 Conflict' => [
+                409,
+                json_encode(['detail' => 'Resource already exists'], JSON_THROW_ON_ERROR),
+                ConflictException::class,
+                409,
+            ],
+            '413 Payload Too Large' => [
+                413,
+                json_encode(['detail' => 'Request body too large'], JSON_THROW_ON_ERROR),
+                PayloadTooLargeException::class,
+                413,
+            ],
+            '422 Validation Error' => [
+                422,
+                json_encode(['detail' => 'Validation failed', 'violations' => []], JSON_THROW_ON_ERROR),
+                ValidationException::class,
+                422,
+            ],
+            '429 Rate Limit' => [
+                429,
+                json_encode(['detail' => 'Too many requests'], JSON_THROW_ON_ERROR),
+                RateLimitExceededException::class,
+                429,
+            ],
+            '500 Server Error' => [
+                500,
+                json_encode(['detail' => 'Internal server error'], JSON_THROW_ON_ERROR),
+                ServerException::class,
+                500,
+            ],
+            '503 Service Unavailable' => [
+                503,
+                json_encode(['detail' => 'Service temporarily unavailable'], JSON_THROW_ON_ERROR),
+                ServiceUnavailableException::class,
+                503,
+            ],
+            '418 Fallback default' => [
+                418,
+                json_encode(['detail' => 'I am a teapot'], JSON_THROW_ON_ERROR),
+                KinetiException::class,
+                418,
+            ],
+        ];
     }
 }

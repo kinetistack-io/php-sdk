@@ -52,9 +52,11 @@ class SymfonyTransport implements TransportInterface
 
         $baseClient = $baseClient ?? HttpClient::create();
 
+        $defaultMaxRetries = isset($this->defaultOptions['max_retries']) && is_numeric($this->defaultOptions['max_retries'])
+            ? (int) $this->defaultOptions['max_retries']
+            : 0;
         if (
-            isset($this->defaultOptions['max_retries'])
-            && (int) $this->defaultOptions['max_retries'] > 0
+            $defaultMaxRetries > 0
             && !$baseClient instanceof RetryableHttpClient
             && class_exists(RetryableHttpClient::class)
         ) {
@@ -66,7 +68,7 @@ class SymfonyTransport implements TransportInterface
                 0,
                 0.1
             );
-            $baseClient = new RetryableHttpClient($baseClient, $strategy, (int) $this->defaultOptions['max_retries']);
+            $baseClient = new RetryableHttpClient($baseClient, $strategy, $defaultMaxRetries);
         }
 
         $this->client = $baseClient;
@@ -77,10 +79,48 @@ class SymfonyTransport implements TransportInterface
         $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
 
         $mergedOptions = array_merge($this->defaultOptions, $options);
-        unset($mergedOptions['retry_strategy']);
-        if (!$this->client instanceof RetryableHttpClient) {
-            unset($mergedOptions['max_retries']);
+
+        $client = $this->client;
+        if (isset($options['max_retries']) && class_exists(RetryableHttpClient::class)) {
+            $perRequestRetries = is_numeric($options['max_retries']) ? (int) $options['max_retries'] : 0;
+            if ($client instanceof RetryableHttpClient) {
+                $client = $client->withOptions(['max_retries' => $perRequestRetries]);
+            } elseif ($perRequestRetries > 0) {
+                /** @var RetryStrategyInterface $strategy */
+                $strategy = $mergedOptions['retry_strategy'] ?? $this->defaultOptions['retry_strategy'] ?? new GenericRetryStrategy(
+                    [429, 503],
+                    1000,
+                    2.0,
+                    0,
+                    0.1
+                );
+                $client = new RetryableHttpClient($client, $strategy, $perRequestRetries);
+            }
         }
+
+        if (isset($mergedOptions['body']) && is_callable($mergedOptions['body']) && !is_string($mergedOptions['body'])) {
+            $bodyCallable = $mergedOptions['body'];
+            $reflection = new \ReflectionFunction(\Closure::fromCallable($bodyCallable));
+            if (!$reflection->isGenerator() && $reflection->getNumberOfRequiredParameters() === 0) {
+                $mergedOptions['body'] = function () use ($bodyCallable) {
+                    $result = $bodyCallable();
+                    if ($result instanceof \Generator || $result instanceof \Traversable) {
+                        yield from $result;
+                    } elseif (is_resource($result)) {
+                        while (!feof($result)) {
+                            $chunk = fread($result, 65536);
+                            if ($chunk !== false && $chunk !== '') {
+                                yield $chunk;
+                            }
+                        }
+                    } elseif (is_string($result)) {
+                        yield $result;
+                    }
+                };
+            }
+        }
+
+        unset($mergedOptions['pause_handler'], $mergedOptions['retry_strategy'], $mergedOptions['max_retries']);
 
         $headers = array_merge(
             ['Accept' => 'application/json'],
@@ -104,8 +144,8 @@ class SymfonyTransport implements TransportInterface
         $mergedOptions['headers'] = $headers;
 
         try {
-            $response = $this->client->request($method, $url, $mergedOptions);
-            $transportResponse = new SymfonyTransportResponse($response, $this->client);
+            $response = $client->request($method, $url, $mergedOptions);
+            $transportResponse = new SymfonyTransportResponse($response, $client);
             $statusCode = $transportResponse->getStatusCode();
             $this->lastRateLimitInfo = RateLimitInfoDto::fromHeaders($transportResponse->getHeaders());
         } catch (TransportExceptionInterface $e) {
