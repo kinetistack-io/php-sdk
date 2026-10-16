@@ -44,6 +44,7 @@ class KinetiClient
      */
     public function __construct(
         string $apiHost,
+        #[\SensitiveParameter]
         string $apiKey,
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         array $options = []
@@ -497,7 +498,7 @@ class KinetiClient
 
     /**
      * @param resource $stream
-     * @param array<string, mixed> $fields
+     * @param array<string, string> $fields
      * @return array{0: string, 1: \Generator<int, string>}
      */
     private function createMultipartStreamPayload($stream, string $filename, array $fields): array
@@ -506,13 +507,15 @@ class KinetiClient
 
         $generator = function () use ($stream, $filename, $fields, $boundary) {
             foreach ($fields as $name => $content) {
+                $safeName = $this->sanitizeMultipartHeaderValue((string) $name);
                 yield "--{$boundary}\r\n";
-                yield sprintf("Content-Disposition: form-data; name=\"%s\"\r\n\r\n", $name);
-                yield $content . "\r\n";
+                yield sprintf("Content-Disposition: form-data; name=\"%s\"\r\n\r\n", $safeName);
+                yield (string) $content . "\r\n";
             }
 
+            $safeFilename = $this->sanitizeMultipartHeaderValue($filename);
             yield "--{$boundary}\r\n";
-            yield sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", $filename);
+            yield sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", $safeFilename);
             yield "Content-Type: application/octet-stream\r\n\r\n";
 
             while (!feof($stream)) {
@@ -529,5 +532,15 @@ class KinetiClient
             'multipart/form-data; boundary=' . $boundary,
             $generator()
         ];
+    }
+
+    /**
+     * Sanitize header parameter values against CRLF injection and quote breakout.
+     */
+    private function sanitizeMultipartHeaderValue(string $value): string
+    {
+        $clean = str_replace(["\r", "\n", "\0"], '', $value);
+
+        return addcslashes($clean, "\\\"");
     }
 }

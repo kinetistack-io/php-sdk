@@ -412,6 +412,78 @@ class KinetiClientTest extends TestCase
         fclose($stream);
     }
 
+    public function testAnalyzeImageStreamSanitizesFilenameAndFieldsAgainstCrlfAndQuotes(): void
+    {
+        $responseBody = json_encode([
+            'job_id' => 'sanitize-job-123',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/sanitize-job-123',
+        ], JSON_THROW_ON_ERROR);
+
+        $capturedBody = '';
+        $client = new MockHttpClient(function ($method, $url, $options) use (&$capturedBody, $responseBody) {
+            $bodyClosure = $options['body'];
+            while ('' !== ($chunk = $bodyClosure(8192))) {
+                $capturedBody .= $chunk;
+            }
+            return new MockResponse($responseBody, ['http_code' => 202]);
+        });
+
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $stream = fopen('php://temp', 'w+b');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Failed to open temp stream');
+        }
+        fwrite($stream, 'image-binary-bytes');
+        rewind($stream);
+
+        // Malicious filename with CRLF injection, quotes, backslashes, and null bytes
+        $maliciousFilename = "evil\"\r\nX-Injected: 1\r\n\0\\foo.jpg";
+
+        $result = $kineti->analyzeImageStream($stream, $maliciousFilename);
+
+        $this->assertInstanceOf(JobDto::class, $result);
+        $this->assertSame('sanitize-job-123', $result->jobId);
+
+        // Assert CRLF and null byte were stripped, quotes and backslashes escaped
+        $this->assertStringContainsString('filename="evil\"X-Injected: 1\\\\foo.jpg"', $capturedBody);
+
+        // Assert that the injected header does not appear as a standalone MIME header line
+        $this->assertStringNotContainsString("\r\nX-Injected: 1\r\n", $capturedBody);
+        $this->assertStringNotContainsString("\nX-Injected: 1\n", $capturedBody);
+
+        fclose($stream);
+    }
+
+    public function testCreateMultipartStreamPayloadSanitizesFieldNames(): void
+    {
+        $kineti = new KinetiClient('https://api.test', 'key');
+        $stream = fopen('php://temp', 'w+b');
+        if (!is_resource($stream)) {
+            throw new \RuntimeException('Failed to open temp stream');
+        }
+        fwrite($stream, 'content');
+        rewind($stream);
+
+        $refMethod = new \ReflectionMethod(KinetiClient::class, 'createMultipartStreamPayload');
+
+        /** @var array{0: string, 1: \Generator<int, string>} $result */
+        $result = $refMethod->invoke($kineti, $stream, 'file.jpg', [
+            "bad\"\r\nHeader: value\r\nname" => 'field_value',
+        ]);
+
+        $body = '';
+        foreach ($result[1] as $chunk) {
+            $body .= $chunk;
+        }
+
+        $this->assertStringContainsString('name="bad\"Header: valuename"', $body);
+        $this->assertStringNotContainsString("\r\nHeader: value\r\n", $body);
+
+        fclose($stream);
+    }
+
     public function testWaitForJobExponentialBackoffWithJitter(): void
     {
         $responses = [

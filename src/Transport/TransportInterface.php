@@ -12,7 +12,7 @@ interface TransportInterface
     /**
      * Return an instance with the specified auth header value.
      */
-    public function withAuthHeaderValue(string $authHeaderValue): TransportInterface;
+    public function withAuthHeaderValue(#[\SensitiveParameter] string $authHeaderValue): TransportInterface;
 
     /**
      * Send an HTTP request and return a unified transport response.

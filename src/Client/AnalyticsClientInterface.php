@@ -11,7 +11,7 @@ use KinetiStack\Sdk\Transport\TransportInterface;
 
 interface AnalyticsClientInterface
 {
-    public function withToken(string $jwtToken): static;
+    public function withToken(#[\SensitiveParameter] string $jwtToken): static;
 
     public function getTransport(): TransportInterface;
 

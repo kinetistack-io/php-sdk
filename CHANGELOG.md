@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Sanitized multipart header filenames and part names against CRLF injection, null bytes, and quote breakouts in `KinetiClient::createMultipartStreamPayload()` (PHPSDK-50).
+- Added `#[\SensitiveParameter]` attribute to all credential, token, secret, and password parameters across `KinetiClient`, `AdminClient`, `AnalyticsClient`, client interfaces, DTOs, and transport implementations to prevent sensitive values from leaking into stack traces (PHPSDK-50).
+
 ### Added
 - Added `hasMore` (`bool`) and `nextOffset` (`?int`) properties and serialization/deserialization support to `SearchResponseDto` along with `hasMore()`, `getNextOffset()`, and `isHasMorePresent()` helper methods (PHPSDK-46).
 

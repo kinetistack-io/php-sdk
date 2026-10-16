@@ -41,6 +41,7 @@ class AdminClient implements AdminClientInterface
      */
     public function __construct(
         private readonly string $apiHost,
+        #[\SensitiveParameter]
         private string $jwtToken = '',
         private readonly HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         private readonly array $options = []
@@ -56,7 +57,7 @@ class AdminClient implements AdminClientInterface
     /**
      * Return a new immutable instance configured with the specified JWT token.
      */
-    public function withToken(string $jwtToken): static
+    public function withToken(#[\SensitiveParameter] string $jwtToken): static
     {
         $clone = clone $this;
         $clone->jwtToken = $jwtToken;
@@ -102,7 +103,7 @@ class AdminClient implements AdminClientInterface
      *
      * @throws KinetiException
      */
-    public function login(string $email, string $password): AuthTokenDto
+    public function login(string $email, #[\SensitiveParameter] string $password): AuthTokenDto
     {
         $response = $this->transport->request('POST', '/api/v1/admin/login', [
             'json' => [
@@ -235,7 +236,7 @@ class AdminClient implements AdminClientInterface
      * @throws ValidationException When the token is invalid or expired (HTTP 422).
      * @throws KinetiException
      */
-    public function verifyEmail(string $token, #[\SensitiveParameter] string $password): AuthTokenDto
+    public function verifyEmail(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $password): AuthTokenDto
     {
         if (trim($token) === '') {
             throw new \InvalidArgumentException('Verification token cannot be empty.');
@@ -941,7 +942,7 @@ class AdminClient implements AdminClientInterface
      * @throws ValidationException When token is invalid/expired or password does not satisfy validation rules (HTTP 422).
      * @throws KinetiException
      */
-    public function resetPassword(string $token, #[\SensitiveParameter] string $newPassword): void
+    public function resetPassword(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $newPassword): void
     {
         $this->transport->request('POST', '/api/v1/admin/password-resets', [
             'json' => [
@@ -1026,6 +1027,7 @@ class AdminClient implements AdminClientInterface
      */
     private function createTransport(
         string $apiHost,
+        #[\SensitiveParameter]
         string $jwtToken,
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient,
         array $options

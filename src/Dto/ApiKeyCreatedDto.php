@@ -10,6 +10,7 @@ class ApiKeyCreatedDto extends ApiKeyDto
         string $id,
         string $name,
         string $tokenSuffix,
+        #[\SensitiveParameter]
         public readonly string $token,
         string $scope = 'all',
         ?int $rateLimitPerMinute = null,

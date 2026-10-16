@@ -24,7 +24,9 @@ class HttpTransport implements TransportInterface
      */
     public function __construct(
         private readonly string $apiHost,
+        #[\SensitiveParameter]
         string $authHeaderName,
+        #[\SensitiveParameter]
         string|HttpClientInterface|ClientInterface|TransportInterface|null $authHeaderValueOrClient = null,
         HttpClientInterface|ClientInterface|TransportInterface|array|null $clientOrDefaultOptions = null,
         array $defaultOptions = []
@@ -87,7 +89,7 @@ class HttpTransport implements TransportInterface
         }
     }
 
-    public function withAuthHeaderValue(string $authHeaderValue): self
+    public function withAuthHeaderValue(#[\SensitiveParameter] string $authHeaderValue): self
     {
         return new self(
             $this->apiHost,
@@ -132,7 +134,9 @@ class HttpTransport implements TransportInterface
      */
     private static function createDiscoveredTransport(
         string $apiHost,
+        #[\SensitiveParameter]
         string $authHeaderName,
+        #[\SensitiveParameter]
         string $authHeaderValue,
         array $defaultOptions = []
     ): TransportInterface {

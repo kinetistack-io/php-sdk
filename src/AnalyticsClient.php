@@ -24,6 +24,7 @@ class AnalyticsClient implements AnalyticsClientInterface
      */
     public function __construct(
         TransportInterface|string $transportOrApiHost,
+        #[\SensitiveParameter]
         private string $jwtToken = '',
         private readonly HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         private readonly array $options = []
@@ -43,7 +44,7 @@ class AnalyticsClient implements AnalyticsClientInterface
         }
     }
 
-    public function withToken(string $jwtToken): static
+    public function withToken(#[\SensitiveParameter] string $jwtToken): static
     {
         $clone = clone $this;
         $clone->jwtToken = $jwtToken;
@@ -109,6 +110,7 @@ class AnalyticsClient implements AnalyticsClientInterface
      */
     private function createTransport(
         string $apiHost,
+        #[\SensitiveParameter]
         string $jwtToken,
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient,
         array $options

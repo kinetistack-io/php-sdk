@@ -7,7 +7,9 @@ namespace KinetiStack\Sdk\Dto;
 class AuthTokenDto
 {
     public function __construct(
+        #[\SensitiveParameter]
         public readonly string $token,
+        #[\SensitiveParameter]
         public readonly ?string $refreshToken = null,
     ) {
         if (trim($this->token) === '') {

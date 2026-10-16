@@ -28,7 +28,9 @@ class SymfonyTransport implements TransportInterface
      */
     public function __construct(
         private readonly string $apiHost,
+        #[\SensitiveParameter]
         string $authHeaderName,
+        #[\SensitiveParameter]
         string|HttpClientInterface|null $authHeaderValueOrClient = null,
         HttpClientInterface|array|null $clientOrDefaultOptions = null,
         array $defaultOptions = []
@@ -132,7 +134,7 @@ class SymfonyTransport implements TransportInterface
         return $this->request($method, $path, $options);
     }
 
-    public function withAuthHeaderValue(string $authHeaderValue): self
+    public function withAuthHeaderValue(#[\SensitiveParameter] string $authHeaderValue): self
     {
         return new self(
             $this->apiHost,
