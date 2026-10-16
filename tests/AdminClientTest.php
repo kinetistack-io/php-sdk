@@ -27,6 +27,7 @@ use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\SymfonyTransport;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -923,9 +924,7 @@ class AdminClientTest extends TestCase
         $this->assertContains('Authorization: Bearer admin-jwt-token', $mockResponse->getRequestOptions()['headers']);
     }
 
-    /**
-     * @dataProvider provideEmptyKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyKeyIdentifiers')]
     public function testGetApiKeyEmptyProjectIdThrowsException(string $emptyProjectId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -937,9 +936,7 @@ class AdminClientTest extends TestCase
         $admin->getApiKey($emptyProjectId, 'key-123');
     }
 
-    /**
-     * @dataProvider provideEmptyKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyKeyIdentifiers')]
     public function testGetApiKeyEmptyKeyIdThrowsException(string $emptyKeyId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -952,9 +949,9 @@ class AdminClientTest extends TestCase
     }
 
     /**
-     * @dataProvider provideEmptyCreateApiKeyProjectPayloads
      * @param array<string, mixed>|string $emptyProject
      */
+    #[DataProvider('provideEmptyCreateApiKeyProjectPayloads')]
     public function testCreateApiKeyEmptyProjectIdThrowsException(array|string $emptyProject): void
     {
         $httpClient = new MockHttpClient([]);
@@ -966,9 +963,7 @@ class AdminClientTest extends TestCase
         $admin->createApiKey($emptyProject, 'Key Name');
     }
 
-    /**
-     * @dataProvider provideEmptyNullableKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyNullableKeyIdentifiers')]
     public function testListApiKeysEmptyProjectIdThrowsException(?string $emptyProjectId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -980,9 +975,7 @@ class AdminClientTest extends TestCase
         $admin->listApiKeys($emptyProjectId);
     }
 
-    /**
-     * @dataProvider provideEmptyKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyKeyIdentifiers')]
     public function testRevokeApiKeyEmptyProjectIdThrowsException(string $emptyProjectId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -994,9 +987,7 @@ class AdminClientTest extends TestCase
         $admin->revokeApiKey($emptyProjectId, 'key-123');
     }
 
-    /**
-     * @dataProvider provideEmptyNullableKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyNullableKeyIdentifiers')]
     public function testRevokeApiKeyEmptyKeyIdThrowsException(?string $emptyKeyId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -1008,9 +999,7 @@ class AdminClientTest extends TestCase
         $admin->revokeApiKey('proj-123', $emptyKeyId);
     }
 
-    /**
-     * @dataProvider provideEmptyKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyKeyIdentifiers')]
     public function testRotateApiKeyEmptyProjectIdThrowsException(string $emptyProjectId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -1022,9 +1011,7 @@ class AdminClientTest extends TestCase
         $admin->rotateApiKey($emptyProjectId, 'key-123');
     }
 
-    /**
-     * @dataProvider provideEmptyKeyIdentifiers
-     */
+    #[DataProvider('provideEmptyKeyIdentifiers')]
     public function testRotateApiKeyEmptyKeyIdThrowsException(string $emptyKeyId): void
     {
         $httpClient = new MockHttpClient([]);
@@ -1503,9 +1490,7 @@ class AdminClientTest extends TestCase
         $this->assertSame(['token' => 'valid-token-123', 'password' => 'NewSecurePassword123!'], $payload);
     }
 
-    /**
-     * @dataProvider provideEmptyVerificationTokens
-     */
+    #[DataProvider('provideEmptyVerificationTokens')]
     public function testVerifyEmailEmptyTokenThrowsException(string $emptyToken): void
     {
         $httpClient = new MockHttpClient([]);
@@ -1529,9 +1514,7 @@ class AdminClientTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider provideEmptyVerificationPasswords
-     */
+    #[DataProvider('provideEmptyVerificationPasswords')]
     public function testVerifyEmailEmptyPasswordThrowsException(string $emptyPassword): void
     {
         $httpClient = new MockHttpClient([]);

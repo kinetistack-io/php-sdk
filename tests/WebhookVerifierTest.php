@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\WebhookVerifier;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(WebhookVerifier::class)]
@@ -268,9 +269,7 @@ final class WebhookVerifierTest extends TestCase
         $this->assertTrue(WebhookVerifier::verify($emptyPayload, $header, self::SECRET));
     }
 
-    /**
-     * @dataProvider provideMalformedV1Headers
-     */
+    #[DataProvider('provideMalformedV1Headers')]
     public function testVerifyV1MalformedHeaders(string $malformedHeader): void
     {
         $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $malformedHeader, self::SECRET));

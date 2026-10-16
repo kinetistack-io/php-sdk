@@ -9,8 +9,8 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  UBUNTU_MIRROR: azure.archive.ubuntu.com
+permissions:
+  contents: read
 
 jobs:
   matrix-tests:
@@ -24,22 +24,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Configure Ubuntu mirror
-        run: |
-          UBUNTU_MIRROR="${UBUNTU_MIRROR:-azure.archive.ubuntu.com}"
-          UBUNTU_MIRROR="${UBUNTU_MIRROR#http://}"
-          UBUNTU_MIRROR="${UBUNTU_MIRROR#https://}"
-          UBUNTU_MIRROR="${UBUNTU_MIRROR%/}"
-          SUDO=""
-          if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
-            SUDO="sudo"
-          fi
-          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
-            if [ -f "$file" ]; then
-              $SUDO sed -i -E "s#https?://(archive|security)\.ubuntu\.com#http://${UBUNTU_MIRROR}#g" "$file"
-            fi
-          done
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -69,22 +53,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure Ubuntu mirror
-        run: |
-          UBUNTU_MIRROR="${UBUNTU_MIRROR:-azure.archive.ubuntu.com}"
-          UBUNTU_MIRROR="${UBUNTU_MIRROR#http://}"
-          UBUNTU_MIRROR="${UBUNTU_MIRROR#https://}"
-          UBUNTU_MIRROR="${UBUNTU_MIRROR%/}"
-          SUDO=""
-          if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
-            SUDO="sudo"
-          fi
-          for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
-            if [ -f "$file" ]; then
-              $SUDO sed -i -E "s#https?://(archive|security)\.ubuntu\.com#http://${UBUNTU_MIRROR}#g" "$file"
-            fi
-          done
-
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -96,15 +64,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-8.3-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-composer-8.3-${{ hashFiles('**/composer.json') }}
           restore-keys: |
             ${{ runner.os }}-composer-8.3-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
+      - name: Validate Composer configuration
+        run: composer validate --no-check-version --strict
+
+      - name: Composer security audit
+        run: composer audit
+
       - name: PHP CS Fixer check
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
 
       - name: PHPStan analysis
-        run: vendor/bin/phpstan analyse
+        run: vendor/bin/phpstan analyse --memory-limit=512M

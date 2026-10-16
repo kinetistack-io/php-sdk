@@ -11,6 +11,7 @@ use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\Dto\OrganizationDto;
 use KinetiStack\Sdk\Dto\ProjectDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class AdminDtoTest extends TestCase
@@ -416,9 +417,9 @@ class AdminDtoTest extends TestCase
     }
 
     /**
-     * @dataProvider emptyNameProvider
      * @param array<string, mixed> $payload
      */
+    #[DataProvider('emptyNameProvider')]
     public function testApiKeyDtoFromArrayDefaultsEmptyNameToApiKey(array $payload): void
     {
         $dto = ApiKeyDto::fromArray($payload);

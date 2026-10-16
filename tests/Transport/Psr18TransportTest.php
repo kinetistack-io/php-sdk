@@ -18,6 +18,7 @@ use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\Psr18Transport;
 use KinetiStack\Sdk\Transport\ResponseErrorHandler;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -288,9 +289,9 @@ class Psr18TransportTest extends TestCase
     }
 
     /**
-     * @dataProvider errorStatusCodeProvider
      * @param class-string<\Throwable> $expectedExceptionClass
      */
+    #[DataProvider('errorStatusCodeProvider')]
     public function testErrorStatusCodes(int $statusCode, string $expectedExceptionClass): void
     {
         $mock = new MockHandler([

@@ -12,6 +12,7 @@ use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\HttpTransport;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -213,9 +214,9 @@ class HttpTransportTest extends TestCase
     }
 
     /**
-     * @dataProvider errorStatusCodeProvider
      * @param class-string<\Throwable> $expectedExceptionClass
      */
+    #[DataProvider('errorStatusCodeProvider')]
     public function testErrorStatusCodes(int $statusCode, string $expectedExceptionClass): void
     {
         $mockResponse = new MockResponse('{"title": "Error"}', [
