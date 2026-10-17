@@ -9,9 +9,12 @@ use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RateLimitExceededException::class)]
+#[UsesClass(RateLimitException::class)]
+#[UsesClass(RateLimitInfoDto::class)]
 final class RateLimitExceededExceptionTest extends TestCase
 {
     public function testInheritance(): void

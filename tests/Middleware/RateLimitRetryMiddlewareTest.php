@@ -9,16 +9,34 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use KinetiStack\Sdk\Dto\ExtractsResponseDataTrait;
+use KinetiStack\Sdk\Dto\HealthStatusDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Middleware\RateLimitRetryMiddleware;
+use KinetiStack\Sdk\Transport\HttpTransport;
+use KinetiStack\Sdk\Transport\Psr18Transport;
+use KinetiStack\Sdk\Transport\Psr18TransportResponse;
+use KinetiStack\Sdk\Transport\ResponseErrorHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
 #[CoversClass(RateLimitRetryMiddleware::class)]
+#[UsesClass(RateLimitInfoDto::class)]
+#[UsesClass(RateLimitExceededException::class)]
+#[UsesClass(RateLimitException::class)]
+#[UsesClass(KinetiClient::class)]
+#[UsesClass(HealthStatusDto::class)]
+#[UsesClass(ExtractsResponseDataTrait::class)]
+#[UsesClass(HttpTransport::class)]
+#[UsesClass(Psr18Transport::class)]
+#[UsesClass(Psr18TransportResponse::class)]
+#[UsesClass(ResponseErrorHandler::class)]
 final class RateLimitRetryMiddlewareTest extends TestCase
 {
     public function testDefaultPropertiesAndGetters(): void

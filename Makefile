@@ -31,6 +31,9 @@ test-all: ## Run PHPUnit tests across all PHP versions (8.1, 8.2, 8.3, 8.4)
 	docker compose run --rm php vendor/bin/phpunit
 	docker compose run --rm php84 vendor/bin/phpunit
 
+coverage: ## Run PHPUnit with code coverage
+	$(DC) vendor/bin/phpunit --coverage-text
+
 phpstan: ## Run PHPStan static analysis
 	$(DC) vendor/bin/phpstan analyse --memory-limit=512M
 
@@ -71,24 +74,15 @@ release: ## Prepare and push a new release (e.g. make release VERSION=1.2.4)
 	fi; \
 	printf "\033[34m==>\033[0m Running verification checks (make check)...\n"; \
 	$(MAKE) check || { printf "\033[31mError: Verification checks failed. Aborting release without changes.\033[0m\n"; exit 1; }; \
-	printf "\033[34m==>\033[0m Bumping composer.json version to %s...\n" "$$CLEAN_VERSION"; \
-	$(DC) composer config version "$$CLEAN_VERSION" || exit 1; \
-	$(DC) composer update --lock || exit 1; \
-	$(DC) composer validate --no-check-version || exit 1; \
-	if git diff --quiet composer.json composer.lock; then \
-		printf "\033[34m==>\033[0m composer.json is already at version %s, skipping commit...\n" "$$CLEAN_VERSION"; \
-	else \
-		printf "\033[34m==>\033[0m Committing release %s...\n" "$$TAG"; \
-		git add composer.json composer.lock || exit 1; \
-		git commit -m "Release $$TAG" || exit 1; \
-	fi; \
+	printf "\033[34m==>\033[0m Validating composer.json strictly...\n"; \
+	$(DC) composer validate --strict || exit 1; \
 	printf "\033[34m==>\033[0m Creating annotated tag %s...\n" "$$TAG"; \
 	git tag -a "$$TAG" -m "Release $$TAG" || exit 1; \
 	if [ "$(DRY_RUN)" = "1" ]; then \
-		printf "\033[33m[DRY RUN] Skipping push to origin. Created local commit and tag %s.\033[0m\n" "$$TAG"; \
+		printf "\033[33m[DRY RUN] Skipping push to origin. Created local tag %s.\033[0m\n" "$$TAG"; \
 	else \
-		if [ -n "$$(git log origin/$$CURRENT_BRANCH..$$CURRENT_BRANCH 2>/dev/null)" ]; then \
-			printf "\033[34m==>\033[0m Pushing commit to origin...\n"; \
+		if ! git rev-parse --verify "origin/$$CURRENT_BRANCH" >/dev/null 2>&1 || [ -n "$$(git log origin/$$CURRENT_BRANCH..$$CURRENT_BRANCH 2>/dev/null)" ]; then \
+			printf "\033[34m==>\033[0m Pushing branch %s to origin...\n" "$$CURRENT_BRANCH"; \
 			git push origin "$$CURRENT_BRANCH" || exit 1; \
 		fi; \
 		printf "\033[34m==>\033[0m Pushing tag %s to origin...\n" "$$TAG"; \
@@ -96,5 +90,5 @@ release: ## Prepare and push a new release (e.g. make release VERSION=1.2.4)
 		printf "\033[32mSuccessfully released and pushed %s!\033[0m\n" "$$TAG"; \
 	fi
 
-.PHONY: help build build-all install update composer test test-all phpstan cs-check cs-fix check shell release
+.PHONY: help build build-all install update composer test test-all coverage phpstan cs-check cs-fix check shell release
 

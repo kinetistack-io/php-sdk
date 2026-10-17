@@ -34,7 +34,7 @@ $client = new KinetiClient(
     apiKey: 'sk_test_12345',
     httpClient: null,             // Optional: PSR-18 ClientInterface (e.g. Guzzle), Symfony HttpClientInterface, or auto-discovered
     options: [
-        'timeout' => 30.0,        // Request timeout in seconds
+        'timeout' => 30.0,        // Request timeout in seconds (applied when using Symfony HttpClient)
         'max_retries' => 3,       // Automatically retry transient HTTP 429 and 503 errors
     ]
 );
@@ -44,8 +44,8 @@ $client = new KinetiClient(
 
 The SDK is strictly framework-agnostic. It does not force a concrete HTTP client implementation:
 - **Auto-Discovery**: If `httpClient` is omitted or `null`, `php-http/discovery` automatically discovers any installed PSR-18 client (such as Guzzle) or Symfony's HTTP Client.
-- **PSR-18 (Guzzle, etc.)**: Inject any `Psr\Http\Client\ClientInterface` instance directly (e.g. `new KinetiClient($host, $key, $guzzleClient)`).
-- **Symfony HTTP Client**: Existing Symfony projects can inject `Symfony\Contracts\HttpClient\HttpClientInterface` for full backward compatibility.
+- **PSR-18 (Guzzle, etc.)**: Inject any `Psr\Http\Client\ClientInterface` instance directly (e.g. `new KinetiClient($host, $key, $guzzleClient)`). Note that PSR-18 `ClientInterface::sendRequest()` does not support per-request timeout options; configure timeout settings directly on your PSR-18 client instance (e.g. `new GuzzleHttp\Client(['timeout' => 30.0])`).
+- **Symfony HTTP Client**: Existing Symfony projects can inject `Symfony\Contracts\HttpClient\HttpClientInterface` for full backward compatibility. The `'timeout'` option in `$options` is applied directly to requests when using the Symfony HTTP client.
 
 #### Transient Error Retries & Backoff
 
@@ -369,7 +369,7 @@ make check
 # Run arbitrary composer command
 make composer cmd="require symfony/yaml"
 
-# Prepare and publish a release (bumps composer.json, runs checks, commits, tags, pushes)
+# Prepare and publish a release (runs verification checks, validates composer strictly, tags, pushes)
 make release VERSION=1.2.4
 
 # Open container shell
@@ -383,7 +383,7 @@ The SDK uses automated CI/CD workflows for testing, static analysis, and release
 - **CI Pipeline (`.github/workflows/ci.yml`)**: Runs on pushes and pull requests targeting `main`. Executes test matrices across PHP 8.1, 8.2, 8.3, and 8.4, followed by PHP CS Fixer and PHPStan static analysis.
 - **Release Pipeline (`.github/workflows/release.yml`)**: Triggered automatically when a version tag matching `v*.*.*` (e.g., `v1.0.0`) is pushed to the repository.
   1. **Validation (`validate`)**: Checks platform requirements via `composer check-platform-reqs` and runs PHPUnit across PHP 8.1, 8.2, 8.3, and 8.4.
-  2. **Quality Checks (`quality-checks`)**: Ensures code conforms to PSR-12 and passes PHPStan Level 8 static analysis.
+  2. **Quality Checks (`quality-checks`)**: Ensures code conforms to PSR-12 and passes PHPStan Level 9 static analysis.
   3. **Release (`release`)**: Requires both `validate` and `quality-checks` to pass. Publishes a GitHub Release (with auto-generated release notes and automatic pre-release detection) and triggers a synchronization webhook to the Packagist API via authenticated cURL.
 
 ### Required Repository Secrets
@@ -404,7 +404,7 @@ Contributions are welcome! Please refer to **[CONTRIBUTING.md](CONTRIBUTING.md)*
 Before opening a pull request, ensure that:
 
 1. Code adheres to **PSR-12** standards (`make cs-check` / `make cs-fix`).
-2. Static analysis passes at **PHPStan Level 8** (`make phpstan`).
+2. Static analysis passes at **PHPStan Level 9** (`make phpstan`).
 3. Unit tests pass across all supported PHP versions (`make test-all`).
 4. All checks pass locally via `make check` before opening a pull request.
 

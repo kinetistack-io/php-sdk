@@ -54,5 +54,7 @@
             "php-http/discovery": true
         }
     },
-    "version": "1.0.11"
+    "scripts": {
+        "test:coverage": "phpunit --coverage-text"
+    }
 }

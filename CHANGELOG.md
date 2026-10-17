@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented `__debugInfo(): array` across secret-bearing classes (`AdminClient`, `AnalyticsClient`, `HttpTransport`, `Psr18Transport`, `SymfonyTransport`, `AuthTokenDto`, `ApiKeyCreatedDto`) to redact sensitive credentials (`jwtToken`, `authHeaderValue`, `token`, `refreshToken`) from `print_r()`, `var_dump()`, and debug output (PHPSDK-56).
 
 ### Added
+- Added `make coverage` target and `composer test:coverage` script generating text code coverage via `pcov` (PHPSDK-60).
 - Added `KinetiClient::withApiKey(#[\SensitiveParameter] string $apiKey): static` and method signature to `KinetiClientInterface` (PHPSDK-59).
 - Added `KinetiClient::MAX_SEARCH_OFFSET = 1000` constant and replaced magic numbers in `searchAll()` (PHPSDK-59).
 - Added named static constructors `withApiKey()` and `withHeader()` to `HttpTransport`, `Psr18Transport`, and `SymfonyTransport` (PHPSDK-59).
@@ -25,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `deleteOrganization(string $id): void` to `AdminClient` and `AdminClientInterface` (`DELETE /api/v1/admin/organizations/{id}`) for parity with the backend organization soft-deletion endpoint (PHPSDK-52).
 
 ### Changed
+- Removed hardcoded version from `composer.json` and aligned `make release` with Packagist VCS tag-based release practices without mutating repository files (PHPSDK-60).
+- Upgraded CI `quality-checks` in `ci.yml` and `release.yml` to PHP 8.4, updated Composer cache hashing to `composer.lock`, added `composer check-platform-reqs`, and enforced `composer validate --strict` (PHPSDK-60).
+- Updated `README.md` and `CONTRIBUTING.md` to reflect PHPStan Level 9 enforcement and clarified PSR-18 client timeout configuration (PHPSDK-60).
 - Preserved existing authentication headers on injected `TransportInterface` instances when `$apiKey` or `$jwtToken` is empty across `KinetiClient`, `AdminClient`, and `AnalyticsClient` constructors (PHPSDK-59).
 - Removed unused private property `$apiHost` from `AnalyticsClient` (PHPSDK-59).
 - Added randomized jitter (0–250ms) to `Psr18Transport` exponential backoff calculations and capped retry delay by `max_retry_delay` (PHPSDK-57).

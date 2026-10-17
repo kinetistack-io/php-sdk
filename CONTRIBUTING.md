@@ -53,7 +53,7 @@ make cs-fix
 ```
 
 ### Static Analysis (PHPStan)
-Static analysis is enforced at **Level 8** with strict parameter rules and explicit typing:
+Static analysis is enforced at **Level 9** with strict parameter rules and explicit typing:
 
 ```bash
 make phpstan
@@ -63,11 +63,14 @@ make phpstan
 All unit and functional tests must pass:
 
 ```bash
-# Run PHPUnit tests against PHP 8.3
+# Run PHPUnit tests
 make test
 
 # Run PHPUnit tests across all supported PHP versions (8.1, 8.2, 8.3, 8.4)
 make test-all
+
+# Run PHPUnit with code coverage summary via pcov
+make coverage
 ```
 
 ### Full Verification Check
@@ -97,7 +100,7 @@ make check
 ## 4. Release Process (`make release`)
 
 The release lifecycle consists of two halves:
-1. **Local Release Automation (`make release`)**: Safely validates code, bumps `composer.json`, tags the release, and pushes to origin.
+1. **Local Release Automation (`make release`)**: Safely validates code, verifies `composer.json` strictly, tags the release, and pushes to origin.
 2. **Server-side CI Pipeline (`.github/workflows/release.yml`)**: Triggered by the pushed tag (`v*.*.*`), running matrix validation, generating GitHub release notes, and notifying Packagist.
 
 ### Cutting a New Release
@@ -130,22 +133,18 @@ The automated target performs the following safeguards and actions sequentially:
 3. **Pre-Release Verification (`make check`)**:
    - Executes `make check` (`cs-check`, `phpstan`, `test`).
    - **Critical Safety Guard**: If any check fails, execution immediately halts before any files are touched or Git operations occur.
-4. **Composer Version Bump**:
-   - Updates `"version"` in `composer.json` using `composer config version <VERSION>`.
-   - Synchronizes `composer.lock` hash using `composer update --lock`.
-   - Validates `composer.json` integrity using `composer validate --no-check-version`.
-5. **Git Commit & Tag**:
-   - Stages `composer.json` and `composer.lock` (`git add composer.json composer.lock`).
-   - Commits with message `Release v<VERSION>`.
-   - Creates an annotated tag `v<VERSION>` (`git tag -a v<VERSION> -m "Release v<VERSION>"`).
+4. **Composer Strict Validation**:
+   - Validates `composer.json` integrity using `composer validate --strict`.
+5. **Git Tag**:
+   - Creates an annotated tag `v<VERSION>` (`git tag -a v<VERSION> -m "Release v<VERSION>"`). The Git tag defines the release in accordance with Packagist VCS best practices without mutating `composer.json`.
 6. **Push to Origin**:
-   - Pushes the release commit on `main` to `origin`.
+   - If unpushed commits exist on the current release branch (or if the branch has not yet been pushed to origin), pushes the branch to `origin`.
    - Pushes the new tag `v<VERSION>` to `origin`.
 
 ### Optional Flags
 
 - **Dry Run**:
-  To test the validation, `make check`, version bump, local commit, and tag without pushing to remote:
+  To test the validation, `make check`, strict composer validation, and local tag creation without pushing to remote:
   ```bash
   make release VERSION=1.2.4 DRY_RUN=1
   ```

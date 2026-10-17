@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Transport;
 
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ConflictException;
@@ -19,9 +20,23 @@ use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\ResponseErrorHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ResponseErrorHandler::class)]
+#[UsesClass(RateLimitInfoDto::class)]
+#[UsesClass(AuthenticationException::class)]
+#[UsesClass(AuthorizationException::class)]
+#[UsesClass(ConflictException::class)]
+#[UsesClass(KinetiException::class)]
+#[UsesClass(NotFoundException::class)]
+#[UsesClass(PayloadTooLargeException::class)]
+#[UsesClass(RateLimitExceededException::class)]
+#[UsesClass(RateLimitException::class)]
+#[UsesClass(ServerException::class)]
+#[UsesClass(ServiceModuleDisabledException::class)]
+#[UsesClass(ServiceUnavailableException::class)]
+#[UsesClass(ValidationException::class)]
 final class ResponseErrorHandlerTest extends TestCase
 {
     public function testHandleErrorThrowsServiceModuleDisabledExceptionWhenModulePresent(): void
