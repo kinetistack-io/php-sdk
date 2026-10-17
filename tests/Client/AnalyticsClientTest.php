@@ -326,4 +326,17 @@ class AnalyticsClientTest extends TestCase
         $this->assertSame('/api/v1/admin/analytics?group_by=month', $sentRequest->getRequestTarget());
         $this->assertSame(['Bearer psr18-token'], $sentRequest->getHeader('Authorization'));
     }
+
+    public function testConstructorPreservesAuthHeaderOnInjectedTransportWhenTokenIsEmpty(): void
+    {
+        $mockResponse = new MockResponse(json_encode(['data' => []], JSON_THROW_ON_ERROR));
+        $httpClient = new MockHttpClient($mockResponse);
+        $transport = new \KinetiStack\Sdk\Transport\SymfonyTransport('https://api.test', 'Authorization', 'Bearer existing-auth-token', $httpClient);
+
+        $client = new AnalyticsClient('https://api.test', '', $transport);
+        $client->getAnalytics();
+
+        $headers = $mockResponse->getRequestOptions()['headers'];
+        $this->assertContains('Authorization: Bearer existing-auth-token', $headers);
+    }
 }

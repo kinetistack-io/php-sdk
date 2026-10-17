@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented `__debugInfo(): array` across secret-bearing classes (`AdminClient`, `AnalyticsClient`, `HttpTransport`, `Psr18Transport`, `SymfonyTransport`, `AuthTokenDto`, `ApiKeyCreatedDto`) to redact sensitive credentials (`jwtToken`, `authHeaderValue`, `token`, `refreshToken`) from `print_r()`, `var_dump()`, and debug output (PHPSDK-56).
 
 ### Added
+- Added `KinetiClient::withApiKey(#[\SensitiveParameter] string $apiKey): static` and method signature to `KinetiClientInterface` (PHPSDK-59).
+- Added `KinetiClient::MAX_SEARCH_OFFSET = 1000` constant and replaced magic numbers in `searchAll()` (PHPSDK-59).
+- Added named static constructors `withApiKey()` and `withHeader()` to `HttpTransport`, `Psr18Transport`, and `SymfonyTransport` (PHPSDK-59).
+- Added `forceReanalysis` property and `withForceReanalysis()` method to `VisionOptionsDto` (PHPSDK-59).
+- Added `rerank` property and `withRerank()` method to `SearchQueryDto` (PHPSDK-59).
 - Added `JobDto::isTerminal(): bool` and `JobDto::isSucceeded(): bool` status helper methods (PHPSDK-58).
 - Added `SseParser` buffer cap with `DEFAULT_MAX_BUFFER_BYTES` (1 MB) and configurable constructor parameter, throwing `TransportException` when exceeded (PHPSDK-57).
 - Added `Psr18Transport::DEFAULT_MAX_RETRY_DELAY_SECONDS` (60.0s) and support for `max_retry_delay` option (PHPSDK-57).
@@ -20,10 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `deleteOrganization(string $id): void` to `AdminClient` and `AdminClientInterface` (`DELETE /api/v1/admin/organizations/{id}`) for parity with the backend organization soft-deletion endpoint (PHPSDK-52).
 
 ### Changed
+- Preserved existing authentication headers on injected `TransportInterface` instances when `$apiKey` or `$jwtToken` is empty across `KinetiClient`, `AdminClient`, and `AnalyticsClient` constructors (PHPSDK-59).
+- Removed unused private property `$apiHost` from `AnalyticsClient` (PHPSDK-59).
 - Added randomized jitter (0–250ms) to `Psr18Transport` exponential backoff calculations and capped retry delay by `max_retry_delay` (PHPSDK-57).
 - Standardized URI path parameter encoding across `AdminClient` and `KinetiClient` to use RFC 3986 `rawurlencode()` (spaces encoded as `%20` instead of `+`) and enforce fast-fail validation rejecting null, empty, or whitespace-only IDs with `\InvalidArgumentException` across all 19 resource methods (PHPSDK-52).
 
 ### Fixed
+- Fixed boolean string hydration in `SearchQueryDto::fromArray()` and `VisionOptionsDto::fromArray()` where `'false'` and `'0'` strings were coerced to `true` (PHPSDK-59).
+- Fixed array validation in `AdminClient::register()` to ensure non-empty `org_name` and `email` throw `\InvalidArgumentException` matching scalar and DTO input validations (PHPSDK-59).
+- Fixed ambiguous constructor overload resolution in `HttpTransport`, `Psr18Transport`, and `SymfonyTransport` when standard header names (`Authorization` or `X-Kineti-Key`) are passed as the second argument with null value (PHPSDK-59).
 - Resolved status trap where `JobDto::isCompleted()` incorrectly returned `true` for failed jobs; `isCompleted()` now strictly checks `JobStatus::Completed` while `isTerminal()` checks for terminal state (`Completed` or `Failed`) (PHPSDK-58).
 - Refactored `KinetiClient::waitForJob()` polling logic to poll immediately, return immediately on terminal jobs even with zero timeout, clamp sleep intervals to remaining timeout budget, and advance simulated elapsed microseconds when custom `$sleeper` callbacks are provided without spinning on wall-clock time (PHPSDK-58).
 - Fixed `SseParser` false-positives by allowing valid JSON chunks with text starting with `[Error:` (e.g. LLM tokens citing logs) to be yielded as `RagStreamChunkDto` (PHPSDK-57).

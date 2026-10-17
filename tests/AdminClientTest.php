@@ -447,7 +447,7 @@ class AdminClientTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Missing or invalid required fields (org_name, email).');
 
-        $admin->register(['email' => 'admin@acme.com']);
+        $admin->register(['org_name' => 'Acme Agency', 'email' => 'admin@acme.com']);
     }
 
     public function testRegisterForbidden(): void
@@ -490,6 +490,60 @@ class AdminClientTest extends TestCase
         $this->expectExceptionMessage('email cannot be empty.');
 
         $admin->register('Acme Agency', '   ');
+    }
+
+    public function testRegisterWithEmptyArrayOrgNameThrowsException(): void
+    {
+        $admin = new AdminClient('https://api.test', '');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('org_name cannot be empty.');
+
+        $admin->register(['org_name' => '   ', 'email' => 'admin@acme.com']);
+    }
+
+    public function testRegisterWithEmptyArrayEmailThrowsException(): void
+    {
+        $admin = new AdminClient('https://api.test', '');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('email cannot be empty.');
+
+        $admin->register(['org_name' => 'Acme Agency', 'email' => '   ']);
+    }
+
+    public function testRegisterWithArrayPayloadTrimsOrgNameAndEmail(): void
+    {
+        $responseBody = json_encode([
+            'message' => 'Verification sent.',
+            'email' => 'admin@acme.com',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 202]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', '', $httpClient);
+
+        $result = $admin->register(['org_name' => '   Acme Corporation   ', 'email' => '   admin@acme.com   ', 'extra' => 'val']);
+
+        $this->assertInstanceOf(RegisterResponseDto::class, $result);
+        /** @var array<string, mixed> $sentBody */
+        $sentBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('Acme Corporation', $sentBody['org_name']);
+        $this->assertSame('admin@acme.com', $sentBody['email']);
+        $this->assertSame('val', $sentBody['extra']);
+    }
+
+    public function testConstructorPreservesAuthHeaderOnInjectedTransportWhenTokenIsEmpty(): void
+    {
+        $mockResponse = new MockResponse(json_encode(['id' => 'org-1', 'name' => 'Org 1'], JSON_THROW_ON_ERROR));
+        $httpClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'Authorization', 'Bearer existing-auth-token', $httpClient);
+
+        $admin = new AdminClient('https://api.test', '', $transport);
+        $admin->getOrganization('org-1');
+
+        $headers = $mockResponse->getRequestOptions()['headers'];
+        $this->assertContains('Authorization: Bearer existing-auth-token', $headers);
     }
 
     public function testCreateOrganizationThrowsBadMethodCallException(): void

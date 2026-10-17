@@ -33,6 +33,7 @@ class KinetiClient implements KinetiClientInterface
     public const DEFAULT_POLL_INTERVAL_SECONDS = 2;
     public const DEFAULT_MAX_POLL_INTERVAL_SECONDS = 10;
     public const DEFAULT_TIMEOUT_SECONDS = 60;
+    public const MAX_SEARCH_OFFSET = 1000;
 
     private TransportInterface $transport;
     private ?ModuleClient $moduleClient = null;
@@ -48,9 +49,23 @@ class KinetiClient implements KinetiClientInterface
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         array $options = []
     ) {
-        $this->transport = $httpClient instanceof TransportInterface
-            ? $httpClient
-            : new HttpTransport($apiHost, 'X-Kineti-Key', $apiKey, $httpClient, $options);
+        if ($httpClient instanceof TransportInterface) {
+            $this->transport = $apiKey !== '' ? $httpClient->withAuthHeaderValue($apiKey) : $httpClient;
+        } else {
+            $this->transport = new HttpTransport($apiHost, 'X-Kineti-Key', $apiKey, $httpClient, $options);
+        }
+    }
+
+    /**
+     * Return a new immutable instance configured with the specified API key.
+     */
+    public function withApiKey(#[\SensitiveParameter] string $apiKey): static
+    {
+        $clone = clone $this;
+        $clone->moduleClient = null;
+        $clone->transport = $this->transport->withAuthHeaderValue($apiKey);
+
+        return $clone;
     }
 
     public function getTransport(): TransportInterface
@@ -455,7 +470,7 @@ class KinetiClient implements KinetiClientInterface
         $limit = max(1, $query->limit ?? 10);
         $offset = max(0, $query->offset ?? ($query->page !== null && $query->page > 1 ? ($query->page - 1) * $limit : 0));
 
-        if ($offset > 1000) {
+        if ($offset > self::MAX_SEARCH_OFFSET) {
             return;
         }
 
@@ -482,7 +497,7 @@ class KinetiClient implements KinetiClientInterface
             }
 
             $nextOffset = $response->nextOffset ?? ($offset + $limit);
-            if ($nextOffset <= $offset || $nextOffset > 1000) {
+            if ($nextOffset <= $offset || $nextOffset > self::MAX_SEARCH_OFFSET) {
                 break;
             }
 

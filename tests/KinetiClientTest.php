@@ -14,6 +14,7 @@ use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\KinetiClient;
+use KinetiStack\Sdk\Transport\SymfonyTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -647,6 +648,60 @@ class KinetiClientTest extends TestCase
         $this->assertSame(KinetiClient::DEFAULT_TIMEOUT_SECONDS, $params['timeoutSeconds']);
         $this->assertSame(KinetiClient::DEFAULT_POLL_INTERVAL_SECONDS, $params['pollIntervalSeconds']);
         $this->assertSame(KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS, $params['maxPollIntervalSeconds']);
+    }
+
+    public function testWithApiKeyReturnsImmutableClone(): void
+    {
+        $mockResponse1 = new MockResponse(json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR));
+        $mockResponse2 = new MockResponse(json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR));
+
+        $httpClient = new MockHttpClient([$mockResponse1, $mockResponse2]);
+        $client1 = new KinetiClient('https://api.test', 'key-1', $httpClient);
+        $modules1 = $client1->modules();
+        $client2 = $client1->withApiKey('key-2');
+        $modules2 = $client2->modules();
+
+        $this->assertNotSame($client1, $client2);
+        $this->assertNotSame($modules1, $modules2);
+
+        $client1->healthz();
+        $headers1 = $mockResponse1->getRequestOptions()['headers'];
+        $this->assertContains('X-Kineti-Key: key-1', $headers1);
+
+        $client2->healthz();
+        $headers2 = $mockResponse2->getRequestOptions()['headers'];
+        $this->assertContains('X-Kineti-Key: key-2', $headers2);
+    }
+
+    public function testConstructorPreservesAuthHeaderOnInjectedTransportWhenApiKeyIsEmpty(): void
+    {
+        $mockResponse = new MockResponse(json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR));
+        $httpClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'pre-configured-key', $httpClient);
+
+        $kineti = new KinetiClient('https://api.test', '', $transport);
+        $kineti->healthz();
+
+        $headers = $mockResponse->getRequestOptions()['headers'];
+        $this->assertContains('X-Kineti-Key: pre-configured-key', $headers);
+    }
+
+    public function testConstructorSetsApiKeyOnInjectedTransportWhenApiKeyIsNonEmpty(): void
+    {
+        $mockResponse = new MockResponse(json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR));
+        $httpClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'old-key', $httpClient);
+
+        $kineti = new KinetiClient('https://api.test', 'new-key', $transport);
+        $kineti->healthz();
+
+        $headers = $mockResponse->getRequestOptions()['headers'];
+        $this->assertContains('X-Kineti-Key: new-key', $headers);
+    }
+
+    public function testMaxSearchOffsetConstant(): void
+    {
+        $this->assertSame(1000, KinetiClient::MAX_SEARCH_OFFSET);
     }
 
     public function testWaitForJobWithZeroTimeoutOnCompletedJobReturnsImmediatelyAndInvokesProgress(): void

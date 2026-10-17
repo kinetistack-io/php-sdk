@@ -35,9 +35,17 @@ class SymfonyTransport implements TransportInterface
         HttpClientInterface|array|null $clientOrDefaultOptions = null,
         array $defaultOptions = []
     ) {
+        $isStandardAuthHeader = in_array(strtolower($authHeaderName), ['authorization', 'x-kineti-key'], true);
+
         if (is_string($authHeaderValueOrClient)) {
             $this->authHeaderName = $authHeaderName;
             $this->authHeaderValue = $authHeaderValueOrClient;
+            /** @var HttpClientInterface|null $baseClient */
+            $baseClient = $clientOrDefaultOptions instanceof HttpClientInterface ? $clientOrDefaultOptions : null;
+            $this->defaultOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
+        } elseif ($authHeaderValueOrClient === null && $isStandardAuthHeader) {
+            $this->authHeaderName = $authHeaderName;
+            $this->authHeaderValue = '';
             /** @var HttpClientInterface|null $baseClient */
             $baseClient = $clientOrDefaultOptions instanceof HttpClientInterface ? $clientOrDefaultOptions : null;
             $this->defaultOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
@@ -72,6 +80,33 @@ class SymfonyTransport implements TransportInterface
         }
 
         $this->client = $baseClient;
+    }
+
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public static function withApiKey(
+        string $apiHost,
+        #[\SensitiveParameter]
+        string $apiKey,
+        ?HttpClientInterface $client = null,
+        array $defaultOptions = []
+    ): self {
+        return new self($apiHost, 'X-Kineti-Key', $apiKey, $client, $defaultOptions);
+    }
+
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public static function withHeader(
+        string $apiHost,
+        string $headerName,
+        #[\SensitiveParameter]
+        string $headerValue,
+        ?HttpClientInterface $client = null,
+        array $defaultOptions = []
+    ): self {
+        return new self($apiHost, $headerName, $headerValue, $client, $defaultOptions);
     }
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface

@@ -15,7 +15,6 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class AnalyticsClient implements AnalyticsClientInterface
 {
     private TransportInterface $transport;
-    private ?string $apiHost = null;
 
     /**
      * @param TransportInterface|string $transportOrApiHost Transport instance or API host URL
@@ -34,9 +33,8 @@ class AnalyticsClient implements AnalyticsClientInterface
                 ? $transportOrApiHost->withAuthHeaderValue('Bearer ' . $this->jwtToken)
                 : $transportOrApiHost;
         } else {
-            $this->apiHost = $transportOrApiHost;
             $this->transport = $this->createTransport(
-                $this->apiHost,
+                $transportOrApiHost,
                 $this->jwtToken,
                 $this->httpClient,
                 $this->options
@@ -119,11 +117,11 @@ class AnalyticsClient implements AnalyticsClientInterface
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient,
         array $options
     ): TransportInterface {
-        $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
-
         if ($httpClient instanceof TransportInterface) {
-            return $httpClient->withAuthHeaderValue($authHeaderValue);
+            return $jwtToken !== '' ? $httpClient->withAuthHeaderValue('Bearer ' . $jwtToken) : $httpClient;
         }
+
+        $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
         return new HttpTransport($apiHost, 'Authorization', $authHeaderValue, $httpClient, $options);
     }

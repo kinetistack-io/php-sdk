@@ -168,7 +168,7 @@ class AdminClient implements AdminClientInterface
      * @param RegisterDto|array<string, mixed>|string $orgNameOrData Organization name, RegisterDto, or associative payload array containing 'org_name' and 'email'.
      * @param string|null $email Admin user email (required when $orgNameOrData is a string).
      * @return RegisterResponseDto
-     * @throws \InvalidArgumentException When scalar arguments are empty.
+     * @throws \InvalidArgumentException When scalar arguments or required array fields (org_name, email) are empty.
      * @throws ConflictException When the email address is already registered (HTTP 409).
      * @throws ValidationException When payload fails validation (HTTP 422).
      * @throws AuthorizationException When registration is closed or not allowed (HTTP 403).
@@ -181,7 +181,21 @@ class AdminClient implements AdminClientInterface
         if ($orgNameOrData instanceof RegisterDto) {
             $payload = $orgNameOrData->toArray();
         } elseif (is_array($orgNameOrData)) {
+            $rawOrgName = $orgNameOrData['org_name'] ?? null;
+            $orgName = is_scalar($rawOrgName) || $rawOrgName instanceof \Stringable ? trim((string) $rawOrgName) : '';
+            if ($orgName === '') {
+                throw new \InvalidArgumentException('org_name cannot be empty.');
+            }
+
+            $rawEmail = $orgNameOrData['email'] ?? null;
+            $email = is_scalar($rawEmail) || $rawEmail instanceof \Stringable ? trim((string) $rawEmail) : '';
+            if ($email === '') {
+                throw new \InvalidArgumentException('email cannot be empty.');
+            }
+
             $payload = $orgNameOrData;
+            $payload['org_name'] = $orgName;
+            $payload['email'] = $email;
             unset($payload['password']);
         } else {
             $dto = new RegisterDto($orgNameOrData, (string) $email);
@@ -1031,11 +1045,11 @@ class AdminClient implements AdminClientInterface
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient,
         array $options
     ): TransportInterface {
-        $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
-
         if ($httpClient instanceof TransportInterface) {
-            return $httpClient->withAuthHeaderValue($authHeaderValue);
+            return $jwtToken !== '' ? $httpClient->withAuthHeaderValue('Bearer ' . $jwtToken) : $httpClient;
         }
+
+        $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
         return new HttpTransport($apiHost, 'Authorization', $authHeaderValue, $httpClient, $options);
     }

@@ -237,4 +237,81 @@ class TransportGeneralizationTest extends TestCase
         $updated->request('GET', '/test2');
         $this->assertContains('Authorization: Bearer new-token', $mockResponse2->getRequestOptions()['headers']);
     }
+
+    public function testTransportsTreatStandardHeaderWithNullValueAsHeaderNameWithEmptyValue(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}');
+        $client = new MockHttpClient($mockResponse);
+
+        $http = new HttpTransport('https://api.test', 'Authorization', null, $client);
+        $this->assertSame('Authorization', $http->getAuthHeaderName());
+        $this->assertSame('', $http->getAuthHeaderValue());
+
+        $httpKey = new HttpTransport('https://api.test', 'X-Kineti-Key', null, $client);
+        $this->assertSame('X-Kineti-Key', $httpKey->getAuthHeaderName());
+        $this->assertSame('', $httpKey->getAuthHeaderValue());
+
+        $symfony = new SymfonyTransport('https://api.test', 'Authorization', null, $client);
+        $this->assertSame('Authorization', $symfony->getAuthHeaderName());
+        $this->assertSame('', $symfony->getAuthHeaderValue());
+
+        $psr = new Psr18Transport('https://api.test', 'Authorization');
+        $this->assertSame('Authorization', $psr->getAuthHeaderName());
+        $this->assertSame('', $psr->getAuthHeaderValue());
+    }
+
+    public function testStaticFactoryMethods(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}');
+        $client = new MockHttpClient($mockResponse);
+
+        $httpApiKey = HttpTransport::withApiKey('https://api.test', 'test-key', $client);
+        $this->assertSame('X-Kineti-Key', $httpApiKey->getAuthHeaderName());
+        $this->assertSame('test-key', $httpApiKey->getAuthHeaderValue());
+
+        $httpHeader = HttpTransport::withHeader('https://api.test', 'Authorization', 'Bearer jwt', $client);
+        $this->assertSame('Authorization', $httpHeader->getAuthHeaderName());
+        $this->assertSame('Bearer jwt', $httpHeader->getAuthHeaderValue());
+
+        $symfonyApiKey = SymfonyTransport::withApiKey('https://api.test', 'test-key', $client);
+        $this->assertSame('X-Kineti-Key', $symfonyApiKey->getAuthHeaderName());
+        $this->assertSame('test-key', $symfonyApiKey->getAuthHeaderValue());
+
+        $symfonyHeader = SymfonyTransport::withHeader('https://api.test', 'Authorization', 'Bearer jwt', $client);
+        $this->assertSame('Authorization', $symfonyHeader->getAuthHeaderName());
+        $this->assertSame('Bearer jwt', $symfonyHeader->getAuthHeaderValue());
+
+        $psrApiKey = Psr18Transport::withApiKey('https://api.test', 'test-key');
+        $this->assertSame('X-Kineti-Key', $psrApiKey->getAuthHeaderName());
+        $this->assertSame('test-key', $psrApiKey->getAuthHeaderValue());
+
+        $psrHeader = Psr18Transport::withHeader('https://api.test', 'Authorization', 'Bearer jwt');
+        $this->assertSame('Authorization', $psrHeader->getAuthHeaderName());
+        $this->assertSame('Bearer jwt', $psrHeader->getAuthHeaderValue());
+    }
+
+    public function testStaticFactoryMethodsNamedArgumentsWithDefaultOptions(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}');
+        $client = new MockHttpClient($mockResponse);
+
+        $httpApiKey = HttpTransport::withApiKey(
+            apiHost: 'https://api.test',
+            apiKey: 'test-key',
+            client: $client,
+            defaultOptions: ['timeout' => 15]
+        );
+        $this->assertSame('X-Kineti-Key', $httpApiKey->getAuthHeaderName());
+        $this->assertSame('test-key', $httpApiKey->getAuthHeaderValue());
+
+        $httpHeader = HttpTransport::withHeader(
+            apiHost: 'https://api.test',
+            headerName: 'Authorization',
+            headerValue: 'Bearer jwt',
+            client: $client,
+            defaultOptions: ['timeout' => 15]
+        );
+        $this->assertSame('Authorization', $httpHeader->getAuthHeaderName());
+        $this->assertSame('Bearer jwt', $httpHeader->getAuthHeaderValue());
+    }
 }

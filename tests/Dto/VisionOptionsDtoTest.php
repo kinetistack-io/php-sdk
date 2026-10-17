@@ -99,4 +99,45 @@ class VisionOptionsDtoTest extends TestCase
 
         new VisionOptionsDto(maxLength: 0);
     }
+
+    public function testFromArrayParsesBooleanStrings(): void
+    {
+        $dtoFalse = VisionOptionsDto::fromArray([
+            'include_tags' => 'false',
+            'force_reanalysis' => '0',
+        ]);
+
+        $this->assertFalse($dtoFalse->includeTags);
+        $this->assertFalse($dtoFalse->forceReanalysis);
+
+        $dtoFalse2 = VisionOptionsDto::fromArray([
+            'includeTags' => '0',
+            'forceReanalysis' => 'false',
+        ]);
+
+        $this->assertFalse($dtoFalse2->includeTags);
+        $this->assertFalse($dtoFalse2->forceReanalysis);
+
+        $dtoTrue = VisionOptionsDto::fromArray([
+            'include_tags' => 'true',
+            'force_reanalysis' => '1',
+        ]);
+
+        $this->assertTrue($dtoTrue->includeTags);
+        $this->assertTrue($dtoTrue->forceReanalysis);
+    }
+
+    public function testWithForceReanalysis(): void
+    {
+        $dto = VisionOptionsDto::create()
+            ->withForceReanalysis(true);
+
+        $this->assertTrue($dto->forceReanalysis);
+        $array = $dto->toArray();
+        $this->assertTrue($array['force_reanalysis']);
+
+        $cloned = $dto->withForceReanalysis(false);
+        $this->assertFalse($cloned->forceReanalysis);
+        $this->assertTrue($dto->forceReanalysis);
+    }
 }

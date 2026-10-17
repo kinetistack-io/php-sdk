@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class VisionOptionsDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param array<string, mixed>|null $custom
      */
@@ -14,6 +16,7 @@ class VisionOptionsDto
         public readonly bool $includeTags = true,
         public readonly int $maxLength = 150,
         public readonly ?array $custom = null,
+        public readonly bool $forceReanalysis = false,
     ) {
         if (trim($this->language) === '') {
             throw new \InvalidArgumentException('Language code cannot be empty.');
@@ -31,17 +34,17 @@ class VisionOptionsDto
 
     public function withLanguage(string $language): self
     {
-        return new self($language, $this->includeTags, $this->maxLength, $this->custom);
+        return new self($language, $this->includeTags, $this->maxLength, $this->custom, $this->forceReanalysis);
     }
 
     public function withIncludeTags(bool $includeTags = true): self
     {
-        return new self($this->language, $includeTags, $this->maxLength, $this->custom);
+        return new self($this->language, $includeTags, $this->maxLength, $this->custom, $this->forceReanalysis);
     }
 
     public function withMaxLength(int $maxLength): self
     {
-        return new self($this->language, $this->includeTags, $maxLength, $this->custom);
+        return new self($this->language, $this->includeTags, $maxLength, $this->custom, $this->forceReanalysis);
     }
 
     public function withCustom(string $key, mixed $value): self
@@ -49,7 +52,7 @@ class VisionOptionsDto
         $custom = $this->custom ?? [];
         $custom[$key] = $value;
 
-        return new self($this->language, $this->includeTags, $this->maxLength, $custom);
+        return new self($this->language, $this->includeTags, $this->maxLength, $custom, $this->forceReanalysis);
     }
 
     /**
@@ -57,7 +60,12 @@ class VisionOptionsDto
      */
     public function withCustomOptions(?array $custom): self
     {
-        return new self($this->language, $this->includeTags, $this->maxLength, $custom);
+        return new self($this->language, $this->includeTags, $this->maxLength, $custom, $this->forceReanalysis);
+    }
+
+    public function withForceReanalysis(bool $forceReanalysis = true): self
+    {
+        return new self($this->language, $this->includeTags, $this->maxLength, $this->custom, $forceReanalysis);
     }
 
     /**
@@ -70,6 +78,10 @@ class VisionOptionsDto
             'include_tags' => $this->includeTags,
             'max_length' => $this->maxLength,
         ];
+
+        if ($this->forceReanalysis) {
+            $data['force_reanalysis'] = true;
+        }
 
         if ($this->custom !== null) {
             foreach ($this->custom as $key => $value) {
@@ -102,7 +114,16 @@ class VisionOptionsDto
             if (!is_scalar($rawIncludeTags)) {
                 throw new \InvalidArgumentException('include_tags must be a boolean.');
             }
-            $includeTags = (bool) $rawIncludeTags;
+            $includeTags = self::extractBool($rawIncludeTags, true);
+        }
+
+        $rawForceReanalysis = $data['force_reanalysis'] ?? $data['forceReanalysis'] ?? null;
+        $forceReanalysis = false;
+        if ($rawForceReanalysis !== null) {
+            if (!is_scalar($rawForceReanalysis)) {
+                throw new \InvalidArgumentException('force_reanalysis must be a boolean.');
+            }
+            $forceReanalysis = self::extractBool($rawForceReanalysis, false);
         }
 
         $rawMaxLength = $data['max_length'] ?? $data['maxLength'] ?? null;
@@ -116,11 +137,11 @@ class VisionOptionsDto
 
         $custom = [];
         foreach ($data as $key => $value) {
-            if (!in_array($key, ['language', 'include_tags', 'includeTags', 'max_length', 'maxLength'], true)) {
+            if (!in_array($key, ['language', 'include_tags', 'includeTags', 'max_length', 'maxLength', 'force_reanalysis', 'forceReanalysis'], true)) {
                 $custom[$key] = $value;
             }
         }
 
-        return new self($language, $includeTags, $maxLength, !empty($custom) ? $custom : null);
+        return new self($language, $includeTags, $maxLength, !empty($custom) ? $custom : null, $forceReanalysis);
     }
 }

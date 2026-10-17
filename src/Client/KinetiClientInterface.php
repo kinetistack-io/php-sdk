@@ -30,6 +30,11 @@ use KinetiStack\Sdk\Transport\TransportInterface;
  */
 interface KinetiClientInterface
 {
+    /**
+     * Return a new immutable instance configured with the specified API key.
+     */
+    public function withApiKey(#[\SensitiveParameter] string $apiKey): static;
+
     public function getTransport(): TransportInterface;
 
     /**

@@ -31,9 +31,21 @@ class HttpTransport implements TransportInterface
         HttpClientInterface|ClientInterface|TransportInterface|array|null $clientOrDefaultOptions = null,
         array $defaultOptions = []
     ) {
+        $isStandardAuthHeader = in_array(strtolower($authHeaderName), ['authorization', 'x-kineti-key'], true);
+
         if (is_string($authHeaderValueOrClient)) {
             $this->authHeaderName = $authHeaderName;
             $this->authHeaderValue = $authHeaderValueOrClient;
+            /** @var HttpClientInterface|ClientInterface|TransportInterface|null $actualClient */
+            $actualClient = ($clientOrDefaultOptions instanceof HttpClientInterface
+                || $clientOrDefaultOptions instanceof ClientInterface
+                || $clientOrDefaultOptions instanceof TransportInterface)
+                ? $clientOrDefaultOptions
+                : null;
+            $actualOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
+        } elseif ($authHeaderValueOrClient === null && $isStandardAuthHeader) {
+            $this->authHeaderName = $authHeaderName;
+            $this->authHeaderValue = '';
             /** @var HttpClientInterface|ClientInterface|TransportInterface|null $actualClient */
             $actualClient = ($clientOrDefaultOptions instanceof HttpClientInterface
                 || $clientOrDefaultOptions instanceof ClientInterface
@@ -59,6 +71,35 @@ class HttpTransport implements TransportInterface
         } else {
             $this->delegate = self::createDiscoveredTransport($apiHost, $this->authHeaderName, $this->authHeaderValue, $actualOptions);
         }
+    }
+
+    /**
+     * @param HttpClientInterface|ClientInterface|TransportInterface|null $client
+     * @param array<string, mixed> $defaultOptions
+     */
+    public static function withApiKey(
+        string $apiHost,
+        #[\SensitiveParameter]
+        string $apiKey,
+        HttpClientInterface|ClientInterface|TransportInterface|null $client = null,
+        array $defaultOptions = []
+    ): self {
+        return new self($apiHost, 'X-Kineti-Key', $apiKey, $client, $defaultOptions);
+    }
+
+    /**
+     * @param HttpClientInterface|ClientInterface|TransportInterface|null $client
+     * @param array<string, mixed> $defaultOptions
+     */
+    public static function withHeader(
+        string $apiHost,
+        string $headerName,
+        #[\SensitiveParameter]
+        string $headerValue,
+        HttpClientInterface|ClientInterface|TransportInterface|null $client = null,
+        array $defaultOptions = []
+    ): self {
+        return new self($apiHost, $headerName, $headerValue, $client, $defaultOptions);
     }
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface

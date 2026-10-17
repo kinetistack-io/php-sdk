@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class SearchQueryDto
 {
+    use ExtractsResponseDataTrait;
+
     /**
      * @param list<string>|null $userRoles
      */
@@ -25,6 +27,7 @@ class SearchQueryDto
         public readonly ?int $page = null,
         public readonly ?int $offset = null,
         public readonly ?FacetRequestDto $facets = null,
+        public readonly ?bool $rerank = null,
     ) {
         if (trim($this->query) === '') {
             throw new \InvalidArgumentException('Search query cannot be empty.');
@@ -54,6 +57,7 @@ class SearchQueryDto
             array_key_exists('page', $overrides) ? (is_int($overrides['page']) ? $overrides['page'] : null) : $this->page,
             array_key_exists('offset', $overrides) ? (is_int($overrides['offset']) ? $overrides['offset'] : null) : $this->offset,
             array_key_exists('facets', $overrides) ? ($overrides['facets'] instanceof FacetRequestDto ? $overrides['facets'] : null) : $this->facets,
+            array_key_exists('rerank', $overrides) ? (is_bool($overrides['rerank']) ? $overrides['rerank'] : null) : $this->rerank,
         );
     }
 
@@ -201,6 +205,11 @@ class SearchQueryDto
         return $this->cloneWith(['facets' => $facets]);
     }
 
+    public function withRerank(?bool $rerank = true): self
+    {
+        return $this->cloneWith(['rerank' => $rerank]);
+    }
+
     public function getFacets(): ?FacetRequestDto
     {
         return $this->facets;
@@ -249,6 +258,10 @@ class SearchQueryDto
 
         if ($this->stream !== null) {
             $data['stream'] = $this->stream;
+        }
+
+        if ($this->rerank !== null) {
+            $data['rerank'] = $this->rerank;
         }
 
         if ($this->filters !== null && !$this->filters->isEmpty()) {
@@ -340,16 +353,16 @@ class SearchQueryDto
             if (!is_scalar($rawDistinct)) {
                 throw new \InvalidArgumentException('distinct_documents must be a boolean.');
             }
-            $distinctDocuments = (bool) $rawDistinct;
+            $distinctDocuments = self::extractNullableBool($rawDistinct);
         }
 
-        $rawSynth = $data['synthesize_answer'] ?? $data['synthesizeAnswer'] ?? null;
+        $rawSynth = $data['synthesize_answer'] ?? $data['synthesizeAnswer'] ?? $data['synthesize'] ?? null;
         $synthesizeAnswer = null;
         if ($rawSynth !== null) {
             if (!is_scalar($rawSynth)) {
                 throw new \InvalidArgumentException('synthesize_answer must be a boolean.');
             }
-            $synthesizeAnswer = (bool) $rawSynth;
+            $synthesizeAnswer = self::extractNullableBool($rawSynth);
         }
 
         $rawStream = $data['stream'] ?? null;
@@ -358,7 +371,16 @@ class SearchQueryDto
             if (!is_scalar($rawStream)) {
                 throw new \InvalidArgumentException('stream must be a boolean.');
             }
-            $stream = (bool) $rawStream;
+            $stream = self::extractNullableBool($rawStream);
+        }
+
+        $rawRerank = $data['rerank'] ?? null;
+        $rerank = null;
+        if ($rawRerank !== null) {
+            if (!is_scalar($rawRerank)) {
+                throw new \InvalidArgumentException('rerank must be a boolean.');
+            }
+            $rerank = self::extractNullableBool($rawRerank);
         }
 
         $filters = null;
@@ -393,7 +415,8 @@ class SearchQueryDto
             $stream,
             $page,
             $offset,
-            $facets
+            $facets,
+            $rerank
         );
     }
 }

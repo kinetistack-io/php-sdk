@@ -15,6 +15,11 @@ use KinetiStack\Sdk\Client\KinetiClientInterface as BaseKinetiClientInterface;
 interface KinetiClientInterface extends BaseKinetiClientInterface
 {
     /**
+     * Return a new immutable instance configured with the specified API key.
+     */
+    public function withApiKey(#[\SensitiveParameter] string $apiKey): static;
+
+    /**
      * Access module-specific client operations.
      */
     public function modules(): ModuleClientInterface;

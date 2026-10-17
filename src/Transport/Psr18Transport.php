@@ -42,9 +42,21 @@ class Psr18Transport implements TransportInterface
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null
     ) {
+        $isStandardAuthHeader = in_array(strtolower($authHeaderName), ['authorization', 'x-kineti-key'], true);
+
         if (is_string($authHeaderValueOrClient)) {
             $this->authHeaderName = $authHeaderName;
             $this->authHeaderValue = $authHeaderValueOrClient;
+            /** @var ClientInterface|null $actualClient */
+            $actualClient = $clientOrDefaultOptions instanceof ClientInterface ? $clientOrDefaultOptions : null;
+            $this->defaultOptions = is_array($clientOrDefaultOptions)
+                ? $clientOrDefaultOptions
+                : (is_array($defaultOptionsOrRequestFactory) ? $defaultOptionsOrRequestFactory : []);
+            $actualReqFactory = $requestFactory ?? ($defaultOptionsOrRequestFactory instanceof RequestFactoryInterface ? $defaultOptionsOrRequestFactory : null);
+            $actualStreamFactory = $streamFactory;
+        } elseif ($authHeaderValueOrClient === null && $isStandardAuthHeader) {
+            $this->authHeaderName = $authHeaderName;
+            $this->authHeaderValue = '';
             /** @var ClientInterface|null $actualClient */
             $actualClient = $clientOrDefaultOptions instanceof ClientInterface ? $clientOrDefaultOptions : null;
             $this->defaultOptions = is_array($clientOrDefaultOptions)
@@ -66,6 +78,37 @@ class Psr18Transport implements TransportInterface
         $this->client = $actualClient ?? Psr18ClientDiscovery::find();
         $this->requestFactory = $actualReqFactory ?? Psr17FactoryDiscovery::findRequestFactory();
         $this->streamFactory = $actualStreamFactory ?? Psr17FactoryDiscovery::findStreamFactory();
+    }
+
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public static function withApiKey(
+        string $apiHost,
+        #[\SensitiveParameter]
+        string $apiKey,
+        ?ClientInterface $client = null,
+        array $defaultOptions = [],
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null
+    ): self {
+        return new self($apiHost, 'X-Kineti-Key', $apiKey, $client, $defaultOptions, $requestFactory, $streamFactory);
+    }
+
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public static function withHeader(
+        string $apiHost,
+        string $headerName,
+        #[\SensitiveParameter]
+        string $headerValue,
+        ?ClientInterface $client = null,
+        array $defaultOptions = [],
+        ?RequestFactoryInterface $requestFactory = null,
+        ?StreamFactoryInterface $streamFactory = null
+    ): self {
+        return new self($apiHost, $headerName, $headerValue, $client, $defaultOptions, $requestFactory, $streamFactory);
     }
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface
