@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Prevented webhook replay protection downgrade in `WebhookVerifier::verify()` by requiring `allowLegacy: true` to accept non-`v1=` legacy signatures (`sha256={hmac}` or raw hex), and enforced strict 64-character hexadecimal digest validation across both modern and legacy verification paths (PHPSDK-56).
+- Implemented `__debugInfo(): array` across secret-bearing classes (`AdminClient`, `AnalyticsClient`, `HttpTransport`, `Psr18Transport`, `SymfonyTransport`, `AuthTokenDto`, `ApiKeyCreatedDto`) to redact sensitive credentials (`jwtToken`, `authHeaderValue`, `token`, `refreshToken`) from `print_r()`, `var_dump()`, and debug output (PHPSDK-56).
+
 ### Added
 - Added `JobType` enum (`vision_single`, `vision_batch`, `document_ingest`) with domain helpers `isVision()`, `isSingleVision()`, `isDocument()`, and `isBatch()` (PHPSDK-55).
 - Added `JobDto::getJobType(): ?JobType` helper method and supported `JobType` instances in constructor and `fromArray()` (PHPSDK-55).

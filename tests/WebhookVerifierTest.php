@@ -20,14 +20,14 @@ final class WebhookVerifierTest extends TestCase
         $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
         $header = 'sha256=' . $signature;
 
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET));
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyValidSignatureWithoutPrefix(): void
     {
         $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
 
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET));
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyValidSignatureUppercaseHex(): void
@@ -35,8 +35,8 @@ final class WebhookVerifierTest extends TestCase
         $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
         $header = 'sha256=' . strtoupper($signature);
 
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET));
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, strtoupper($signature), self::SECRET));
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, strtoupper($signature), self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyValidSignatureWithWhitespace(): void
@@ -44,7 +44,7 @@ final class WebhookVerifierTest extends TestCase
         $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
         $header = "  sha256=" . $signature . " \n";
 
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET));
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyInvalidPayloadFails(): void
@@ -53,7 +53,7 @@ final class WebhookVerifierTest extends TestCase
         $header = 'sha256=' . $signature;
         $tamperedPayload = self::PAYLOAD . ' ';
 
-        $this->assertFalse(WebhookVerifier::verify($tamperedPayload, $header, self::SECRET));
+        $this->assertFalse(WebhookVerifier::verify($tamperedPayload, $header, self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyIncorrectSecretFails(): void
@@ -62,14 +62,14 @@ final class WebhookVerifierTest extends TestCase
         $header = 'sha256=' . $signature;
         $wrongSecret = 'wrong_secret_key';
 
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, $wrongSecret));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, $wrongSecret, allowLegacy: true));
     }
 
     public function testVerifyIncorrectSignatureFails(): void
     {
         $header = 'sha256=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
 
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyEmptySecretFails(): void
@@ -77,14 +77,14 @@ final class WebhookVerifierTest extends TestCase
         $signature = hash_hmac('sha256', self::PAYLOAD, '');
         $header = 'sha256=' . $signature;
 
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, ''));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, '', allowLegacy: true));
     }
 
     public function testVerifyEmptySignatureHeaderFails(): void
     {
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '', self::SECRET));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=', self::SECRET));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '   ', self::SECRET));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '', self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=', self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '   ', self::SECRET, allowLegacy: true));
     }
 
     public function testVerifyEmptyPayloadWithValidSignature(): void
@@ -93,7 +93,39 @@ final class WebhookVerifierTest extends TestCase
         $signature = hash_hmac('sha256', $emptyPayload, self::SECRET);
         $header = 'sha256=' . $signature;
 
-        $this->assertTrue(WebhookVerifier::verify($emptyPayload, $header, self::SECRET));
+        $this->assertTrue(WebhookVerifier::verify($emptyPayload, $header, self::SECRET, allowLegacy: true));
+    }
+
+    public function testLegacySignaturesRejectedByDefault(): void
+    {
+        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
+        $header = 'sha256=' . $signature;
+
+        // Legacy with sha256= prefix rejected by default
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: false));
+
+        // Legacy without prefix (raw hex) rejected by default
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET, allowLegacy: false));
+    }
+
+    public function testLegacySignaturesInvalidHexOrLengthRejected(): void
+    {
+        // Shorter than 64 hex characters (63 chars)
+        $short = str_repeat('a', 63);
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $short, self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=' . $short, self::SECRET, allowLegacy: true));
+
+        // Longer than 64 hex characters (65 chars)
+        $long = str_repeat('a', 65);
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $long, self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=' . $long, self::SECRET, allowLegacy: true));
+
+        // 64 characters but containing non-hex characters
+        $nonHex = str_repeat('g', 64);
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $nonHex, self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=' . $nonHex, self::SECRET, allowLegacy: true));
     }
 
     public function testConstants(): void
@@ -269,6 +301,23 @@ final class WebhookVerifierTest extends TestCase
         $this->assertTrue(WebhookVerifier::verify($emptyPayload, $header, self::SECRET));
     }
 
+    public function testVerifyV1InvalidHexOrLengthRejected(): void
+    {
+        $timestamp = time();
+
+        // 63 chars (too short)
+        $short = "v1={$timestamp}." . str_repeat('a', 63);
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $short, self::SECRET));
+
+        // 65 chars (too long)
+        $long = "v1={$timestamp}." . str_repeat('a', 65);
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $long, self::SECRET));
+
+        // 64 chars with non-hex characters
+        $nonHex = "v1={$timestamp}." . str_repeat('z', 64);
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $nonHex, self::SECRET));
+    }
+
     #[DataProvider('provideMalformedV1Headers')]
     public function testVerifyV1MalformedHeaders(string $malformedHeader): void
     {
@@ -292,6 +341,9 @@ final class WebhookVerifierTest extends TestCase
             'non-numeric timestamp' => ['v1=abc.def'],
             'negative timestamp' => ['v1=-12345.' . $dummyHex],
             'non-hex signature' => ['v1=12345.not_a_valid_hex_signature_value_here!'],
+            'non-hex 64-char signature' => ['v1=12345.' . str_repeat('z', 64)],
+            'invalid signature length short' => ['v1=12345.' . substr($dummyHex, 0, 63)],
+            'invalid signature length long' => ['v1=12345.' . $dummyHex . 'a'],
             'spaces around separator' => ['v1= 12345 . abcdef '],
         ];
     }

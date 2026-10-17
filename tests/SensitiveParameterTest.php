@@ -133,4 +133,152 @@ class SensitiveParameterTest extends TestCase
             }
         }
     }
+
+    public function testAdminClientDebugInfoRedactsJwtToken(): void
+    {
+        $secretToken = 'secret-admin-jwt-token-xyz';
+        $client = new AdminClient('https://api.test', $secretToken);
+
+        $debugInfo = $client->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['jwtToken']);
+        $this->assertStringNotContainsString($secretToken, var_export($debugInfo['jwtToken'], true));
+
+        $printOutput = print_r($client, true);
+        $this->assertStringNotContainsString($secretToken, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        // When empty token
+        $clientEmpty = new AdminClient('https://api.test', '');
+        $this->assertSame('', $clientEmpty->__debugInfo()['jwtToken']);
+    }
+
+    public function testAnalyticsClientDebugInfoRedactsJwtToken(): void
+    {
+        $secretToken = 'secret-analytics-jwt-token-xyz';
+        $client = new AnalyticsClient('https://api.test', $secretToken);
+
+        $debugInfo = $client->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['jwtToken']);
+        $this->assertStringNotContainsString($secretToken, var_export($debugInfo['jwtToken'], true));
+
+        $printOutput = print_r($client, true);
+        $this->assertStringNotContainsString($secretToken, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        // When empty token
+        $clientEmpty = new AnalyticsClient('https://api.test', '');
+        $this->assertSame('', $clientEmpty->__debugInfo()['jwtToken']);
+    }
+
+    public function testHttpTransportDebugInfoRedactsAuthHeaderValue(): void
+    {
+        $secretValue = 'Bearer secret-auth-token-123';
+        $transport = new HttpTransport('https://api.test', 'Authorization', $secretValue);
+
+        $debugInfo = $transport->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
+        $this->assertStringNotContainsString($secretValue, var_export($debugInfo['authHeaderValue'], true));
+
+        $printOutput = print_r($transport, true);
+        $this->assertStringNotContainsString($secretValue, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        // When empty value
+        $transportEmpty = new HttpTransport('https://api.test', 'Authorization', '');
+        $this->assertSame('', $transportEmpty->__debugInfo()['authHeaderValue']);
+    }
+
+    public function testPsr18TransportDebugInfoRedactsAuthHeaderValue(): void
+    {
+        $secretValue = 'Bearer secret-psr18-token-456';
+        $transport = new Psr18Transport('https://api.test', 'Authorization', $secretValue);
+
+        $debugInfo = $transport->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
+        $this->assertStringNotContainsString($secretValue, var_export($debugInfo['authHeaderValue'], true));
+
+        $printOutput = print_r($transport, true);
+        $this->assertStringNotContainsString($secretValue, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        // When empty value
+        $transportEmpty = new Psr18Transport('https://api.test', 'Authorization', '');
+        $this->assertSame('', $transportEmpty->__debugInfo()['authHeaderValue']);
+    }
+
+    public function testSymfonyTransportDebugInfoRedactsAuthHeaderValue(): void
+    {
+        $secretValue = 'Bearer secret-symfony-token-789';
+        $transport = new SymfonyTransport('https://api.test', 'Authorization', $secretValue);
+
+        $debugInfo = $transport->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
+        $this->assertStringNotContainsString($secretValue, var_export($debugInfo['authHeaderValue'], true));
+
+        $printOutput = print_r($transport, true);
+        $this->assertStringNotContainsString($secretValue, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        // When empty value
+        $transportEmpty = new SymfonyTransport('https://api.test', 'Authorization', '');
+        $this->assertSame('', $transportEmpty->__debugInfo()['authHeaderValue']);
+    }
+
+    public function testAuthTokenDtoDebugInfoRedactsSecrets(): void
+    {
+        $secretToken = 'secret-token-abc';
+        $secretRefresh = 'secret-refresh-token-def';
+        $dto = new AuthTokenDto($secretToken, $secretRefresh);
+
+        $debugInfo = $dto->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['token']);
+        $this->assertSame('[REDACTED]', $debugInfo['refreshToken']);
+
+        $printOutput = print_r($dto, true);
+        $this->assertStringNotContainsString($secretToken, $printOutput);
+        $this->assertStringNotContainsString($secretRefresh, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        $varExportDebug = var_export($debugInfo, true);
+        $this->assertStringNotContainsString($secretToken, $varExportDebug);
+        $this->assertStringNotContainsString($secretRefresh, $varExportDebug);
+
+        // When refreshToken is null
+        $dtoNoRefresh = new AuthTokenDto($secretToken);
+        $this->assertSame('[REDACTED]', $dtoNoRefresh->__debugInfo()['token']);
+        $this->assertNull($dtoNoRefresh->__debugInfo()['refreshToken']);
+    }
+
+    public function testApiKeyCreatedDtoDebugInfoRedactsToken(): void
+    {
+        $secretToken = 'secret-apikey-token-ghi';
+        $dto = new ApiKeyCreatedDto('key-1', 'Key Name', 'suffix', $secretToken);
+
+        $debugInfo = $dto->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['token']);
+        $this->assertSame('key-1', $debugInfo['id']);
+        $this->assertSame('Key Name', $debugInfo['name']);
+        $this->assertSame('suffix', $debugInfo['tokenSuffix']);
+
+        $printOutput = print_r($dto, true);
+        $this->assertStringNotContainsString($secretToken, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        $varExportDebug = var_export($debugInfo, true);
+        $this->assertStringNotContainsString($secretToken, $varExportDebug);
+    }
+
+    public function testKinetiClientDebugInfoRecursivelyRedactsApiKeyViaTransport(): void
+    {
+        $secretApiKey = 'secret-kineti-api-key-999';
+        $client = new KinetiClient('https://api.test', $secretApiKey);
+
+        $printOutput = print_r($client, true);
+        $this->assertStringNotContainsString($secretApiKey, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        $transport = $client->getTransport();
+        $this->assertInstanceOf(HttpTransport::class, $transport);
+        $this->assertSame('[REDACTED]', $transport->__debugInfo()['authHeaderValue']);
+    }
 }

@@ -130,6 +130,19 @@ class HttpTransport implements TransportInterface
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info = get_object_vars($this);
+        if ($this->authHeaderValue !== '') {
+            $info['authHeaderValue'] = '[REDACTED]';
+        }
+
+        return $info;
+    }
+
+    /**
      * @param array<string, mixed> $defaultOptions
      */
     private static function createDiscoveredTransport(

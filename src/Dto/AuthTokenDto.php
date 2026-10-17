@@ -45,4 +45,18 @@ class AuthTokenDto
 
         return new self($token, $refreshToken);
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info = get_object_vars($this);
+        $info['token'] = '[REDACTED]';
+        if ($this->refreshToken !== null) {
+            $info['refreshToken'] = '[REDACTED]';
+        }
+
+        return $info;
+    }
 }

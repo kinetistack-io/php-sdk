@@ -192,10 +192,8 @@ use KinetiStack\Sdk\WebhookVerifier;
 
 $payload = file_get_contents('php://input');
 
-// Prefer modern Kineti-Signature (v1={timestamp}.{hmac}), fallback to legacy X-Kineti-Signature
-$signatureHeader = $_SERVER['HTTP_KINETI_SIGNATURE']
-    ?? $_SERVER['HTTP_X_KINETI_SIGNATURE']
-    ?? '';
+// Prefer modern Kineti-Signature (v1={timestamp}.{hmac}) with replay protection
+$signatureHeader = $_SERVER['HTTP_KINETI_SIGNATURE'] ?? '';
 
 $webhookSecret = 'whsec_your_secret_key';
 
@@ -204,6 +202,10 @@ $isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret);
 
 // Or customize tolerance window in seconds (pass 0 to disable replay check)
 // $isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret, toleranceSeconds: 600);
+
+// To accept legacy signatures without timestamp replay protection (X-Kineti-Signature: sha256={hmac}), pass allowLegacy: true
+// $legacySignature = $_SERVER['HTTP_X_KINETI_SIGNATURE'] ?? '';
+// $isValid = WebhookVerifier::verify($payload, $legacySignature, $webhookSecret, allowLegacy: true);
 
 if (!$isValid) {
     http_response_code(401);

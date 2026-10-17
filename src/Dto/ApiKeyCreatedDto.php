@@ -76,4 +76,15 @@ class ApiKeyCreatedDto extends ApiKeyDto
             $base->requestsToday
         );
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info = get_object_vars($this);
+        $info['token'] = '[REDACTED]';
+
+        return $info;
+    }
 }

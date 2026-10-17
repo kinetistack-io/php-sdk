@@ -30,6 +30,7 @@ final class WebhookVerifier
      * @param int $toleranceSeconds Maximum allowed clock skew / replay window in seconds (0 to disable).
      *     Negative values are rejected.
      * @param int|null $currentTime Optional UNIX timestamp for clock isolation / testing (defaults to time()).
+     * @param bool $allowLegacy Whether to allow legacy signatures without timestamp/replay protection.
      *
      * @return bool True if the signature is valid and within tolerance, false otherwise.
      */
@@ -39,6 +40,7 @@ final class WebhookVerifier
         #[\SensitiveParameter] string $secret,
         int $toleranceSeconds = self::DEFAULT_TOLERANCE_SECONDS,
         ?int $currentTime = null,
+        bool $allowLegacy = false,
     ): bool {
         $trimmed = trim($signatureHeader);
 
@@ -54,7 +56,7 @@ final class WebhookVerifier
 
             [$timestampStr, $signature] = $parts;
 
-            if (!ctype_digit($timestampStr) || !ctype_xdigit($signature)) {
+            if (!ctype_digit($timestampStr) || !ctype_xdigit($signature) || \strlen($signature) !== 64) {
                 return false;
             }
 
@@ -68,13 +70,17 @@ final class WebhookVerifier
             return hash_equals($expectedSignature, strtolower($signature));
         }
 
+        if (!$allowLegacy) {
+            return false;
+        }
+
         // Legacy signature verification (sha256={hmac} or raw hex)
         $signature = $trimmed;
         if (str_starts_with($signature, self::PREFIX_LEGACY)) {
             $signature = substr($signature, \strlen(self::PREFIX_LEGACY));
         }
 
-        if ($signature === '') {
+        if (!ctype_xdigit($signature) || \strlen($signature) !== 64) {
             return false;
         }
 

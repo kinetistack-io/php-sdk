@@ -220,4 +220,17 @@ class SymfonyTransport implements TransportInterface
     {
         return $this->lastRateLimitInfo;
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info = get_object_vars($this);
+        if ($this->authHeaderValue !== '') {
+            $info['authHeaderValue'] = '[REDACTED]';
+        }
+
+        return $info;
+    }
 }

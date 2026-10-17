@@ -61,6 +61,19 @@ class AnalyticsClient implements AnalyticsClientInterface
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info = get_object_vars($this);
+        if ($this->jwtToken !== '') {
+            $info['jwtToken'] = '[REDACTED]';
+        }
+
+        return $info;
+    }
+
+    /**
      * Query aggregated usage analytics buckets.
      *
      * @throws KinetiException
