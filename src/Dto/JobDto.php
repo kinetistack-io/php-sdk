@@ -202,12 +202,22 @@ class JobDto
 
     public function isCompleted(): bool
     {
-        return $this->status->isTerminal();
+        return $this->status === JobStatus::Completed;
+    }
+
+    public function isSucceeded(): bool
+    {
+        return $this->status === JobStatus::Completed;
     }
 
     public function isFailed(): bool
     {
         return $this->status === JobStatus::Failed;
+    }
+
+    public function isTerminal(): bool
+    {
+        return $this->status->isTerminal();
     }
 
     public function getProgressPercentage(): float

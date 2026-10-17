@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented `__debugInfo(): array` across secret-bearing classes (`AdminClient`, `AnalyticsClient`, `HttpTransport`, `Psr18Transport`, `SymfonyTransport`, `AuthTokenDto`, `ApiKeyCreatedDto`) to redact sensitive credentials (`jwtToken`, `authHeaderValue`, `token`, `refreshToken`) from `print_r()`, `var_dump()`, and debug output (PHPSDK-56).
 
 ### Added
+- Added `JobDto::isTerminal(): bool` and `JobDto::isSucceeded(): bool` status helper methods (PHPSDK-58).
 - Added `SseParser` buffer cap with `DEFAULT_MAX_BUFFER_BYTES` (1 MB) and configurable constructor parameter, throwing `TransportException` when exceeded (PHPSDK-57).
 - Added `Psr18Transport::DEFAULT_MAX_RETRY_DELAY_SECONDS` (60.0s) and support for `max_retry_delay` option (PHPSDK-57).
 - Added `JobType` enum (`vision_single`, `vision_batch`, `document_ingest`) with domain helpers `isVision()`, `isSingleVision()`, `isDocument()`, and `isBatch()` (PHPSDK-55).
@@ -23,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized URI path parameter encoding across `AdminClient` and `KinetiClient` to use RFC 3986 `rawurlencode()` (spaces encoded as `%20` instead of `+`) and enforce fast-fail validation rejecting null, empty, or whitespace-only IDs with `\InvalidArgumentException` across all 19 resource methods (PHPSDK-52).
 
 ### Fixed
+- Resolved status trap where `JobDto::isCompleted()` incorrectly returned `true` for failed jobs; `isCompleted()` now strictly checks `JobStatus::Completed` while `isTerminal()` checks for terminal state (`Completed` or `Failed`) (PHPSDK-58).
+- Refactored `KinetiClient::waitForJob()` polling logic to poll immediately, return immediately on terminal jobs even with zero timeout, clamp sleep intervals to remaining timeout budget, and advance simulated elapsed microseconds when custom `$sleeper` callbacks are provided without spinning on wall-clock time (PHPSDK-58).
 - Fixed `SseParser` false-positives by allowing valid JSON chunks with text starting with `[Error:` (e.g. LLM tokens citing logs) to be yielded as `RagStreamChunkDto` (PHPSDK-57).
 - Unified `SymfonyTransportResponse::toArray()` to return `[]` on empty or whitespace-only response bodies matching `Psr18TransportResponse` (PHPSDK-57).
 - Fixed potential temporary stream resource leak in `Psr18Transport` by ensuring temporary streams created from `\Traversable` bodies are safely closed upon write or iteration exceptions (PHPSDK-57).

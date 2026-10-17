@@ -648,4 +648,149 @@ class KinetiClientTest extends TestCase
         $this->assertSame(KinetiClient::DEFAULT_POLL_INTERVAL_SECONDS, $params['pollIntervalSeconds']);
         $this->assertSame(KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS, $params['maxPollIntervalSeconds']);
     }
+
+    public function testWaitForJobWithZeroTimeoutOnCompletedJobReturnsImmediatelyAndInvokesProgress(): void
+    {
+        $response = new MockResponse(json_encode(['job_id' => 'done-1', 'status' => 'completed'], JSON_THROW_ON_ERROR));
+        $client = new MockHttpClient([$response]);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $progressCalls = 0;
+        $result = $kineti->waitForJob(
+            jobId: 'done-1',
+            timeoutSeconds: 0,
+            onProgress: function (JobDto $dto) use (&$progressCalls): void {
+                $progressCalls++;
+                $this->assertSame('done-1', $dto->jobId);
+                $this->assertTrue($dto->isCompleted());
+            }
+        );
+
+        $this->assertSame('done-1', $result->jobId);
+        $this->assertTrue($result->isCompleted());
+        $this->assertTrue($result->isTerminal());
+        $this->assertSame(1, $progressCalls);
+        $this->assertSame(1, $client->getRequestsCount());
+    }
+
+    public function testWaitForJobWithZeroTimeoutOnFailedJobReturnsImmediatelyAndInvokesProgress(): void
+    {
+        $response = new MockResponse(json_encode(['job_id' => 'failed-1', 'status' => 'failed'], JSON_THROW_ON_ERROR));
+        $client = new MockHttpClient([$response]);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $progressCalls = 0;
+        $result = $kineti->waitForJob(
+            jobId: 'failed-1',
+            timeoutSeconds: 0,
+            onProgress: function (JobDto $dto) use (&$progressCalls): void {
+                $progressCalls++;
+                $this->assertSame('failed-1', $dto->jobId);
+                $this->assertTrue($dto->isFailed());
+            }
+        );
+
+        $this->assertSame('failed-1', $result->jobId);
+        $this->assertTrue($result->isFailed());
+        $this->assertTrue($result->isTerminal());
+        $this->assertFalse($result->isCompleted());
+        $this->assertSame(1, $progressCalls);
+        $this->assertSame(1, $client->getRequestsCount());
+    }
+
+    public function testWaitForJobWithZeroTimeoutOnPendingJobThrowsJobTimeoutException(): void
+    {
+        $response = new MockResponse(json_encode(['job_id' => 'pending-1', 'status' => 'pending'], JSON_THROW_ON_ERROR));
+        $client = new MockHttpClient([$response]);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        $progressCalls = 0;
+        try {
+            $kineti->waitForJob(
+                jobId: 'pending-1',
+                timeoutSeconds: 0,
+                onProgress: function (JobDto $dto) use (&$progressCalls): void {
+                    $progressCalls++;
+                }
+            );
+            $this->fail('Expected JobTimeoutException was not thrown.');
+        } catch (JobTimeoutException $e) {
+            $this->assertSame('Job pending-1 did not complete within 0 seconds.', $e->getMessage());
+            $this->assertSame('pending-1', $e->latestJob->jobId);
+            $this->assertTrue($e->latestJob->isPending());
+            $this->assertSame(1, $progressCalls);
+            $this->assertSame(1, $client->getRequestsCount());
+        }
+    }
+
+    public function testWaitForJobCustomSleeperAdvancesSimulatedTimeAndTimesOut(): void
+    {
+        $responses = [
+            new MockResponse(json_encode(['job_id' => 'spin-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'spin-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'spin-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+        ];
+
+        $client = new MockHttpClient($responses);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        /** @var list<int> $sleepCalls */
+        $sleepCalls = [];
+        $startTime = microtime(true);
+
+        try {
+            $kineti->waitForJob(
+                jobId: 'spin-1',
+                timeoutSeconds: 5,
+                pollIntervalSeconds: 2,
+                sleeper: function (int $microseconds) use (&$sleepCalls): void {
+                    $sleepCalls[] = $microseconds;
+                }
+            );
+            $this->fail('Expected JobTimeoutException was not thrown.');
+        } catch (JobTimeoutException $e) {
+            $elapsedRealSeconds = microtime(true) - $startTime;
+            $this->assertLessThan(1.0, $elapsedRealSeconds);
+            $this->assertSame('Job spin-1 did not complete within 5 seconds.', $e->getMessage());
+            $this->assertSame('spin-1', $e->latestJob->jobId);
+            $this->assertTrue($e->latestJob->isProcessing());
+            $this->assertNotEmpty($sleepCalls);
+        }
+    }
+
+    public function testWaitForJobClampsSleepIntervalToRemainingTimeoutBudget(): void
+    {
+        $responses = [
+            new MockResponse(json_encode(['job_id' => 'clamp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'clamp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+            new MockResponse(json_encode(['job_id' => 'clamp-1', 'status' => 'processing'], JSON_THROW_ON_ERROR)),
+        ];
+
+        $client = new MockHttpClient($responses);
+        $kineti = new KinetiClient('https://api.test', 'key', $client);
+
+        /** @var list<int> $sleepCalls */
+        $sleepCalls = [];
+        $timeoutSeconds = 3;
+        $timeoutBudgetUs = $timeoutSeconds * 1_000_000;
+
+        try {
+            $kineti->waitForJob(
+                jobId: 'clamp-1',
+                timeoutSeconds: $timeoutSeconds,
+                pollIntervalSeconds: 2,
+                sleeper: function (int $microseconds) use (&$sleepCalls): void {
+                    $sleepCalls[] = $microseconds;
+                }
+            );
+            $this->fail('Expected JobTimeoutException was not thrown.');
+        } catch (JobTimeoutException $e) {
+            $totalSleptUs = array_sum($sleepCalls);
+            $this->assertLessThanOrEqual($timeoutBudgetUs, $totalSleptUs);
+            $this->assertSame($timeoutBudgetUs, $totalSleptUs);
+
+            $this->assertCount(2, $sleepCalls);
+            $this->assertLessThan(4_000_000, $sleepCalls[1]);
+        }
+    }
 }

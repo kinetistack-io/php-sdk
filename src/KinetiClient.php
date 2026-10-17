@@ -296,34 +296,60 @@ class KinetiClient implements KinetiClientInterface
         int $maxPollIntervalSeconds = self::DEFAULT_MAX_POLL_INTERVAL_SECONDS,
         ?callable $sleeper = null
     ): JobDto {
-        $startTime = time();
-        $lastDto = null;
         $pollIntervalSeconds = max(1, $pollIntervalSeconds);
         $maxPollIntervalSeconds = max($pollIntervalSeconds, $maxPollIntervalSeconds);
         $currentInterval = $pollIntervalSeconds;
 
-        if ($timeoutSeconds <= 0) {
-            $lastDto = $this->getJob($jobId);
+        $startNano = hrtime(true);
+        $simulatedElapsedUs = 0;
+
+        $lastDto = $this->getJob($jobId);
+
+        if ($onProgress !== null) {
+            $onProgress($lastDto);
         }
 
-        while ((time() - $startTime) < $timeoutSeconds) {
-            $lastDto = $this->getJob($jobId);
+        if ($lastDto->isTerminal()) {
+            return $lastDto;
+        }
 
-            if ($onProgress) {
-                $onProgress($lastDto);
-            }
+        if ($timeoutSeconds <= 0) {
+            throw new JobTimeoutException(
+                sprintf('Job %s did not complete within %d seconds.', $jobId, $timeoutSeconds),
+                $lastDto
+            );
+        }
 
-            if ($lastDto->isCompleted()) {
-                return $lastDto;
+        $budgetUs = $timeoutSeconds * 1_000_000;
+
+        while (true) {
+            $elapsedUs = $sleeper !== null
+                ? $simulatedElapsedUs
+                : (int) ((hrtime(true) - $startNano) / 1_000);
+
+            $remainingUs = max(0, $budgetUs - $elapsedUs);
+            if ($remainingUs <= 0) {
+                break;
             }
 
             $jitterUs = random_int(0, 500_000);
-            $sleepUs = ($currentInterval * 1_000_000) + $jitterUs;
+            $sleepUs = min(($currentInterval * 1_000_000) + $jitterUs, $remainingUs);
 
             if ($sleeper !== null) {
                 $sleeper($sleepUs);
+                $simulatedElapsedUs += $sleepUs;
             } else {
                 usleep($sleepUs);
+            }
+
+            $lastDto = $this->getJob($jobId);
+
+            if ($onProgress !== null) {
+                $onProgress($lastDto);
+            }
+
+            if ($lastDto->isTerminal()) {
+                return $lastDto;
             }
 
             $currentInterval = min($maxPollIntervalSeconds, $currentInterval * 2);
@@ -331,7 +357,7 @@ class KinetiClient implements KinetiClientInterface
 
         throw new JobTimeoutException(
             sprintf('Job %s did not complete within %d seconds.', $jobId, $timeoutSeconds),
-            $lastDto ?? $this->getJob($jobId)
+            $lastDto
         );
     }
 

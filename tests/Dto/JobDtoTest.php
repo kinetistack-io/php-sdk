@@ -199,24 +199,32 @@ class JobDtoTest extends TestCase
         $this->assertFalse($pendingDto->isProcessing());
         $this->assertFalse($pendingDto->isCompleted());
         $this->assertFalse($pendingDto->isFailed());
+        $this->assertFalse($pendingDto->isTerminal());
+        $this->assertFalse($pendingDto->isSucceeded());
 
         $processingDto = new JobDto('2', JobStatus::Processing);
         $this->assertFalse($processingDto->isPending());
         $this->assertTrue($processingDto->isProcessing());
         $this->assertFalse($processingDto->isCompleted());
         $this->assertFalse($processingDto->isFailed());
+        $this->assertFalse($processingDto->isTerminal());
+        $this->assertFalse($processingDto->isSucceeded());
 
         $completedDto = new JobDto('3', JobStatus::Completed);
         $this->assertFalse($completedDto->isPending());
         $this->assertFalse($completedDto->isProcessing());
         $this->assertTrue($completedDto->isCompleted());
         $this->assertFalse($completedDto->isFailed());
+        $this->assertTrue($completedDto->isTerminal());
+        $this->assertTrue($completedDto->isSucceeded());
 
         $failedDto = new JobDto('4', JobStatus::Failed);
         $this->assertFalse($failedDto->isPending());
         $this->assertFalse($failedDto->isProcessing());
-        $this->assertTrue($failedDto->isCompleted());
+        $this->assertFalse($failedDto->isCompleted());
         $this->assertTrue($failedDto->isFailed());
+        $this->assertTrue($failedDto->isTerminal());
+        $this->assertFalse($failedDto->isSucceeded());
     }
 
     public function testGetProgressPercentage(): void
