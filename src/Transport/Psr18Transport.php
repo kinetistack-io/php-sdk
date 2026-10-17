@@ -16,6 +16,8 @@ use Psr\Http\Message\StreamInterface;
 
 class Psr18Transport implements TransportInterface
 {
+    public const DEFAULT_MAX_RETRY_DELAY_SECONDS = 60.0;
+
     private readonly ClientInterface $client;
     private readonly RequestFactoryInterface $requestFactory;
     private readonly StreamFactoryInterface $streamFactory;
@@ -131,15 +133,7 @@ class Psr18Transport implements TransportInterface
             } elseif (is_resource($body)) {
                 $stream = $this->streamFactory->createStreamFromResource($body);
             } elseif ($body instanceof \Traversable) {
-                $temp = fopen('php://temp', 'w+b');
-                if ($temp === false) {
-                    throw new TransportException('Failed to open temporary stream for request body.');
-                }
-                foreach ($body as $chunk) {
-                    fwrite($temp, (string) $chunk);
-                }
-                rewind($temp);
-                $stream = $this->streamFactory->createStreamFromResource($temp);
+                $stream = $this->createStreamFromTraversable($body);
             } elseif ($body instanceof StreamInterface) {
                 $stream = $body;
             }
@@ -160,15 +154,7 @@ class Psr18Transport implements TransportInterface
                 } elseif (isset($bodyFactory)) {
                     $recreated = $bodyFactory();
                     if ($recreated instanceof \Traversable) {
-                        $temp = fopen('php://temp', 'w+b');
-                        if ($temp === false) {
-                            throw new TransportException('Failed to open temporary stream for request body.');
-                        }
-                        foreach ($recreated as $chunk) {
-                            fwrite($temp, (string) $chunk);
-                        }
-                        rewind($temp);
-                        $stream = $this->streamFactory->createStreamFromResource($temp);
+                        $stream = $this->createStreamFromTraversable($recreated);
                     } elseif (is_resource($recreated)) {
                         $stream = $this->streamFactory->createStreamFromResource($recreated);
                     } elseif (is_string($recreated)) {
@@ -200,14 +186,24 @@ class Psr18Transport implements TransportInterface
             $statusCode = $psrResponse->getStatusCode();
 
             if (($statusCode === 429 || $statusCode === 503) && $attempts <= $maxRetries) {
+                $maxRetryDelay = max(
+                    0.0,
+                    isset($mergedOptions['max_retry_delay']) && is_numeric($mergedOptions['max_retry_delay'])
+                        ? (float) $mergedOptions['max_retry_delay']
+                        : self::DEFAULT_MAX_RETRY_DELAY_SECONDS
+                );
+
                 $retryAfter = RateLimitInfoDto::fromHeaders($psrResponse->getHeaders())?->retryAfter;
-                $delaySeconds = $retryAfter !== null ? (float) $retryAfter : (1.0 * (2 ** ($attempts - 1)));
+                $delaySeconds = $retryAfter !== null
+                    ? (float) $retryAfter
+                    : (1.0 * (2 ** ($attempts - 1))) + (random_int(0, 250) / 1000.0);
+
+                $delaySeconds = min(max(0.0, $delaySeconds), $maxRetryDelay);
 
                 $pauseHandler = $mergedOptions['pause_handler'] ?? null;
                 if (is_callable($pauseHandler)) {
                     $pauseHandler($delaySeconds);
                 } else {
-                    $delaySeconds = max(0.0, $delaySeconds);
                     $intSeconds = (int) floor($delaySeconds);
                     $microSeconds = (int) round(($delaySeconds - $intSeconds) * 1_000_000);
 
@@ -303,5 +299,38 @@ class Psr18Transport implements TransportInterface
         }
 
         return $info;
+    }
+
+    /**
+     * @param \Traversable<mixed> $body
+     */
+    private function createStreamFromTraversable(\Traversable $body): StreamInterface
+    {
+        $temp = fopen('php://temp', 'w+b');
+        if ($temp === false) {
+            throw new TransportException('Failed to open temporary stream for request body.');
+        }
+
+        try {
+            foreach ($body as $chunk) {
+                if (!is_scalar($chunk) && !$chunk instanceof \Stringable) {
+                    throw new TransportException(sprintf(
+                        'Expected stream chunk to be scalar or \Stringable, got "%s".',
+                        get_debug_type($chunk)
+                    ));
+                }
+
+                fwrite($temp, (string) $chunk);
+            }
+            rewind($temp);
+
+            return $this->streamFactory->createStreamFromResource($temp);
+        } catch (\Throwable $e) {
+            if (is_resource($temp)) {
+                fclose($temp);
+            }
+
+            throw $e;
+        }
     }
 }

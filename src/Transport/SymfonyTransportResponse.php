@@ -28,6 +28,10 @@ class SymfonyTransportResponse implements TransportResponseInterface
 
     public function toArray(): array
     {
+        if (trim($this->getContent()) === '') {
+            return [];
+        }
+
         try {
             return $this->response->toArray(false);
         } catch (\Throwable $e) {

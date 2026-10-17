@@ -126,23 +126,22 @@ class StreamParsingTest extends TestCase
         }
     }
 
-    public function testServerSynthesisErrorChunkThrowsServerException(): void
+    public function testJsonChunkContainingErrorPrefixYieldsChunkDto(): void
     {
         $chunks = [
             "data: {\"chunk\": \"Starting synthesis...\"}\n\n",
             "data: {\"chunk\": \"\\n[Error: Synthesis failed. Ollama process timed out]\"}\n\n",
+            "data: {\"text\": \"[Error: 404 Not Found in logs]\"}\n\n",
             "event: done\ndata: [DONE]\n\n",
         ];
 
-        $generator = $this->parser->parse($chunks);
+        /** @var RagStreamChunkDto[] $results */
+        $results = iterator_to_array($this->parser->parse($chunks));
 
-        $this->expectException(ServerException::class);
-        $this->expectExceptionMessage('[Error: Synthesis failed. Ollama process timed out]');
-
-        foreach ($generator as $chunk) {
-            // First chunk succeeds
-            $this->assertSame('Starting synthesis...', $chunk->text);
-        }
+        $this->assertCount(3, $results);
+        $this->assertSame('Starting synthesis...', $results[0]->text);
+        $this->assertSame("\n[Error: Synthesis failed. Ollama process timed out]", $results[1]->text);
+        $this->assertSame('[Error: 404 Not Found in logs]', $results[2]->text);
     }
 
     public function testJsonErrorFieldThrowsServerException(): void
@@ -157,6 +156,18 @@ class StreamParsingTest extends TestCase
         iterator_to_array($this->parser->parse($chunks));
     }
 
+    public function testJsonNestedErrorObjectThrowsServerException(): void
+    {
+        $chunks = [
+            "data: {\"error\": {\"message\": \"Model timeout\"}}\n\n",
+        ];
+
+        $this->expectException(ServerException::class);
+        $this->expectExceptionMessage('Model timeout');
+
+        iterator_to_array($this->parser->parse($chunks));
+    }
+
     public function testPlainPlainTextErrorThrowsServerException(): void
     {
         $chunks = [
@@ -167,6 +178,51 @@ class StreamParsingTest extends TestCase
         $this->expectExceptionMessage('[Error: Internal model error]');
 
         iterator_to_array($this->parser->parse($chunks));
+    }
+
+    public function testRawNonJsonErrorThrowsServerException(): void
+    {
+        $chunks = [
+            "data: [Error: failure]\n\n",
+        ];
+
+        $this->expectException(ServerException::class);
+        $this->expectExceptionMessage('[Error: failure]');
+
+        iterator_to_array($this->parser->parse($chunks));
+    }
+
+    public function testBufferExceedingMaxBufferBytesThrowsTransportException(): void
+    {
+        $parser = new SseParser(maxBufferBytes: 50);
+
+        $chunks = [
+            'data: ' . str_repeat('a', 60),
+        ];
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('SSE stream buffer exceeded maximum limit of 50 bytes.');
+
+        iterator_to_array($parser->parse($chunks));
+    }
+
+    public function testBufferExceedingMaxBufferBytesBeforeDelimiterThrowsTransportException(): void
+    {
+        $parser = new SseParser(maxBufferBytes: 50);
+
+        $chunks = [
+            'data: ' . str_repeat('b', 60) . "\n\n",
+        ];
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('SSE stream buffer exceeded maximum limit of 50 bytes.');
+
+        iterator_to_array($parser->parse($chunks));
+    }
+
+    public function testDefaultMaxBufferBytesConstant(): void
+    {
+        $this->assertSame(1048576, SseParser::DEFAULT_MAX_BUFFER_BYTES);
     }
 
     public function testPlainTextDataYieldsChunk(): void
@@ -209,5 +265,21 @@ class StreamParsingTest extends TestCase
         foreach ($generator as $chunk) {
             $this->assertSame('First chunk', $chunk->text);
         }
+    }
+
+    public function testNonPositiveMaxBufferBytesThrowsInvalidArgumentException(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('maxBufferBytes must be a positive integer, got 0.');
+
+        new SseParser(0);
+    }
+
+    public function testNegativeMaxBufferBytesThrowsInvalidArgumentException(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('maxBufferBytes must be a positive integer, got -5.');
+
+        new SseParser(-5);
     }
 }

@@ -330,4 +330,35 @@ class SymfonyTransportTest extends TestCase
             fclose($readStream);
         }
     }
+
+    public function testToArrayReturnsEmptyArrayOnEmptyResponseBody(): void
+    {
+        $mockResponse = new MockResponse('', [
+            'http_code' => 204,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+
+        $response = $transport->request('DELETE', '/v1/resource/123');
+
+        $this->assertSame(204, $response->getStatusCode());
+        $this->assertSame('', $response->getContent());
+        $this->assertSame([], $response->toArray());
+    }
+
+    public function testToArrayReturnsEmptyArrayOnWhitespaceOnlyResponseBody(): void
+    {
+        $mockResponse = new MockResponse("   \r\n   ", [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+
+        $response = $transport->request('GET', '/v1/empty');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame([], $response->toArray());
+    }
 }

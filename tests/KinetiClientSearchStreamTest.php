@@ -239,7 +239,7 @@ class KinetiClientSearchStreamTest extends TestCase
     {
         $sseChunks = [
             "data: {\"chunk\": \"Intro chunk.\"}\n\n",
-            "data: {\"chunk\": \"\\n[Error: Synthesis failed. Ollama backend crashed]\"}\n\n",
+            "data: [Error: Synthesis failed. Ollama backend crashed]\n\n",
             "event: done\ndata: [DONE]\n\n",
         ];
 

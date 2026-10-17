@@ -6,9 +6,23 @@ namespace KinetiStack\Sdk\Transport;
 
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Exception\ServerException;
+use KinetiStack\Sdk\Exception\TransportException;
 
 class SseParser
 {
+    public const DEFAULT_MAX_BUFFER_BYTES = 1048576;
+
+    public function __construct(
+        private readonly int $maxBufferBytes = self::DEFAULT_MAX_BUFFER_BYTES
+    ) {
+        if ($this->maxBufferBytes <= 0) {
+            throw new \InvalidArgumentException(sprintf(
+                'maxBufferBytes must be a positive integer, got %d.',
+                $this->maxBufferBytes
+            ));
+        }
+    }
+
     /**
      * Parse raw string chunks from an SSE stream and yield typed RagStreamChunkDto items.
      *
@@ -16,6 +30,7 @@ class SseParser
      * @return \Generator<int, RagStreamChunkDto>
      *
      * @throws ServerException If the stream yields an error event or error chunk
+     * @throws TransportException If the stream buffer exceeds maximum limit
      */
     public function parse(iterable $stream): \Generator
     {
@@ -29,6 +44,9 @@ class SseParser
                 $posCrlf = strpos($buffer, "\r\n\r\n");
 
                 if ($posLf === false && $posCrlf === false) {
+                    if (strlen($buffer) > $this->maxBufferBytes) {
+                        throw new TransportException(sprintf('SSE stream buffer exceeded maximum limit of %d bytes.', $this->maxBufferBytes));
+                    }
                     break;
                 }
 
@@ -46,6 +64,10 @@ class SseParser
                 } else {
                     $pos = $posCrlf;
                     $delimLen = 4;
+                }
+
+                if ($pos > $this->maxBufferBytes) {
+                    throw new TransportException(sprintf('SSE stream buffer exceeded maximum limit of %d bytes.', $this->maxBufferBytes));
                 }
 
                 $eventBlock = substr($buffer, 0, $pos);
@@ -117,6 +139,8 @@ class SseParser
             return null;
         }
 
+        /** @var array<string, mixed>|null $decoded */
+        $decoded = null;
         try {
             $decoded = json_decode($dataStr, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
@@ -125,25 +149,25 @@ class SseParser
 
         if (is_array($decoded)) {
             if (isset($decoded['error'])) {
-                $rawMsg = is_string($decoded['error'])
-                    ? $decoded['error']
-                    : ($decoded['message'] ?? 'Server error during stream');
+                $rawMsg = null;
+                if (is_string($decoded['error'])) {
+                    $rawMsg = $decoded['error'];
+                } elseif (is_array($decoded['error'])) {
+                    $nestedMsg = $decoded['error']['message'] ?? $decoded['error']['detail'] ?? null;
+                    if (is_scalar($nestedMsg)) {
+                        $rawMsg = (string) $nestedMsg;
+                    }
+                }
+
+                if ($rawMsg === null) {
+                    $rawMsg = $decoded['message'] ?? 'Server error during stream';
+                }
+
                 $errorMsg = is_scalar($rawMsg) ? (string) $rawMsg : 'Server error during stream';
                 throw new ServerException($errorMsg);
             }
 
-            if (isset($decoded['chunk']) && is_string($decoded['chunk'])) {
-                if (str_starts_with(trim($decoded['chunk']), '[Error:')) {
-                    throw new ServerException(trim($decoded['chunk']));
-                }
-            }
-
-            if (isset($decoded['text']) && is_string($decoded['text'])) {
-                if (str_starts_with(trim($decoded['text']), '[Error:')) {
-                    throw new ServerException(trim($decoded['text']));
-                }
-            }
-
+            /** @var array<string, mixed> $decoded */
             return RagStreamChunkDto::fromArray($decoded);
         }
 

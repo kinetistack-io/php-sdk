@@ -401,7 +401,8 @@ class Psr18TransportTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(['data' => 'recovered'], $response->toArray());
         $this->assertCount(1, $pausedDurations);
-        $this->assertSame(1.0, $pausedDurations[0]);
+        $this->assertGreaterThanOrEqual(1.0, $pausedDurations[0]);
+        $this->assertLessThanOrEqual(1.25, $pausedDurations[0]);
     }
 
     public function testExhaustedRetriesThrowsException(): void
@@ -564,5 +565,248 @@ class Psr18TransportTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('date', $capturedBody);
+    }
+
+    public function testRetryDelayCappedAtDefaultMaxRetryDelay(): void
+    {
+        $pausedDurations = [];
+        $pauseHandler = function (float $duration) use (&$pausedDurations): void {
+            $pausedDurations[] = $duration;
+        };
+
+        $mock = new MockHandler([
+            new Response(429, [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '3600',
+            ], '{"title": "Too Many Requests"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "ok"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => $pauseHandler,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(1, $pausedDurations);
+        $this->assertSame(60.0, $pausedDurations[0]);
+    }
+
+    public function testRetryDelayRespectsCustomMaxRetryDelay(): void
+    {
+        $pausedDurations = [];
+        $pauseHandler = function (float $duration) use (&$pausedDurations): void {
+            $pausedDurations[] = $duration;
+        };
+
+        $mock = new MockHandler([
+            new Response(429, [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '3600',
+            ], '{"title": "Too Many Requests"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "ok"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+            'max_retry_delay' => 15.0,
+            'pause_handler' => $pauseHandler,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(1, $pausedDurations);
+        $this->assertSame(15.0, $pausedDurations[0]);
+    }
+
+    public function testExponentialBackoffIncludesJitterAndCapsAtMaxRetryDelay(): void
+    {
+        $pausedDurations = [];
+        $pauseHandler = function (float $duration) use (&$pausedDurations): void {
+            $pausedDurations[] = $duration;
+        };
+
+        $mock = new MockHandler([
+            new Response(503, ['Content-Type' => 'application/problem+json']),
+            new Response(503, ['Content-Type' => 'application/problem+json']),
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "success"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 2,
+            'pause_handler' => $pauseHandler,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(2, $pausedDurations);
+        // Attempt 1: 1.0 + [0.0, 0.25]
+        $this->assertGreaterThanOrEqual(1.0, $pausedDurations[0]);
+        $this->assertLessThanOrEqual(1.25, $pausedDurations[0]);
+        // Attempt 2: 2.0 + [0.0, 0.25]
+        $this->assertGreaterThanOrEqual(2.0, $pausedDurations[1]);
+        $this->assertLessThanOrEqual(2.25, $pausedDurations[1]);
+    }
+
+    public function testThrowingTraversableCleansUpTemporaryResourceWithoutLeaking(): void
+    {
+        $mock = new MockHandler([]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $throwingTraversable = (function () {
+            yield 'initial-data';
+            throw new \RuntimeException('Stream generation failure');
+        })();
+
+        $openResourcesBefore = count(get_resources('stream'));
+
+        try {
+            $transport->request('POST', '/v1/upload', [
+                'body' => $throwingTraversable,
+            ]);
+            $this->fail('Expected RuntimeException was not thrown.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Stream generation failure', $e->getMessage());
+        }
+
+        $openResourcesAfter = count(get_resources('stream'));
+        $this->assertSame($openResourcesBefore, $openResourcesAfter);
+    }
+
+    public function testThrowingTraversableOnRetryCleansUpTemporaryResourceWithoutLeaking(): void
+    {
+        $mock = new MockHandler([
+            new Response(503, ['Content-Type' => 'application/problem+json'], '{"title": "Service Unavailable"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "success"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => function (): void {
+            },
+        ]);
+
+        $callCount = 0;
+        $bodyFactory = function () use (&$callCount) {
+            $callCount++;
+            if ($callCount === 1) {
+                $nonSeekable = $this->createMock(StreamInterface::class);
+                $nonSeekable->method('isSeekable')->willReturn(false);
+
+                return $nonSeekable;
+            }
+
+            return (function () {
+                yield 'second-attempt-data';
+                throw new \RuntimeException('Retry stream creation failure');
+            })();
+        };
+
+        $openResourcesBefore = count(get_resources('stream'));
+
+        try {
+            $transport->request('POST', '/v1/upload', [
+                'body' => $bodyFactory,
+            ]);
+            $this->fail('Expected RuntimeException was not thrown.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Retry stream creation failure', $e->getMessage());
+        }
+
+        $openResourcesAfter = count(get_resources('stream'));
+        $this->assertSame($openResourcesBefore, $openResourcesAfter);
+    }
+
+    public function testUnsupportedChunkInTraversableThrowsTransportExceptionAndCleansUp(): void
+    {
+        $mock = new MockHandler([]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $invalidTraversable = (function () {
+            yield 'valid-header';
+            yield ['invalid-array-chunk'];
+        })();
+
+        $openResourcesBefore = count(get_resources('stream'));
+
+        try {
+            $transport->request('POST', '/v1/upload', [
+                'body' => $invalidTraversable,
+            ]);
+            $this->fail('Expected TransportException was not thrown.');
+        } catch (TransportException $e) {
+            $this->assertStringContainsString('Expected stream chunk to be scalar or \Stringable, got "array"', $e->getMessage());
+        }
+
+        $openResourcesAfter = count(get_resources('stream'));
+        $this->assertSame($openResourcesBefore, $openResourcesAfter);
+    }
+
+    public function testNegativeMaxRetryDelayClampedToZero(): void
+    {
+        $pausedDurations = [];
+        $pauseHandler = function (float $duration) use (&$pausedDurations): void {
+            $pausedDurations[] = $duration;
+        };
+
+        $mock = new MockHandler([
+            new Response(429, [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '10',
+            ], '{"title": "Too Many Requests"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "ok"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+            'max_retries' => 1,
+            'max_retry_delay' => -5.0,
+            'pause_handler' => $pauseHandler,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(1, $pausedDurations);
+        $this->assertSame(0.0, $pausedDurations[0]);
+    }
+
+    public function testToArrayReturnsEmptyArrayOnEmptyResponseBody(): void
+    {
+        $mock = new MockHandler([
+            new Response(204, ['Content-Type' => 'application/json'], ''),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $response = $transport->request('DELETE', '/v1/resource/123');
+
+        $this->assertSame(204, $response->getStatusCode());
+        $this->assertSame('', $response->getContent());
+        $this->assertSame([], $response->toArray());
+    }
+
+    public function testToArrayReturnsEmptyArrayOnWhitespaceOnlyResponseBody(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], "   \r\n   "),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+
+        $response = $transport->request('GET', '/v1/empty');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame([], $response->toArray());
     }
 }
