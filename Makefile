@@ -28,7 +28,7 @@ test: ## Run PHPUnit tests
 test-all: ## Run PHPUnit tests across all PHP versions (8.1, 8.2, 8.3, 8.4)
 	docker compose run --rm php81 vendor/bin/phpunit
 	docker compose run --rm php82 vendor/bin/phpunit
-	docker compose run --rm php vendor/bin/phpunit
+	docker compose run --rm php83 vendor/bin/phpunit
 	docker compose run --rm php84 vendor/bin/phpunit
 
 coverage: ## Run PHPUnit with code coverage

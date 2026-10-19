@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ matrix.php-version }}-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-composer-${{ matrix.php-version }}-${{ hashFiles('**/composer.json') }}
           restore-keys: |
             ${{ runner.os }}-composer-${{ matrix.php-version }}-
 
@@ -111,7 +111,8 @@ jobs:
         run: |
           echo "Triggering Packagist package update for ${PACKAGIST_REPO_URL}..."
           PAYLOAD=$(jq -n --arg url "$PACKAGIST_REPO_URL" '{"repository":{"url":$url}}')
-          curl -sS --fail -X POST "https://packagist.org/api/update-package?username=${PACKAGIST_USER}&apiToken=${PACKAGIST_TOKEN}" \
+          curl -sS --fail -X POST "https://packagist.org/api/update-package" \
+            -H "Authorization: Bearer ${PACKAGIST_USER}:${PACKAGIST_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD"
 
