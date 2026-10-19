@@ -58,6 +58,7 @@ class SymfonyTransportTest extends TestCase
 
         $transport = new SymfonyTransport(
             'https://api.test',
+            'X-Kineti-Key',
             'test-key',
             $mockClient,
             [
@@ -105,7 +106,7 @@ class SymfonyTransportTest extends TestCase
         ]);
         $mockClient = new MockHttpClient($mockResponse);
 
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
 
         $response = $transport->request('GET', '/v1/test', [
             'pause_handler' => function (): void {
@@ -137,7 +138,7 @@ class SymfonyTransportTest extends TestCase
         $mockClient = new MockHttpClient([$response1, $response2]);
 
         // Default transport has NO retries
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
 
         $response = $transport->request('GET', '/v1/test', [
             'max_retries' => 1,
@@ -164,7 +165,7 @@ class SymfonyTransportTest extends TestCase
         });
 
         // Default transport has 2 retries
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient, [
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient, [
             'max_retries' => 2,
             'retry_strategy' => new GenericRetryStrategy([429, 503], 0),
         ]);
@@ -205,7 +206,7 @@ class SymfonyTransportTest extends TestCase
             return count($requestBodies) === 1 ? $response1 : $response2;
         });
 
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient, [
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient, [
             'max_retries' => 1,
             'retry_strategy' => new GenericRetryStrategy([429, 503], 0),
         ]);
@@ -240,7 +241,7 @@ class SymfonyTransportTest extends TestCase
             ]);
         });
 
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
         $response = $transport->request('POST', '/v1/test', [
             'body' => 'date',
         ]);
@@ -265,7 +266,7 @@ class SymfonyTransportTest extends TestCase
             ]);
         });
 
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
 
         $called = false;
         $chunkClosure = function (int $size) use (&$called): string {
@@ -315,7 +316,7 @@ class SymfonyTransportTest extends TestCase
             return $requestCount === 1 ? $response1 : $response2;
         });
 
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient, [
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient, [
             'max_retries' => 1,
             'retry_strategy' => new GenericRetryStrategy([503], 0),
         ]);
@@ -339,7 +340,7 @@ class SymfonyTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'application/json'],
         ]);
         $mockClient = new MockHttpClient($mockResponse);
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
 
         $response = $transport->request('DELETE', '/v1/resource/123');
 
@@ -355,7 +356,7 @@ class SymfonyTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'application/json'],
         ]);
         $mockClient = new MockHttpClient($mockResponse);
-        $transport = new SymfonyTransport('https://api.test', 'test-key', $mockClient);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
 
         $response = $transport->request('GET', '/v1/empty');
 

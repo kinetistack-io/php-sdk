@@ -40,16 +40,17 @@ class TransportGeneralizationTest extends TestCase
         $this->assertContains('Authorization: Bearer jwt-abc-123', $headers);
     }
 
-    public function testSymfonyTransportWithLegacySignature(): void
+    public function testSymfonyTransportWithClean5ArgConstructor(): void
     {
         $mockResponse = new MockResponse('{"ok": true}');
         $client = new MockHttpClient($mockResponse);
 
-        // Legacy: ($apiHost, $apiKey, $client, $defaultOptions)
         $transport = new SymfonyTransport(
             'https://api.test',
+            'X-Kineti-Key',
             'legacy-api-key',
-            $client
+            $client,
+            ['timeout' => 10]
         );
 
         $this->assertSame('X-Kineti-Key', $transport->getAuthHeaderName());
@@ -109,7 +110,7 @@ class TransportGeneralizationTest extends TestCase
         $this->assertSame('Bearer jwt-xyz', $container[0]['request']->getHeaderLine('Authorization'));
     }
 
-    public function testPsr18TransportWithLegacySignature(): void
+    public function testPsr18TransportWithClean5ArgConstructor(): void
     {
         /** @var list<array{request: RequestInterface}> $container */
         $container = [];
@@ -121,11 +122,12 @@ class TransportGeneralizationTest extends TestCase
 
         $guzzleClient = new Client(['handler' => $stack]);
 
-        // Legacy: ($apiHost, $apiKey, $client)
         $transport = new Psr18Transport(
             'https://api.test',
+            'X-Kineti-Key',
             'legacy-key-psr18',
-            $guzzleClient
+            $guzzleClient,
+            ['timeout' => 10]
         );
 
         $this->assertSame('X-Kineti-Key', $transport->getAuthHeaderName());
@@ -238,20 +240,20 @@ class TransportGeneralizationTest extends TestCase
         $this->assertContains('Authorization: Bearer new-token', $mockResponse2->getRequestOptions()['headers']);
     }
 
-    public function testTransportsTreatStandardHeaderWithNullValueAsHeaderNameWithEmptyValue(): void
+    public function testTransportsDefaultToEmptyAuthHeaderValue(): void
     {
         $mockResponse = new MockResponse('{"ok": true}');
         $client = new MockHttpClient($mockResponse);
 
-        $http = new HttpTransport('https://api.test', 'Authorization', null, $client);
+        $http = new HttpTransport('https://api.test', 'Authorization', '', $client);
         $this->assertSame('Authorization', $http->getAuthHeaderName());
         $this->assertSame('', $http->getAuthHeaderValue());
 
-        $httpKey = new HttpTransport('https://api.test', 'X-Kineti-Key', null, $client);
+        $httpKey = new HttpTransport('https://api.test', 'X-Kineti-Key', '', $client);
         $this->assertSame('X-Kineti-Key', $httpKey->getAuthHeaderName());
         $this->assertSame('', $httpKey->getAuthHeaderValue());
 
-        $symfony = new SymfonyTransport('https://api.test', 'Authorization', null, $client);
+        $symfony = new SymfonyTransport('https://api.test', 'Authorization', '', $client);
         $this->assertSame('Authorization', $symfony->getAuthHeaderName());
         $this->assertSame('', $symfony->getAuthHeaderValue());
 
@@ -273,6 +275,10 @@ class TransportGeneralizationTest extends TestCase
         $this->assertSame('Authorization', $httpHeader->getAuthHeaderName());
         $this->assertSame('Bearer jwt', $httpHeader->getAuthHeaderValue());
 
+        $httpBearer = HttpTransport::withBearerToken('https://api.test', 'jwt-token', $client);
+        $this->assertSame('Authorization', $httpBearer->getAuthHeaderName());
+        $this->assertSame('Bearer jwt-token', $httpBearer->getAuthHeaderValue());
+
         $symfonyApiKey = SymfonyTransport::withApiKey('https://api.test', 'test-key', $client);
         $this->assertSame('X-Kineti-Key', $symfonyApiKey->getAuthHeaderName());
         $this->assertSame('test-key', $symfonyApiKey->getAuthHeaderValue());
@@ -281,6 +287,10 @@ class TransportGeneralizationTest extends TestCase
         $this->assertSame('Authorization', $symfonyHeader->getAuthHeaderName());
         $this->assertSame('Bearer jwt', $symfonyHeader->getAuthHeaderValue());
 
+        $symfonyBearer = SymfonyTransport::withBearerToken('https://api.test', 'jwt-token', $client);
+        $this->assertSame('Authorization', $symfonyBearer->getAuthHeaderName());
+        $this->assertSame('Bearer jwt-token', $symfonyBearer->getAuthHeaderValue());
+
         $psrApiKey = Psr18Transport::withApiKey('https://api.test', 'test-key');
         $this->assertSame('X-Kineti-Key', $psrApiKey->getAuthHeaderName());
         $this->assertSame('test-key', $psrApiKey->getAuthHeaderValue());
@@ -288,6 +298,13 @@ class TransportGeneralizationTest extends TestCase
         $psrHeader = Psr18Transport::withHeader('https://api.test', 'Authorization', 'Bearer jwt');
         $this->assertSame('Authorization', $psrHeader->getAuthHeaderName());
         $this->assertSame('Bearer jwt', $psrHeader->getAuthHeaderValue());
+
+        $psrBearer = Psr18Transport::withBearerToken('https://api.test', 'jwt-token');
+        $this->assertSame('Authorization', $psrBearer->getAuthHeaderName());
+        $this->assertSame('Bearer jwt-token', $psrBearer->getAuthHeaderValue());
+
+        $psrBearerPrefixed = Psr18Transport::withBearerToken('https://api.test', 'Bearer already-prefixed');
+        $this->assertSame('Bearer already-prefixed', $psrBearerPrefixed->getAuthHeaderValue());
     }
 
     public function testStaticFactoryMethodsNamedArgumentsWithDefaultOptions(): void
@@ -313,5 +330,14 @@ class TransportGeneralizationTest extends TestCase
         );
         $this->assertSame('Authorization', $httpHeader->getAuthHeaderName());
         $this->assertSame('Bearer jwt', $httpHeader->getAuthHeaderValue());
+
+        $httpBearer = HttpTransport::withBearerToken(
+            apiHost: 'https://api.test',
+            token: 'jwt-token',
+            client: $client,
+            defaultOptions: ['timeout' => 15]
+        );
+        $this->assertSame('Authorization', $httpBearer->getAuthHeaderName());
+        $this->assertSame('Bearer jwt-token', $httpBearer->getAuthHeaderValue());
     }
 }

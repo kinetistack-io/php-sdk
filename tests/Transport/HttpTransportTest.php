@@ -26,7 +26,7 @@ class HttpTransportTest extends TestCase
         ]);
         $client = new MockHttpClient($mockResponse);
 
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
         $response = $transport->request('GET', '/v1/test');
 
         $this->assertSame(200, $response->getStatusCode());
@@ -46,7 +46,7 @@ class HttpTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'application/problem+json']
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException(AuthenticationException::class);
         $this->expectExceptionMessage('Unauthorized');
@@ -69,7 +69,7 @@ class HttpTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'application/problem+json'],
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('GET', '/v1/test');
@@ -95,7 +95,7 @@ class HttpTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'application/problem+json']
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('POST', '/v1/test');
@@ -117,7 +117,7 @@ class HttpTransportTest extends TestCase
             ]
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('GET', '/v1/test');
@@ -142,7 +142,7 @@ class HttpTransportTest extends TestCase
             ],
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('GET', '/v1/test');
@@ -179,7 +179,7 @@ class HttpTransportTest extends TestCase
             ],
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->assertNull($transport->getLastRateLimitInfo());
 
@@ -206,7 +206,7 @@ class HttpTransportTest extends TestCase
             ],
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $transport->request('GET', '/v1/data');
         $this->assertNull($transport->getLastRateLimitInfo());
@@ -223,7 +223,7 @@ class HttpTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'application/problem+json']
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException($expectedExceptionClass);
         $this->expectExceptionMessage('Error');
@@ -254,7 +254,7 @@ class HttpTransportTest extends TestCase
             'response_headers' => ['Content-Type' => 'text/html']
         ]);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException(\KinetiStack\Sdk\Exception\KinetiException::class);
         // The message should fall back to the raw content
@@ -267,7 +267,7 @@ class HttpTransportTest extends TestCase
     {
         $mockResponse = new MockResponse('', ['error' => 'cURL error 28: Operation timed out']);
         $client = new MockHttpClient($mockResponse);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client);
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException(\KinetiStack\Sdk\Exception\TransportException::class);
         $transport->request('GET', '/v1/test');
@@ -295,7 +295,7 @@ class HttpTransportTest extends TestCase
         ]);
 
         $client = new MockHttpClient([$response1, $response2]);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 3,
         ]);
 
@@ -327,7 +327,7 @@ class HttpTransportTest extends TestCase
         ]);
 
         $client = new MockHttpClient([$response1, $response2]);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 2,
         ]);
 
@@ -355,7 +355,7 @@ class HttpTransportTest extends TestCase
         ]);
 
         $client = new MockHttpClient([$response1, $response2]);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
         ]);
 
@@ -391,7 +391,7 @@ class HttpTransportTest extends TestCase
         ]);
 
         $client = new MockHttpClient([$response1, $response2]);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
         ]);
 
@@ -413,7 +413,7 @@ class HttpTransportTest extends TestCase
         ]);
 
         $client = new MockHttpClient([$response]);
-        $transport = new HttpTransport('https://api.test', 'test-key', $client, [
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 3,
         ]);
 

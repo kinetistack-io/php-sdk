@@ -7,7 +7,9 @@ namespace KinetiStack\Sdk\Tests\Transport;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\NoSeekStream;
 use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Psr7\Utils;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
@@ -33,7 +35,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
         $response = $transport->request('GET', '/v1/test', [
             'query' => ['page' => 2, 'limit' => 10],
         ]);
@@ -57,7 +59,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
         $response = $transport->request('POST', '/v1/documents', [
             'json' => ['title' => 'Test Document'],
         ]);
@@ -79,7 +81,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
         $transport->request('GET', '/v1/me', [
             'headers' => ['Authorization' => 'Bearer custom-token'],
         ]);
@@ -99,7 +101,7 @@ class Psr18TransportTest extends TestCase
             new Response(200, ['Content-Type' => 'application/json'], '{"ok": true}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         // 1. String body
         $transport->request('POST', '/v1/raw', ['body' => 'raw-data']);
@@ -129,7 +131,7 @@ class Psr18TransportTest extends TestCase
             new Response(401, ['Content-Type' => 'application/problem+json'], '{"title": "Unauthorized"}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException(AuthenticationException::class);
         $this->expectExceptionMessage('Unauthorized');
@@ -151,7 +153,7 @@ class Psr18TransportTest extends TestCase
             new Response(403, ['Content-Type' => 'application/problem+json'], $errorBody),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('POST', '/v1/images/analyze');
@@ -177,7 +179,7 @@ class Psr18TransportTest extends TestCase
             new Response(422, ['Content-Type' => 'application/problem+json'], $errorBody),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('POST', '/v1/test');
@@ -198,7 +200,7 @@ class Psr18TransportTest extends TestCase
             ], '{"title": "Too Many Requests"}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('GET', '/v1/test');
@@ -222,7 +224,7 @@ class Psr18TransportTest extends TestCase
             ], '{"title": "Too Many Requests"}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         try {
             $transport->request('GET', '/v1/test');
@@ -258,7 +260,7 @@ class Psr18TransportTest extends TestCase
             ], '{"data": "ok"}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->assertNull($transport->getLastRateLimitInfo());
 
@@ -281,7 +283,7 @@ class Psr18TransportTest extends TestCase
             ], '{"data": "ok"}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $transport->request('GET', '/v1/data');
         $this->assertNull($transport->getLastRateLimitInfo());
@@ -297,7 +299,7 @@ class Psr18TransportTest extends TestCase
             new Response($statusCode, ['Content-Type' => 'application/problem+json'], '{"title": "Error"}'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException($expectedExceptionClass);
         $this->expectExceptionMessage('Error');
@@ -326,7 +328,7 @@ class Psr18TransportTest extends TestCase
             new Response(502, ['Content-Type' => 'text/html'], '<html><body>502 Bad Gateway</body></html>'),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException(\KinetiStack\Sdk\Exception\KinetiException::class);
         $this->expectExceptionMessage('API Error 502: <html><body>502 Bad Gateway</body></html>');
@@ -341,7 +343,7 @@ class Psr18TransportTest extends TestCase
             new class ('Connection timed out') extends \RuntimeException implements ClientExceptionInterface {}
         );
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $this->expectException(TransportException::class);
         $this->expectExceptionMessage('Connection timed out');
@@ -365,7 +367,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 3,
             'pause_handler' => $pauseHandler,
         ]);
@@ -391,7 +393,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 2,
             'pause_handler' => $pauseHandler,
         ]);
@@ -413,7 +415,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => function (): void {
             },
@@ -425,29 +427,42 @@ class Psr18TransportTest extends TestCase
         $transport->request('GET', '/v1/test');
     }
 
-    public function testRetryThrowsWhenStreamIsNotSeekable(): void
+    public function testNonSeekableBodyStreamIsBufferedAndRetriedSuccessfully(): void
     {
+        $capturedBodies = [];
         $mock = new MockHandler([
-            new Response(503, ['Content-Type' => 'application/problem+json'], '{"title": "Service Unavailable"}'),
-            new Response(200, ['Content-Type' => 'application/json'], '{"data": "success"}'),
+            function ($request) use (&$capturedBodies) {
+                $capturedBodies[] = (string) $request->getBody();
+
+                return new Response(503, ['Content-Type' => 'application/problem+json'], '{"title": "Service Unavailable"}');
+            },
+            function ($request) use (&$capturedBodies) {
+                $capturedBodies[] = (string) $request->getBody();
+
+                return new Response(200, ['Content-Type' => 'application/json'], '{"data": "success"}');
+            },
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => function (): void {
             },
         ]);
 
-        $nonSeekableStream = $this->createMock(StreamInterface::class);
-        $nonSeekableStream->method('isSeekable')->willReturn(false);
+        $rawStream = Utils::streamFor('non-seekable-payload-data');
+        $nonSeekableStream = new NoSeekStream($rawStream);
+        $this->assertFalse($nonSeekableStream->isSeekable());
 
-        $this->expectException(TransportException::class);
-        $this->expectExceptionMessage('Cannot retry request with non-seekable body stream.');
-
-        $transport->request('POST', '/v1/test', [
+        $response = $transport->request('POST', '/v1/test', [
             'body' => $nonSeekableStream,
         ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['data' => 'success'], $response->toArray());
+        $this->assertCount(2, $capturedBodies);
+        $this->assertSame('non-seekable-payload-data', $capturedBodies[0]);
+        $this->assertSame('non-seekable-payload-data', $capturedBodies[1]);
     }
 
     public function testRetryWithHttpDateRetryAfter(): void
@@ -468,7 +483,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => $pauseHandler,
         ]);
@@ -488,7 +503,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => function (): void {
             },
@@ -523,7 +538,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => function (): void {
             },
@@ -557,7 +572,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $response = $transport->request('POST', '/v1/test', [
             'body' => 'date',
@@ -583,7 +598,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => $pauseHandler,
         ]);
@@ -611,7 +626,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'max_retry_delay' => 15.0,
             'pause_handler' => $pauseHandler,
@@ -638,7 +653,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 2,
             'pause_handler' => $pauseHandler,
         ]);
@@ -659,7 +674,7 @@ class Psr18TransportTest extends TestCase
     {
         $mock = new MockHandler([]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $throwingTraversable = (function () {
             yield 'initial-data';
@@ -689,7 +704,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'pause_handler' => function (): void {
             },
@@ -730,7 +745,7 @@ class Psr18TransportTest extends TestCase
     {
         $mock = new MockHandler([]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $invalidTraversable = (function () {
             yield 'valid-header';
@@ -768,7 +783,7 @@ class Psr18TransportTest extends TestCase
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
 
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client, [
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
             'max_retries' => 1,
             'max_retry_delay' => -5.0,
             'pause_handler' => $pauseHandler,
@@ -787,7 +802,7 @@ class Psr18TransportTest extends TestCase
             new Response(204, ['Content-Type' => 'application/json'], ''),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $response = $transport->request('DELETE', '/v1/resource/123');
 
@@ -802,12 +817,112 @@ class Psr18TransportTest extends TestCase
             new Response(200, ['Content-Type' => 'application/json'], "   \r\n   "),
         ]);
         $client = new Client(['handler' => HandlerStack::create($mock)]);
-        $transport = new Psr18Transport('https://api.test', 'test-key', $client);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
 
         $response = $transport->request('GET', '/v1/empty');
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame([], $response->toArray());
+    }
+
+    public function testTransientNetworkExceptionRetriesAndSucceeds(): void
+    {
+        $networkException = new class ('Connection timed out') extends \Exception implements ClientExceptionInterface {
+        };
+
+        $mock = new MockHandler([
+            $networkException,
+            new Response(200, ['Content-Type' => 'application/json'], '{"data": "recovered_after_network_error"}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $paused = false;
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => function (float $duration) use (&$paused): void {
+                $paused = true;
+                $this->assertGreaterThan(0.0, $duration);
+            },
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['data' => 'recovered_after_network_error'], $response->toArray());
+        $this->assertTrue($paused);
+    }
+
+    public function testExhaustedNetworkRetriesThrowsTransportException(): void
+    {
+        $networkException1 = new class ('Connection timed out') extends \Exception implements ClientExceptionInterface {
+        };
+        $networkException2 = new class ('Connection reset by peer') extends \Exception implements ClientExceptionInterface {
+        };
+
+        $mock = new MockHandler([
+            $networkException1,
+            $networkException2,
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $pauseCount = 0;
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => function () use (&$pauseCount): void {
+                $pauseCount++;
+            },
+        ]);
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('Connection reset by peer');
+
+        try {
+            $transport->request('GET', '/v1/test');
+        } finally {
+            $this->assertSame(1, $pauseCount);
+        }
+    }
+
+    public function testCallableBodyFactoryReEvaluatedOnEachAttempt(): void
+    {
+        $capturedBodies = [];
+        $mock = new MockHandler([
+            function ($request) use (&$capturedBodies) {
+                $capturedBodies[] = (string) $request->getBody();
+
+                return new Response(503, ['Content-Type' => 'application/problem+json'], '{"title": "Service Unavailable"}');
+            },
+            function ($request) use (&$capturedBodies) {
+                $capturedBodies[] = (string) $request->getBody();
+
+                return new Response(200, ['Content-Type' => 'application/json'], '{"data": "success"}');
+            },
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, [
+            'max_retries' => 1,
+            'pause_handler' => function (): void {
+            },
+        ]);
+
+        $factoryCallCount = 0;
+        $bodyFactory = function () use (&$factoryCallCount) {
+            $factoryCallCount++;
+
+            return 'attempt-' . $factoryCallCount;
+        };
+
+        $response = $transport->request('POST', '/v1/test', [
+            'body' => $bodyFactory,
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['data' => 'success'], $response->toArray());
+        $this->assertSame(2, $factoryCallCount);
+        $this->assertCount(2, $capturedBodies);
+        $this->assertSame('attempt-1', $capturedBodies[0]);
+        $this->assertSame('attempt-2', $capturedBodies[1]);
     }
 
     /**

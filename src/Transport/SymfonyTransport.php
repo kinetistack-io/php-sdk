@@ -18,51 +18,23 @@ class SymfonyTransport implements TransportInterface
     use TransportHelperTrait;
 
     private readonly HttpClientInterface $client;
-    private readonly string $authHeaderName;
-    private readonly string $authHeaderValue;
-    /** @var array<string, mixed> */
-    private readonly array $defaultOptions;
     private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
     /**
-     * @param HttpClientInterface|array<string, mixed>|null $clientOrDefaultOptions
      * @param array<string, mixed> $defaultOptions
      */
     public function __construct(
         private readonly string $apiHost,
         #[\SensitiveParameter]
-        string $authHeaderName,
+        private readonly string $authHeaderName,
         #[\SensitiveParameter]
-        string|HttpClientInterface|null $authHeaderValueOrClient = null,
-        HttpClientInterface|array|null $clientOrDefaultOptions = null,
-        array $defaultOptions = []
+        private readonly string $authHeaderValue = '',
+        ?HttpClientInterface $client = null,
+        private readonly array $defaultOptions = [],
     ) {
         $this->validateApiHost($apiHost);
 
-        $isStandardAuthHeader = in_array(strtolower($authHeaderName), ['authorization', 'x-kineti-key'], true);
-
-        if (is_string($authHeaderValueOrClient)) {
-            $this->authHeaderName = $authHeaderName;
-            $this->authHeaderValue = $authHeaderValueOrClient;
-            /** @var HttpClientInterface|null $baseClient */
-            $baseClient = $clientOrDefaultOptions instanceof HttpClientInterface ? $clientOrDefaultOptions : null;
-            $this->defaultOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
-        } elseif ($authHeaderValueOrClient === null && $isStandardAuthHeader) {
-            $this->authHeaderName = $authHeaderName;
-            $this->authHeaderValue = '';
-            /** @var HttpClientInterface|null $baseClient */
-            $baseClient = $clientOrDefaultOptions instanceof HttpClientInterface ? $clientOrDefaultOptions : null;
-            $this->defaultOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
-        } else {
-            // Legacy signature: ($apiHost, $apiKey, $client, $defaultOptions)
-            $this->authHeaderName = 'X-Kineti-Key';
-            $this->authHeaderValue = $authHeaderName;
-            /** @var HttpClientInterface|null $baseClient */
-            $baseClient = $authHeaderValueOrClient;
-            $this->defaultOptions = is_array($clientOrDefaultOptions) ? $clientOrDefaultOptions : $defaultOptions;
-        }
-
-        $baseClient = $baseClient ?? HttpClient::create();
+        $baseClient = $client ?? HttpClient::create();
 
         $defaultMaxRetries = isset($this->defaultOptions['max_retries']) && is_numeric($this->defaultOptions['max_retries'])
             ? (int) $this->defaultOptions['max_retries']
@@ -102,8 +74,24 @@ class SymfonyTransport implements TransportInterface
     /**
      * @param array<string, mixed> $defaultOptions
      */
+    public static function withBearerToken(
+        string $apiHost,
+        #[\SensitiveParameter]
+        string $token,
+        ?HttpClientInterface $client = null,
+        array $defaultOptions = []
+    ): self {
+        $headerValue = $token !== '' ? (str_starts_with($token, 'Bearer ') ? $token : 'Bearer ' . $token) : '';
+
+        return new self($apiHost, 'Authorization', $headerValue, $client, $defaultOptions);
+    }
+
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
     public static function withHeader(
         string $apiHost,
+        #[\SensitiveParameter]
         string $headerName,
         #[\SensitiveParameter]
         string $headerValue,
