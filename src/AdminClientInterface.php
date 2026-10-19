@@ -271,7 +271,7 @@ interface AdminClientInterface
      * @throws ValidationException When payload fails validation (HTTP 422).
      * @throws KinetiException
      */
-    public function createUser(array $payload): UserDto;
+    public function createUser(#[\SensitiveParameter] array $payload): UserDto;
 
     /**
      * Update an existing user.
@@ -280,7 +280,7 @@ interface AdminClientInterface
      * @throws ValidationException When payload fails validation or violates constraints (HTTP 422).
      * @throws KinetiException
      */
-    public function updateUser(string $id, array $payload): UserDto;
+    public function updateUser(string $id, #[\SensitiveParameter] array $payload): UserDto;
 
     /**
      * Delete a user by ID.

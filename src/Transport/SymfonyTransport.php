@@ -15,6 +15,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class SymfonyTransport implements TransportInterface
 {
+    use TransportHelperTrait;
+
     private readonly HttpClientInterface $client;
     private readonly string $authHeaderName;
     private readonly string $authHeaderValue;
@@ -35,6 +37,8 @@ class SymfonyTransport implements TransportInterface
         HttpClientInterface|array|null $clientOrDefaultOptions = null,
         array $defaultOptions = []
     ) {
+        $this->validateApiHost($apiHost);
+
         $isStandardAuthHeader = in_array(strtolower($authHeaderName), ['authorization', 'x-kineti-key'], true);
 
         if (is_string($authHeaderValueOrClient)) {
@@ -111,6 +115,8 @@ class SymfonyTransport implements TransportInterface
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface
     {
+        $this->validatePath($path);
+
         $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
 
         $mergedOptions = array_merge($this->defaultOptions, $options);
@@ -265,6 +271,9 @@ class SymfonyTransport implements TransportInterface
         if ($this->authHeaderValue !== '') {
             $info['authHeaderValue'] = '[REDACTED]';
         }
+
+        $info['client'] = $this->client::class;
+        $info['defaultOptions'] = $this->redactDebugOptions($this->defaultOptions);
 
         return $info;
     }

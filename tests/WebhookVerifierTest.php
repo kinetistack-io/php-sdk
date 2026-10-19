@@ -15,123 +15,25 @@ final class WebhookVerifierTest extends TestCase
     private const SECRET = 'test_webhook_secret_key_12345';
     private const PAYLOAD = '{"event":"batch_images.completed","job_id":"f327cd33-b38d-416e-8094-fb05ca44699c","status":"completed","results":[{"external_id":"media:1","alt_text":"A scenic mountain view"}]}';
 
-    public function testVerifyValidSignatureWithPrefix(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
-        $header = 'sha256=' . $signature;
-
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
-    }
-
-    public function testVerifyValidSignatureWithoutPrefix(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
-
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET, allowLegacy: true));
-    }
-
-    public function testVerifyValidSignatureUppercaseHex(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
-        $header = 'sha256=' . strtoupper($signature);
-
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, strtoupper($signature), self::SECRET, allowLegacy: true));
-    }
-
-    public function testVerifyValidSignatureWithWhitespace(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
-        $header = "  sha256=" . $signature . " \n";
-
-        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
-    }
-
-    public function testVerifyInvalidPayloadFails(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
-        $header = 'sha256=' . $signature;
-        $tamperedPayload = self::PAYLOAD . ' ';
-
-        $this->assertFalse(WebhookVerifier::verify($tamperedPayload, $header, self::SECRET, allowLegacy: true));
-    }
-
-    public function testVerifyIncorrectSecretFails(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
-        $header = 'sha256=' . $signature;
-        $wrongSecret = 'wrong_secret_key';
-
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, $wrongSecret, allowLegacy: true));
-    }
-
-    public function testVerifyIncorrectSignatureFails(): void
-    {
-        $header = 'sha256=abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
-
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: true));
-    }
-
-    public function testVerifyEmptySecretFails(): void
-    {
-        $signature = hash_hmac('sha256', self::PAYLOAD, '');
-        $header = 'sha256=' . $signature;
-
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, '', allowLegacy: true));
-    }
-
     public function testVerifyEmptySignatureHeaderFails(): void
     {
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '', self::SECRET, allowLegacy: true));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=', self::SECRET, allowLegacy: true));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '   ', self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '', self::SECRET));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, '   ', self::SECRET));
     }
 
-    public function testVerifyEmptyPayloadWithValidSignature(): void
-    {
-        $emptyPayload = '';
-        $signature = hash_hmac('sha256', $emptyPayload, self::SECRET);
-        $header = 'sha256=' . $signature;
-
-        $this->assertTrue(WebhookVerifier::verify($emptyPayload, $header, self::SECRET, allowLegacy: true));
-    }
-
-    public function testLegacySignaturesRejectedByDefault(): void
+    public function testLegacySignaturesReturnFalse(): void
     {
         $signature = hash_hmac('sha256', self::PAYLOAD, self::SECRET);
         $header = 'sha256=' . $signature;
 
-        // Legacy with sha256= prefix rejected by default
         $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, self::SECRET, allowLegacy: false));
-
-        // Legacy without prefix (raw hex) rejected by default
         $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $signature, self::SECRET, allowLegacy: false));
-    }
-
-    public function testLegacySignaturesInvalidHexOrLengthRejected(): void
-    {
-        // Shorter than 64 hex characters (63 chars)
-        $short = str_repeat('a', 63);
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $short, self::SECRET, allowLegacy: true));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=' . $short, self::SECRET, allowLegacy: true));
-
-        // Longer than 64 hex characters (65 chars)
-        $long = str_repeat('a', 65);
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $long, self::SECRET, allowLegacy: true));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=' . $long, self::SECRET, allowLegacy: true));
-
-        // 64 characters but containing non-hex characters
-        $nonHex = str_repeat('g', 64);
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $nonHex, self::SECRET, allowLegacy: true));
-        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=' . $nonHex, self::SECRET, allowLegacy: true));
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, 'sha256=', self::SECRET));
     }
 
     public function testConstants(): void
     {
         $this->assertSame('Kineti-Signature', WebhookVerifier::HEADER_SIGNATURE);
-        $this->assertSame('X-Kineti-Signature', WebhookVerifier::HEADER_LEGACY_SIGNATURE);
         $this->assertSame(300, WebhookVerifier::DEFAULT_TOLERANCE_SECONDS);
     }
 

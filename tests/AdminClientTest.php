@@ -73,6 +73,84 @@ class AdminClientTest extends TestCase
         $this->assertSame(1726950123, $info->reset);
     }
 
+    public function testLastRateLimitInfoNotShadowedByEarlierAuthenticatedRequest(): void
+    {
+        $mockResponse1 = new MockResponse(json_encode([
+            'id' => 'user-1',
+            'email' => 'admin@test.com',
+            'roles' => ['ROLE_ADMIN'],
+        ], JSON_THROW_ON_ERROR), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '100',
+                'X-RateLimit-Remaining' => '99',
+                'X-RateLimit-Reset' => '1726950000',
+            ],
+        ]);
+        $mockResponse2 = new MockResponse(json_encode([
+            'registration_mode' => 'public',
+            'allowed_domains' => [],
+            'default_roles' => [],
+        ], JSON_THROW_ON_ERROR), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '500',
+                'X-RateLimit-Remaining' => '450',
+                'X-RateLimit-Reset' => '1726959999',
+            ],
+        ]);
+
+        $httpClient = new MockHttpClient([$mockResponse1, $mockResponse2]);
+        $client = new AdminClient('https://api.test', 'auth-token', $httpClient);
+
+        $client->getMe();
+        $authInfo = $client->getLastRateLimitInfo();
+        $this->assertNotNull($authInfo);
+        $this->assertSame(100, $authInfo->limit);
+        $this->assertSame(99, $authInfo->remaining);
+
+        $client->getRegistrationStatus();
+        $unauthInfo = $client->getLastRateLimitInfo();
+        $this->assertNotNull($unauthInfo);
+        $this->assertSame(500, $unauthInfo->limit);
+        $this->assertSame(450, $unauthInfo->remaining);
+        $this->assertSame(1726959999, $unauthInfo->reset);
+    }
+
+    public function testLastRateLimitInfoRetainedOnUnauthenticatedHttp429(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'title' => 'Too Many Requests',
+            'detail' => 'Rate limit exceeded.',
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'X-RateLimit-Limit' => '60',
+                'X-RateLimit-Remaining' => '0',
+                'X-RateLimit-Reset' => '1726951234',
+                'Retry-After' => '45',
+            ],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', '', $httpClient);
+
+        try {
+            $client->login('user@test.com', 'password');
+            $this->fail('Expected RateLimitExceededException was not thrown.');
+        } catch (\KinetiStack\Sdk\Exception\RateLimitExceededException $e) {
+            $this->assertSame(45, $e->getRetryAfter());
+        }
+
+        $info = $client->getLastRateLimitInfo();
+        $this->assertNotNull($info);
+        $this->assertSame(60, $info->limit);
+        $this->assertSame(0, $info->remaining);
+        $this->assertSame(1726951234, $info->reset);
+        $this->assertSame(45, $info->retryAfter);
+    }
+
     /**
      * S2: withToken('new-jwt') returns a new immutable instance; original is unchanged.
      */
@@ -2024,5 +2102,94 @@ class AdminClientTest extends TestCase
 
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertSame('https://api.test/api/v1/admin/jobs/00000000-0000-0000-0000-000000000003', $mockResponse->getRequestUrl());
+    }
+
+    /**
+     * @return array<string, array{0: \Closure(AdminClient): mixed, 1: string, 2: non-empty-string, 3: string}>
+     */
+    public static function publicEndpointsWithoutBearerTokenProvider(): array
+    {
+        return [
+            'login' => [
+                fn (AdminClient $c) => $c->login('admin@test.com', 'secret-pw'),
+                'POST',
+                '/api/v1/admin/login',
+                json_encode(['token' => 'issued-jwt', 'refresh_token' => null], JSON_THROW_ON_ERROR),
+            ],
+            'register' => [
+                fn (AdminClient $c) => $c->register('Acme Corp', 'admin@acme.com'),
+                'POST',
+                '/api/v1/admin/register',
+                json_encode([
+                    'organization' => ['id' => 'org-1', 'name' => 'Acme Corp'],
+                    'admin_user' => ['id' => 'usr-1', 'email' => 'admin@acme.com', 'roles' => ['ROLE_ADMIN']],
+                ], JSON_THROW_ON_ERROR),
+            ],
+            'getRegistrationStatus' => [
+                fn (AdminClient $c) => $c->getRegistrationStatus(),
+                'GET',
+                '/api/v1/admin/registration-status',
+                json_encode([
+                    'registration_mode' => 'public',
+                    'allowed_domains' => [],
+                    'default_roles' => [],
+                ], JSON_THROW_ON_ERROR),
+            ],
+            'resendVerificationEmail' => [
+                fn (AdminClient $c) => $c->resendVerificationEmail('unverified@test.com'),
+                'POST',
+                '/api/v1/admin/resend-verification',
+                '{}',
+            ],
+            'verifyEmail' => [
+                fn (AdminClient $c) => $c->verifyEmail('verify-tok', 'new-pw'),
+                'POST',
+                '/api/v1/admin/verify-email',
+                json_encode(['token' => 'verified-jwt', 'refresh_token' => null], JSON_THROW_ON_ERROR),
+            ],
+            'requestPasswordReset' => [
+                fn (AdminClient $c) => $c->requestPasswordReset('forgot@test.com'),
+                'POST',
+                '/api/v1/admin/password-reset-requests',
+                '{}',
+            ],
+            'resetPassword' => [
+                fn (AdminClient $c) => $c->resetPassword('reset-tok', 'new-secure-pw'),
+                'POST',
+                '/api/v1/admin/password-resets',
+                '{}',
+            ],
+        ];
+    }
+
+    /**
+     * @param \Closure(AdminClient): mixed $action
+     * @param non-empty-string $expectedPath
+     */
+    #[DataProvider('publicEndpointsWithoutBearerTokenProvider')]
+    public function testPublicEndpointsDoNotSendAuthorizationHeaderEvenWithStaleToken(
+        \Closure $action,
+        string $expectedMethod,
+        string $expectedPath,
+        string $responseBody
+    ): void {
+        $mockResponse = new MockResponse($responseBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', 'stale-token', $httpClient);
+
+        $action($client);
+
+        $this->assertSame($expectedMethod, $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith($expectedPath, $mockResponse->getRequestUrl());
+
+        $headers = $mockResponse->getRequestOptions()['headers'] ?? [];
+        foreach ($headers as $header) {
+            $this->assertStringStartsNotWith('authorization:', strtolower((string) $header));
+        }
+
+        $this->assertSame('stale-token', $client->getJwtToken());
     }
 }

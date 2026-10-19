@@ -809,4 +809,132 @@ class Psr18TransportTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame([], $response->toArray());
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function invalidApiHostProvider(): array
+    {
+        return [
+            'empty host' => [''],
+            'ftp scheme' => ['ftp://api.test'],
+            'no host' => ['http://'],
+            'not a url' => ['not-a-url'],
+        ];
+    }
+
+    #[DataProvider('invalidApiHostProvider')]
+    public function testInvalidApiHostThrowsException(string $invalidHost): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid API host URL. Must be an absolute HTTP or HTTPS URL.');
+
+        new Psr18Transport($invalidHost, 'X-Kineti-Key', 'test-key');
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function invalidPathProvider(): array
+    {
+        return [
+            'no leading slash' => ['api/v1/resource'],
+            'double leading slash' => ['//api/v1/resource'],
+            'traversal middle' => ['/api/v1/../secret'],
+            'traversal end' => ['/api/v1/..'],
+            'traversal only' => ['/../'],
+            'encoded traversal middle lowercase' => ['/api/v1/%2e%2e/secret'],
+            'encoded traversal middle uppercase' => ['/api/v1/%2E%2E/secret'],
+            'encoded traversal end lowercase' => ['/api/v1/%2e%2e'],
+            'encoded traversal end uppercase' => ['/api/v1/%2E%2E'],
+            'encoded slash leading' => ['/%2fsecret'],
+        ];
+    }
+
+    #[DataProvider('invalidPathProvider')]
+    public function testInvalidPathThrowsException(string $invalidPath): void
+    {
+        $mock = new MockHandler([]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid request path. Must be a relative path starting with a single forward slash and cannot contain traversal segments.');
+
+        $transport->request('GET', $invalidPath);
+    }
+
+    public function testValidPathWithQueryStringContainingDotsDoesNotThrow(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], '{}'),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
+
+        $response = $transport->request('GET', '/api/v1/search?query=/../test');
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    public function testDebugInfoRedactsSensitiveHeadersInDefaultOptions(): void
+    {
+        $mock = new MockHandler([]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport(
+            'https://api.test',
+            'Authorization',
+            'Bearer token123',
+            $client,
+            [
+                'headers' => [
+                    'Authorization' => 'Bearer secret-bearer',
+                    'x-kineti-key' => 'secret-kineti-key',
+                    'Proxy-Authorization' => 'Basic proxy-secret',
+                    'X-Custom-Header' => 'public-value',
+                ],
+            ]
+        );
+
+        $debugInfo = $transport->__debugInfo();
+
+        $this->assertSame(Client::class, $debugInfo['client']);
+        $this->assertNotEmpty($debugInfo['requestFactory']);
+        $this->assertNotEmpty($debugInfo['streamFactory']);
+        $this->assertIsArray($debugInfo['defaultOptions']);
+        $this->assertIsArray($debugInfo['defaultOptions']['headers']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Authorization']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['x-kineti-key']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Proxy-Authorization']);
+        $this->assertSame('public-value', $debugInfo['defaultOptions']['headers']['X-Custom-Header']);
+        $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
+    }
+
+    public function testDebugInfoRedactsColonDelimitedStringHeaders(): void
+    {
+        $mock = new MockHandler([]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+        $transport = new Psr18Transport(
+            'https://api.test',
+            'Authorization',
+            'Bearer token123',
+            $client,
+            [
+                'headers' => [
+                    'Authorization: Bearer secret-bearer',
+                    'x-kineti-key: secret-kineti-key',
+                    'Proxy-Authorization: Basic proxy-secret',
+                    'X-Custom-Header: public-value',
+                ],
+            ]
+        );
+
+        $debugInfo = $transport->__debugInfo();
+
+        $this->assertIsArray($debugInfo['defaultOptions']);
+        $this->assertIsArray($debugInfo['defaultOptions']['headers']);
+        $this->assertSame('Authorization: [REDACTED]', $debugInfo['defaultOptions']['headers'][0]);
+        $this->assertSame('x-kineti-key: [REDACTED]', $debugInfo['defaultOptions']['headers'][1]);
+        $this->assertSame('Proxy-Authorization: [REDACTED]', $debugInfo['defaultOptions']['headers'][2]);
+        $this->assertSame('X-Custom-Header: public-value', $debugInfo['defaultOptions']['headers'][3]);
+    }
 }

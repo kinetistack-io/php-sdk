@@ -24,6 +24,7 @@ use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\SseParser;
+use KinetiStack\Sdk\Transport\TransportHelperTrait;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -31,6 +32,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class KinetiClient implements KinetiClientInterface
 {
     use ClientHelperTrait;
+    use TransportHelperTrait;
 
     public const MAX_BATCH_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB (10485760 bytes)
     public const DEFAULT_POLL_INTERVAL_SECONDS = 2;
@@ -515,6 +517,13 @@ class KinetiClient implements KinetiClientInterface
      */
     public function searchStream(SearchQueryDto|string $query, string $path = '/api/v1/search/rag'): \Generator
     {
+        $this->validatePath($path);
+
+        return $this->doSearchStream($query, $path);
+    }
+
+    private function doSearchStream(SearchQueryDto|string $query, string $path): \Generator
+    {
         if (is_string($query)) {
             $query = SearchQueryDto::create($query)->withStream(true);
         } elseif (!$query->isStreaming()) {
@@ -529,7 +538,6 @@ class KinetiClient implements KinetiClientInterface
 
         yield from $parser->parse($response->getStreamIterator());
     }
-
 
     /**
      * @param resource $stream

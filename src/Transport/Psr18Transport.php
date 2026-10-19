@@ -16,6 +16,8 @@ use Psr\Http\Message\StreamInterface;
 
 class Psr18Transport implements TransportInterface
 {
+    use TransportHelperTrait;
+
     public const DEFAULT_MAX_RETRY_DELAY_SECONDS = 60.0;
 
     private readonly ClientInterface $client;
@@ -42,6 +44,8 @@ class Psr18Transport implements TransportInterface
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null
     ) {
+        $this->validateApiHost($apiHost);
+
         $isStandardAuthHeader = in_array(strtolower($authHeaderName), ['authorization', 'x-kineti-key'], true);
 
         if (is_string($authHeaderValueOrClient)) {
@@ -113,6 +117,8 @@ class Psr18Transport implements TransportInterface
 
     public function request(string $method, string $path, array $options = []): TransportResponseInterface
     {
+        $this->validatePath($path);
+
         $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
 
         $mergedOptions = array_merge($this->defaultOptions, $options);
@@ -340,6 +346,11 @@ class Psr18Transport implements TransportInterface
         if ($this->authHeaderValue !== '') {
             $info['authHeaderValue'] = '[REDACTED]';
         }
+
+        $info['client'] = $this->client::class;
+        $info['requestFactory'] = $this->requestFactory::class;
+        $info['streamFactory'] = $this->streamFactory::class;
+        $info['defaultOptions'] = $this->redactDebugOptions($this->defaultOptions);
 
         return $info;
     }

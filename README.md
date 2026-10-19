@@ -203,10 +203,6 @@ $isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret);
 // Or customize tolerance window in seconds (pass 0 to disable replay check)
 // $isValid = WebhookVerifier::verify($payload, $signatureHeader, $webhookSecret, toleranceSeconds: 600);
 
-// To accept legacy signatures without timestamp replay protection (X-Kineti-Signature: sha256={hmac}), pass allowLegacy: true
-// $legacySignature = $_SERVER['HTTP_X_KINETI_SIGNATURE'] ?? '';
-// $isValid = WebhookVerifier::verify($payload, $legacySignature, $webhookSecret, allowLegacy: true);
-
 if (!$isValid) {
     http_response_code(401);
     exit('Invalid or expired signature');
@@ -215,7 +211,6 @@ if (!$isValid) {
 
 #### Available Constants
 - `WebhookVerifier::HEADER_SIGNATURE`: `'Kineti-Signature'`
-- `WebhookVerifier::HEADER_LEGACY_SIGNATURE`: `'X-Kineti-Signature'`
 - `WebhookVerifier::DEFAULT_TOLERANCE_SECONDS`: `300`
 
 ### Error Handling

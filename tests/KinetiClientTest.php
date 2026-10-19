@@ -848,4 +848,70 @@ class KinetiClientTest extends TestCase
             $this->assertLessThan(4_000_000, $sleepCalls[1]);
         }
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function invalidApiHostProvider(): array
+    {
+        return [
+            'empty host' => [''],
+            'ftp scheme' => ['ftp://api.test'],
+            'no host' => ['http://'],
+            'not a url' => ['not-a-url'],
+        ];
+    }
+
+    #[DataProvider('invalidApiHostProvider')]
+    public function testInvalidApiHostThrowsException(string $invalidHost): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid API host URL. Must be an absolute HTTP or HTTPS URL.');
+
+        new KinetiClient($invalidHost, 'test-key');
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function invalidPathProvider(): array
+    {
+        return [
+            'no leading slash' => ['api/v1/search/rag'],
+            'double leading slash' => ['//api/v1/search/rag'],
+            'traversal middle' => ['/api/v1/../search/rag'],
+            'traversal end' => ['/api/v1/search/..'],
+            'traversal only' => ['/../'],
+            'encoded traversal middle lowercase' => ['/api/v1/%2e%2e/search/rag'],
+            'encoded traversal middle uppercase' => ['/api/v1/%2E%2E/search/rag'],
+            'encoded traversal end lowercase' => ['/api/v1/search/%2e%2e'],
+            'encoded traversal end uppercase' => ['/api/v1/search/%2E%2E'],
+            'encoded slash leading' => ['/%2fsearch/rag'],
+        ];
+    }
+
+    #[DataProvider('invalidPathProvider')]
+    public function testSearchStreamInvalidPathThrowsException(string $invalidPath): void
+    {
+        $client = new KinetiClient('https://api.test', 'test-key', new MockHttpClient());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid request path. Must be a relative path starting with a single forward slash and cannot contain traversal segments.');
+
+        $client->searchStream('search query', $invalidPath);
+    }
+
+    public function testSearchStreamValidPathWithQueryStringContainingDotsDoesNotThrow(): void
+    {
+        $mockResponse = new MockResponse("event: message\ndata: {\"text\": \"result\"}\n\n", [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $client = new KinetiClient('https://api.test', 'test-key', new MockHttpClient($mockResponse));
+
+        $generator = $client->searchStream('search query', '/api/v1/search/rag?query=/../test');
+        $this->assertInstanceOf(\Generator::class, $generator);
+        $results = iterator_to_array($generator);
+        $this->assertNotEmpty($results);
+    }
 }

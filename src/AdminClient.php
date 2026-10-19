@@ -27,6 +27,7 @@ use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\Transport\TransportInterface;
+use KinetiStack\Sdk\Transport\TransportResponseInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -36,6 +37,7 @@ class AdminClient implements AdminClientInterface
 
     private TransportInterface $transport;
     private ?AnalyticsClientInterface $analyticsClient = null;
+    private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
     /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
@@ -65,6 +67,7 @@ class AdminClient implements AdminClientInterface
         $clone = clone $this;
         $clone->jwtToken = $jwtToken;
         $clone->analyticsClient = null;
+        $clone->lastRateLimitInfo = $this->lastRateLimitInfo;
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
         $clone->transport = $this->transport->withAuthHeaderValue($authHeaderValue);
@@ -79,7 +82,7 @@ class AdminClient implements AdminClientInterface
 
     public function getLastRateLimitInfo(): ?RateLimitInfoDto
     {
-        return $this->transport->getLastRateLimitInfo();
+        return $this->lastRateLimitInfo ?? $this->transport->getLastRateLimitInfo();
     }
 
     public function getApiHost(): string
@@ -112,12 +115,12 @@ class AdminClient implements AdminClientInterface
      */
     public function login(string $email, #[\SensitiveParameter] string $password): AuthTokenDto
     {
-        $response = $this->transport->request('POST', '/api/v1/admin/login', [
+        $response = $this->request('POST', '/api/v1/admin/login', [
             'json' => [
                 'email' => $email,
                 'password' => $password,
             ],
-        ]);
+        ], authenticated: false);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -133,7 +136,7 @@ class AdminClient implements AdminClientInterface
      */
     public function refreshToken(): AuthTokenDto
     {
-        $response = $this->transport->request('POST', '/api/v1/admin/token/refresh');
+        $response = $this->request('POST', '/api/v1/admin/token/refresh');
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -154,7 +157,7 @@ class AdminClient implements AdminClientInterface
      */
     public function ping(): bool
     {
-        $response = $this->transport->request('GET', '/api/v1/admin/ping');
+        $response = $this->request('GET', '/api/v1/admin/ping');
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -205,9 +208,9 @@ class AdminClient implements AdminClientInterface
             $payload = $dto->toArray();
         }
 
-        $response = $this->transport->request('POST', '/api/v1/admin/register', [
+        $response = $this->request('POST', '/api/v1/admin/register', [
             'json' => $payload,
-        ]);
+        ], authenticated: false);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -222,7 +225,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getRegistrationStatus(): RegistrationStatusDto
     {
-        $response = $this->transport->request('GET', '/api/v1/admin/registration-status');
+        $response = $this->request('GET', '/api/v1/admin/registration-status', authenticated: false);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -238,11 +241,11 @@ class AdminClient implements AdminClientInterface
      */
     public function resendVerificationEmail(string $email): void
     {
-        $this->transport->request('POST', '/api/v1/admin/resend-verification', [
+        $this->request('POST', '/api/v1/admin/resend-verification', [
             'json' => [
                 'email' => $email,
             ],
-        ]);
+        ], authenticated: false);
     }
 
     /**
@@ -267,12 +270,12 @@ class AdminClient implements AdminClientInterface
             throw new \InvalidArgumentException('Password cannot be empty.');
         }
 
-        $response = $this->transport->request('POST', '/api/v1/admin/verify-email', [
+        $response = $this->request('POST', '/api/v1/admin/verify-email', [
             'json' => [
                 'token' => $token,
                 'password' => $password,
             ],
-        ]);
+        ], authenticated: false);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -287,7 +290,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getOrganization(string $id): OrganizationDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')));
+        $response = $this->request('GET', sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -305,7 +308,7 @@ class AdminClient implements AdminClientInterface
     {
         $data = $this->normalizePayloadKeys($data, ['monthlyQuotaCap' => 'monthly_quota_cap']);
 
-        $response = $this->transport->request(
+        $response = $this->request(
             'PATCH',
             sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')),
             [
@@ -329,7 +332,7 @@ class AdminClient implements AdminClientInterface
      */
     public function deleteOrganization(string $id): void
     {
-        $this->transport->request('DELETE', sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')));
+        $this->request('DELETE', sprintf('/api/v1/admin/organizations/%s', $this->encodePathSegment($id, 'Organization ID')));
     }
 
     /**
@@ -366,7 +369,7 @@ class AdminClient implements AdminClientInterface
 
         $payload = $this->normalizePayloadKeys($payload, ['monthlyQuotaCap' => 'monthly_quota_cap']);
 
-        $response = $this->transport->request('POST', '/api/v1/admin/projects', [
+        $response = $this->request('POST', '/api/v1/admin/projects', [
             'json' => $payload,
         ]);
 
@@ -390,7 +393,7 @@ class AdminClient implements AdminClientInterface
             $requestOptions['query'] = $options;
         }
 
-        $response = $this->transport->request('GET', '/api/v1/admin/projects', $requestOptions);
+        $response = $this->request('GET', '/api/v1/admin/projects', $requestOptions);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();
@@ -406,7 +409,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getProject(string $id): ProjectDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
+        $response = $this->request('GET', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -424,7 +427,7 @@ class AdminClient implements AdminClientInterface
     {
         $data = $this->normalizePayloadKeys($data, ['monthlyQuotaCap' => 'monthly_quota_cap']);
 
-        $response = $this->transport->request(
+        $response = $this->request(
             'PATCH',
             sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')),
             [
@@ -448,7 +451,7 @@ class AdminClient implements AdminClientInterface
      */
     public function deleteProject(string $id): void
     {
-        $this->transport->request('DELETE', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
+        $this->request('DELETE', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
     }
 
     /**
@@ -498,7 +501,7 @@ class AdminClient implements AdminClientInterface
 
         $path = sprintf('/api/v1/admin/projects/%s/api-keys', $this->encodePathSegment($projectId, 'Project ID'));
 
-        $response = $this->transport->request('POST', $path, [
+        $response = $this->request('POST', $path, [
             'json' => $payload,
         ]);
 
@@ -526,7 +529,7 @@ class AdminClient implements AdminClientInterface
             $requestOptions['query'] = $options;
         }
 
-        $response = $this->transport->request('GET', $path, $requestOptions);
+        $response = $this->request('GET', $path, $requestOptions);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();
@@ -552,7 +555,7 @@ class AdminClient implements AdminClientInterface
             $this->encodePathSegment($projectId, 'Project ID'),
             $this->encodePathSegment($keyId, 'API key ID')
         );
-        $response = $this->transport->request('GET', $path);
+        $response = $this->request('GET', $path);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -576,7 +579,7 @@ class AdminClient implements AdminClientInterface
             $this->encodePathSegment($keyId, 'API key ID')
         );
 
-        $this->transport->request('DELETE', $path);
+        $this->request('DELETE', $path);
     }
 
     /**
@@ -592,7 +595,7 @@ class AdminClient implements AdminClientInterface
             $this->encodePathSegment($projectId, 'Project ID'),
             $this->encodePathSegment($keyId, 'API key ID')
         );
-        $response = $this->transport->request('POST', $path);
+        $response = $this->request('POST', $path);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -645,7 +648,7 @@ class AdminClient implements AdminClientInterface
             $requestOptions['query'] = $query;
         }
 
-        $response = $this->transport->request('GET', '/api/v1/admin/usage', $requestOptions);
+        $response = $this->request('GET', '/api/v1/admin/usage', $requestOptions);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();
@@ -684,7 +687,7 @@ class AdminClient implements AdminClientInterface
     {
         $path = sprintf('/api/v1/admin/projects/%s/jobs', $this->encodePathSegment($projectId, 'Project ID'));
         $query = array_merge(['page' => $page], $options);
-        $response = $this->transport->request('GET', $path, ['query' => $query]);
+        $response = $this->request('GET', $path, ['query' => $query]);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();
@@ -701,7 +704,7 @@ class AdminClient implements AdminClientInterface
     public function retryJob(string $jobId): JobDto
     {
         $path = sprintf('/api/v1/admin/jobs/%s/retry', $this->encodePathSegment($jobId, 'Job ID'));
-        $response = $this->transport->request('POST', $path);
+        $response = $this->request('POST', $path);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -717,7 +720,7 @@ class AdminClient implements AdminClientInterface
     public function getJob(string $jobId): JobDto
     {
         $path = sprintf('/api/v1/admin/jobs/%s', $this->encodePathSegment($jobId, 'Job ID'));
-        $response = $this->transport->request('GET', $path);
+        $response = $this->request('GET', $path);
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -739,7 +742,7 @@ class AdminClient implements AdminClientInterface
             $requestOptions['query'] = $options;
         }
 
-        $response = $this->transport->request('GET', '/api/v1/admin/users', $requestOptions);
+        $response = $this->request('GET', '/api/v1/admin/users', $requestOptions);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();
@@ -755,7 +758,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getUser(string $id): UserDto
     {
-        $response = $this->transport->request('GET', sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')));
+        $response = $this->request('GET', sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')));
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -771,9 +774,9 @@ class AdminClient implements AdminClientInterface
      * @throws ValidationException When payload fails validation (HTTP 422).
      * @throws KinetiException
      */
-    public function createUser(array $payload): UserDto
+    public function createUser(#[\SensitiveParameter] array $payload): UserDto
     {
-        $response = $this->transport->request('POST', '/api/v1/admin/users', [
+        $response = $this->request('POST', '/api/v1/admin/users', [
             'json' => $payload,
         ]);
 
@@ -790,9 +793,9 @@ class AdminClient implements AdminClientInterface
      * @throws ValidationException When payload fails validation or violates constraints (HTTP 422).
      * @throws KinetiException
      */
-    public function updateUser(string $id, array $payload): UserDto
+    public function updateUser(string $id, #[\SensitiveParameter] array $payload): UserDto
     {
-        $response = $this->transport->request(
+        $response = $this->request(
             'PATCH',
             sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')),
             [
@@ -816,7 +819,7 @@ class AdminClient implements AdminClientInterface
      */
     public function deleteUser(string $id): void
     {
-        $this->transport->request('DELETE', sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')));
+        $this->request('DELETE', sprintf('/api/v1/admin/users/%s', $this->encodePathSegment($id, 'User ID')));
     }
 
     /**
@@ -834,7 +837,7 @@ class AdminClient implements AdminClientInterface
             $requestOptions['query'] = $options;
         }
 
-        $response = $this->transport->request('GET', $path, $requestOptions);
+        $response = $this->request('GET', $path, $requestOptions);
 
         /** @var array<string, mixed>|list<array<string, mixed>> $data */
         $data = $response->toArray();
@@ -860,7 +863,7 @@ class AdminClient implements AdminClientInterface
 
         $payload = $this->normalizePayloadKeys($payload, ['userId' => 'user_id']);
 
-        $response = $this->transport->request('POST', $path, [
+        $response = $this->request('POST', $path, [
             'json' => $payload,
         ]);
 
@@ -882,7 +885,7 @@ class AdminClient implements AdminClientInterface
             $this->encodePathSegment($projectId, 'Project ID'),
             $this->encodePathSegment($userId, 'User ID')
         );
-        $this->transport->request('DELETE', $path);
+        $this->request('DELETE', $path);
     }
 
     /**
@@ -893,11 +896,11 @@ class AdminClient implements AdminClientInterface
      */
     public function requestPasswordReset(string $email): void
     {
-        $this->transport->request('POST', '/api/v1/admin/password-reset-requests', [
+        $this->request('POST', '/api/v1/admin/password-reset-requests', [
             'json' => [
                 'email' => $email,
             ],
-        ]);
+        ], authenticated: false);
     }
 
     /**
@@ -908,12 +911,12 @@ class AdminClient implements AdminClientInterface
      */
     public function resetPassword(#[\SensitiveParameter] string $token, #[\SensitiveParameter] string $newPassword): void
     {
-        $this->transport->request('POST', '/api/v1/admin/password-resets', [
+        $this->request('POST', '/api/v1/admin/password-resets', [
             'json' => [
                 'token' => $token,
                 'password' => $newPassword,
             ],
-        ]);
+        ], authenticated: false);
     }
 
     /**
@@ -923,7 +926,7 @@ class AdminClient implements AdminClientInterface
      */
     public function getMe(): UserDto
     {
-        $response = $this->transport->request('GET', '/api/v1/admin/me');
+        $response = $this->request('GET', '/api/v1/admin/me');
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -947,7 +950,7 @@ class AdminClient implements AdminClientInterface
     ): UserDto {
         $payload = $this->normalizePayloadKeys($payload, ['currentPassword' => 'current_password']);
 
-        $response = $this->transport->request(
+        $response = $this->request(
             'PATCH',
             '/api/v1/admin/me',
             [
@@ -974,7 +977,7 @@ class AdminClient implements AdminClientInterface
         #[\SensitiveParameter] string $currentPassword,
         #[\SensitiveParameter] string $newPassword
     ): void {
-        $this->transport->request(
+        $this->request(
             'PATCH',
             '/api/v1/admin/me/password',
             [
@@ -987,6 +990,36 @@ class AdminClient implements AdminClientInterface
                 ],
             ]
         );
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @throws KinetiException
+     */
+    private function request(
+        string $method,
+        string $path,
+        array $options = [],
+        bool $authenticated = true
+    ): TransportResponseInterface {
+        $transport = $authenticated ? $this->transport : $this->unauthenticatedTransport();
+
+        try {
+            $response = $transport->request($method, $path, $options);
+            $this->lastRateLimitInfo = $transport->getLastRateLimitInfo() ?? RateLimitInfoDto::fromHeaders($response->getHeaders());
+
+            return $response;
+        } catch (\Throwable $e) {
+            if ($transport->getLastRateLimitInfo() !== null) {
+                $this->lastRateLimitInfo = $transport->getLastRateLimitInfo();
+            }
+            throw $e;
+        }
+    }
+
+    private function unauthenticatedTransport(): TransportInterface
+    {
+        return $this->transport->withAuthHeaderValue('');
     }
 
     /**
