@@ -11,7 +11,7 @@ use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use KinetiStack\Sdk\AdminClient;
 use KinetiStack\Sdk\AnalyticsClient;
-use KinetiStack\Sdk\Client\AnalyticsClientInterface;
+use KinetiStack\Sdk\AnalyticsClientInterface;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use PHPUnit\Framework\TestCase;

@@ -6,7 +6,6 @@ namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\AdminClient;
 use KinetiStack\Sdk\AdminClientInterface;
-use KinetiStack\Sdk\Client\AdminClientInterface as BaseAdminClientInterface;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
@@ -44,7 +43,6 @@ class AdminClientTest extends TestCase
     {
         $client = new AdminClient('https://api.test', 'initial-jwt');
         $this->assertInstanceOf(AdminClientInterface::class, $client);
-        $this->assertInstanceOf(BaseAdminClientInterface::class, $client);
     }
 
     public function testLastRateLimitInfoOnAdminClient(): void
@@ -546,26 +544,12 @@ class AdminClientTest extends TestCase
         $this->assertContains('Authorization: Bearer existing-auth-token', $headers);
     }
 
-    public function testCreateOrganizationThrowsBadMethodCallException(): void
+    public function testCreateAndListOrganizationMethodsDoNotExist(): void
     {
-        $httpClient = new MockHttpClient([]);
-        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
-
-        $this->expectException(\BadMethodCallException::class);
-        $this->expectExceptionMessage('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
-
-        $admin->createOrganization('Acme Agency', 'standard');
-    }
-
-    public function testListOrganizationsThrowsBadMethodCallException(): void
-    {
-        $httpClient = new MockHttpClient([]);
-        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
-
-        $this->expectException(\BadMethodCallException::class);
-        $this->expectExceptionMessage('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
-
-        $admin->listOrganizations(['page' => 1]);
+        $this->assertFalse(method_exists(AdminClient::class, 'createOrganization'));
+        $this->assertFalse(method_exists(AdminClient::class, 'listOrganizations'));
+        $this->assertFalse(method_exists(AdminClientInterface::class, 'createOrganization'));
+        $this->assertFalse(method_exists(AdminClientInterface::class, 'listOrganizations'));
     }
 
     public function testGetOrganization(): void
@@ -971,13 +955,27 @@ class AdminClientTest extends TestCase
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys/key-uuid-1', $mockResponse->getRequestUrl());
     }
 
-    public function testRevokeApiKeySupportsLegacyNamedArguments(): void
+    public function testRevokeApiKeyRequiresTwoParameters(): void
     {
+        $refMethod = new \ReflectionMethod(AdminClient::class, 'revokeApiKey');
+        $this->assertSame(2, $refMethod->getNumberOfParameters());
+        $this->assertSame(2, $refMethod->getNumberOfRequiredParameters());
+        $params = $refMethod->getParameters();
+        $this->assertSame('projectId', $params[0]->getName());
+        $this->assertSame('keyId', $params[1]->getName());
+
+        $interfaceRefMethod = new \ReflectionMethod(AdminClientInterface::class, 'revokeApiKey');
+        $this->assertSame(2, $interfaceRefMethod->getNumberOfParameters());
+        $this->assertSame(2, $interfaceRefMethod->getNumberOfRequiredParameters());
+        $interfaceParams = $interfaceRefMethod->getParameters();
+        $this->assertSame('projectId', $interfaceParams[0]->getName());
+        $this->assertSame('keyId', $interfaceParams[1]->getName());
+
         $mockResponse = new MockResponse('', ['http_code' => 204]);
         $httpClient = new MockHttpClient($mockResponse);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
 
-        $admin->revokeApiKey(projectIdOrKeyId: 'proj-1', keyId: 'key-uuid-1');
+        $admin->revokeApiKey(projectId: 'proj-1', keyId: 'key-uuid-1');
 
         $this->assertSame('DELETE', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/admin/projects/proj-1/api-keys/key-uuid-1', $mockResponse->getRequestUrl());
@@ -1108,8 +1106,8 @@ class AdminClientTest extends TestCase
         $admin->revokeApiKey($emptyProjectId, 'key-123');
     }
 
-    #[DataProvider('provideEmptyNullableKeyIdentifiers')]
-    public function testRevokeApiKeyEmptyKeyIdThrowsException(?string $emptyKeyId): void
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testRevokeApiKeyEmptyKeyIdThrowsException(string $emptyKeyId): void
     {
         $httpClient = new MockHttpClient([]);
         $admin = new AdminClient('https://api.test', 'jwt', $httpClient);

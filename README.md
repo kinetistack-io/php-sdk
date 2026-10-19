@@ -54,7 +54,7 @@ When `max_retries` is configured in `$options`, the SDK automatically retries tr
 - **HTTP 503 (Service Unavailable)**: Automatically retries using exponential backoff.
 - **Non-transient errors** (such as HTTP 400, 401, 403, 404, 422, or 500) fail immediately without retrying.
 
-If all retry attempts are exhausted, the corresponding typed exception (e.g., `RateLimitException` or `ServiceUnavailableException`) is thrown.
+If all retry attempts are exhausted, the corresponding typed exception (e.g., `RateLimitExceededException` or `ServiceUnavailableException`) is thrown.
 
 ### Image Analysis
 
@@ -228,7 +228,7 @@ use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
-use KinetiStack\Sdk\Exception\RateLimitException;
+use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\ValidationException;
@@ -237,7 +237,7 @@ try {
     $client->analyzeImage('invalid-url');
 } catch (ValidationException $e) {
     print_r($e->violations);
-} catch (RateLimitException $e) {
+} catch (RateLimitExceededException $e) {
     // Thrown if max_retries is not configured or all retry attempts are exhausted
     echo "Rate limited. Retry after: " . $e->retryAfter . " seconds.";
 } catch (ServiceUnavailableException $e) {
@@ -248,7 +248,7 @@ try {
 }
 ```
 
-> **Note on Transient Errors**: When `max_retries` is specified in client options (e.g., `['max_retries' => 3]`), transient HTTP errors (`429 Too Many Requests` respecting `Retry-After` header, and `503 Service Unavailable`) are automatically retried with exponential backoff before throwing `RateLimitException` or `ServiceUnavailableException`.
+> **Note on Transient Errors**: When `max_retries` is specified in client options (e.g., `['max_retries' => 3]`), transient HTTP errors (`429 Too Many Requests` respecting `Retry-After` header, and `503 Service Unavailable`) are automatically retried with exponential backoff before throwing `RateLimitExceededException` or `ServiceUnavailableException`.
 
 ### Admin API (`AdminClient`)
 

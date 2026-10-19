@@ -90,21 +90,14 @@ class SearchResultDtoTest extends TestCase
         $this->assertSame(['staff'], $step11->filters->permissions);
         $this->assertSame(['category' => 'tech'], $step11->filters->custom);
 
-        $step12 = $step11->withPage(3);
-        $this->assertNotSame($step11, $step12);
-        $this->assertSame(3, $step12->page);
-        $this->assertSame(3, $step12->getPage());
-
-        $step13 = $step12->withOffset(30);
-        $this->assertNotSame($step12, $step13);
+        $step13 = $step11->withOffset(30);
+        $this->assertNotSame($step11, $step13);
         $this->assertSame(30, $step13->offset);
         $this->assertSame(30, $step13->getOffset());
 
-        $step14 = $step13->setLimit(50)->setPage(2)->setOffset(10);
+        $step14 = $step13->setLimit(50)->setOffset(10);
         $this->assertSame(50, $step14->limit);
         $this->assertSame(50, $step14->getLimit());
-        $this->assertSame(2, $step14->page);
-        $this->assertSame(2, $step14->getPage());
         $this->assertSame(10, $step14->offset);
         $this->assertSame(10, $step14->getOffset());
     }
@@ -113,7 +106,6 @@ class SearchResultDtoTest extends TestCase
     {
         $query = SearchQueryDto::create('full test')
             ->withLimit(10)
-            ->withPage(2)
             ->withOffset(10)
             ->withLocale('en')
             ->withUserRoles(['editor'])
@@ -127,7 +119,6 @@ class SearchResultDtoTest extends TestCase
 
         $this->assertSame('full test', $array['query']);
         $this->assertSame(10, $array['limit']);
-        $this->assertSame(2, $array['page']);
         $this->assertSame(10, $array['offset']);
         $this->assertSame('en', $array['locale']);
         $this->assertSame(['editor'], $array['user_roles']);
@@ -141,7 +132,6 @@ class SearchResultDtoTest extends TestCase
         $restored = SearchQueryDto::fromArray($array);
         $this->assertSame('full test', $restored->query);
         $this->assertSame(10, $restored->limit);
-        $this->assertSame(2, $restored->page);
         $this->assertSame(10, $restored->offset);
         $this->assertSame('en', $restored->locale);
         $this->assertSame(['editor'], $restored->userRoles);

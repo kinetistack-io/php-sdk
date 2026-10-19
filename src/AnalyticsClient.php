@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
+use KinetiStack\Sdk\Client\ClientHelperTrait;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\KinetiException;
-use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class AnalyticsClient implements AnalyticsClientInterface
 {
+    use ClientHelperTrait;
+
     private TransportInterface $transport;
 
     /**
@@ -28,18 +30,13 @@ class AnalyticsClient implements AnalyticsClientInterface
         private readonly HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         private readonly array $options = []
     ) {
-        if ($transportOrApiHost instanceof TransportInterface) {
-            $this->transport = $this->jwtToken !== ''
-                ? $transportOrApiHost->withAuthHeaderValue('Bearer ' . $this->jwtToken)
-                : $transportOrApiHost;
-        } else {
-            $this->transport = $this->createTransport(
-                $transportOrApiHost,
-                $this->jwtToken,
-                $this->httpClient,
-                $this->options
-            );
-        }
+        $this->transport = $this->createBearerTransport(
+            is_string($transportOrApiHost) ? $transportOrApiHost : '',
+            $this->jwtToken,
+            $transportOrApiHost instanceof TransportInterface ? $transportOrApiHost : null,
+            $this->httpClient,
+            $this->options
+        );
     }
 
     public function withToken(#[\SensitiveParameter] string $jwtToken): static
@@ -104,25 +101,5 @@ class AnalyticsClient implements AnalyticsClientInterface
         $data = $response->toArray();
 
         return AnalyticsDto::fromArray($data);
-    }
-
-    /**
-     * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
-     * @param array<string, mixed> $options
-     */
-    private function createTransport(
-        string $apiHost,
-        #[\SensitiveParameter]
-        string $jwtToken,
-        HttpClientInterface|ClientInterface|TransportInterface|null $httpClient,
-        array $options
-    ): TransportInterface {
-        if ($httpClient instanceof TransportInterface) {
-            return $jwtToken !== '' ? $httpClient->withAuthHeaderValue('Bearer ' . $jwtToken) : $httpClient;
-        }
-
-        $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
-
-        return new HttpTransport($apiHost, 'Authorization', $authHeaderValue, $httpClient, $options);
     }
 }

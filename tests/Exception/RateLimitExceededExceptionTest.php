@@ -7,13 +7,11 @@ namespace KinetiStack\Sdk\Tests\Exception;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
-use KinetiStack\Sdk\Exception\RateLimitException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RateLimitExceededException::class)]
-#[UsesClass(RateLimitException::class)]
 #[UsesClass(RateLimitInfoDto::class)]
 final class RateLimitExceededExceptionTest extends TestCase
 {
@@ -21,7 +19,6 @@ final class RateLimitExceededExceptionTest extends TestCase
     {
         $exception = new RateLimitExceededException();
 
-        $this->assertInstanceOf(RateLimitException::class, $exception);
         $this->assertInstanceOf(KinetiException::class, $exception);
         $this->assertInstanceOf(\RuntimeException::class, $exception);
         $this->assertSame('Rate limit exceeded.', $exception->getMessage());

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Exception;
 
-class ServiceModuleDisabledException extends KinetiException
+class ServiceModuleDisabledException extends AuthorizationException
 {
     public function __construct(
         string $message,

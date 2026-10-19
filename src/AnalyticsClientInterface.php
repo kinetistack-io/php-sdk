@@ -4,14 +4,31 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
-use KinetiStack\Sdk\Client\AnalyticsClientInterface as BaseAnalyticsClientInterface;
+use KinetiStack\Sdk\Dto\AnalyticsDto;
+use KinetiStack\Sdk\Enum\AnalyticsGrouping;
+use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Transport\TransportInterface;
 
 /**
- * Public facade interface for AnalyticsClient.
+ * Interface defining usage analytics and metrics retrieval operations.
  *
- * Extends the base client contract {@see BaseAnalyticsClientInterface}. Consumers should type-hint
- * against this facade in analytics dashboards and monitoring tools.
+ * Consumers should type-hint against this interface in analytics dashboards and monitoring tools.
  */
-interface AnalyticsClientInterface extends BaseAnalyticsClientInterface
+interface AnalyticsClientInterface
 {
+    public function withToken(#[\SensitiveParameter] string $jwtToken): static;
+
+    public function getTransport(): TransportInterface;
+
+    /**
+     * Query aggregated usage analytics buckets.
+     *
+     * @throws KinetiException
+     */
+    public function getAnalytics(
+        AnalyticsGrouping $grouping = AnalyticsGrouping::DAY,
+        ?string $from = null,
+        ?string $to = null,
+        ?string $projectId = null
+    ): AnalyticsDto;
 }

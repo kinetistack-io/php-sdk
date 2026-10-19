@@ -12,7 +12,6 @@ use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
-use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
@@ -32,7 +31,6 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(NotFoundException::class)]
 #[UsesClass(PayloadTooLargeException::class)]
 #[UsesClass(RateLimitExceededException::class)]
-#[UsesClass(RateLimitException::class)]
 #[UsesClass(ServerException::class)]
 #[UsesClass(ServiceModuleDisabledException::class)]
 #[UsesClass(ServiceUnavailableException::class)]
@@ -112,7 +110,7 @@ final class ResponseErrorHandlerTest extends TestCase
         ResponseErrorHandler::handleError(409, ['Content-Type' => ['application/problem+json']], $body);
     }
 
-    public function testHandleErrorThrowsRateLimitExceptionWithParsedHeaders(): void
+    public function testHandleErrorThrowsRateLimitExceededExceptionWithParsedHeaders(): void
     {
         $body = json_encode([
             'type' => 'https://tools.ietf.org/html/rfc9457',
@@ -131,9 +129,9 @@ final class ResponseErrorHandlerTest extends TestCase
 
         try {
             $this->invokeErrorHandler(429, $headers, $body);
-            $this->fail('Expected RateLimitException to be thrown');
-        } catch (RateLimitException $e) {
-            $this->assertInstanceOf(RateLimitExceededException::class, $e);
+            $this->fail('Expected RateLimitExceededException to be thrown');
+        } catch (RateLimitExceededException $e) {
+            $this->assertInstanceOf(KinetiException::class, $e);
             $this->assertSame('Rate limit exceeded.', $e->getMessage());
             $this->assertSame(429, $e->getCode());
             $this->assertSame(100, $e->getLimit());
@@ -154,7 +152,7 @@ final class ResponseErrorHandlerTest extends TestCase
         }
     }
 
-    public function testHandleErrorThrowsRateLimitExceptionWithoutHeaders(): void
+    public function testHandleErrorThrowsRateLimitExceededExceptionWithoutHeaders(): void
     {
         $body = json_encode([
             'title' => 'Too Many Requests',
@@ -164,9 +162,9 @@ final class ResponseErrorHandlerTest extends TestCase
 
         try {
             $this->invokeErrorHandler(429, ['Content-Type' => ['application/problem+json']], $body);
-            $this->fail('Expected RateLimitException to be thrown');
-        } catch (RateLimitException $e) {
-            $this->assertInstanceOf(RateLimitExceededException::class, $e);
+            $this->fail('Expected RateLimitExceededException to be thrown');
+        } catch (RateLimitExceededException $e) {
+            $this->assertInstanceOf(KinetiException::class, $e);
             $this->assertSame('Rate limit exceeded.', $e->getMessage());
             $this->assertNull($e->getLimit());
             $this->assertNull($e->limit);

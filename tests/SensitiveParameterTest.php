@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\AdminClient;
+use KinetiStack\Sdk\AdminClientInterface;
 use KinetiStack\Sdk\AnalyticsClient;
-use KinetiStack\Sdk\Client\AdminClientInterface;
-use KinetiStack\Sdk\Client\AnalyticsClientInterface;
+use KinetiStack\Sdk\AnalyticsClientInterface;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
 use KinetiStack\Sdk\KinetiClient;
+use KinetiStack\Sdk\KinetiClientInterface;
 use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\Psr18Transport;
 use KinetiStack\Sdk\Transport\SymfonyTransport;
@@ -28,6 +29,8 @@ class SensitiveParameterTest extends TestCase
     {
         return [
             'KinetiClient::__construct $apiKey' => [KinetiClient::class, '__construct', 'apiKey'],
+            'KinetiClient::withApiKey $apiKey' => [KinetiClient::class, 'withApiKey', 'apiKey'],
+            'KinetiClientInterface::withApiKey $apiKey' => [KinetiClientInterface::class, 'withApiKey', 'apiKey'],
             'AdminClient::__construct $jwtToken' => [AdminClient::class, '__construct', 'jwtToken'],
             'AdminClient::withToken $jwtToken' => [AdminClient::class, 'withToken', 'jwtToken'],
             'AdminClient::login $password' => [AdminClient::class, 'login', 'password'],
@@ -37,6 +40,7 @@ class SensitiveParameterTest extends TestCase
             'AdminClient::resetPassword $newPassword' => [AdminClient::class, 'resetPassword', 'newPassword'],
             'AdminClient::updateMyPassword $currentPassword' => [AdminClient::class, 'updateMyPassword', 'currentPassword'],
             'AdminClient::updateMyPassword $newPassword' => [AdminClient::class, 'updateMyPassword', 'newPassword'],
+            'AdminClient::updateMe $payload' => [AdminClient::class, 'updateMe', 'payload'],
             'AdminClientInterface::withToken $jwtToken' => [AdminClientInterface::class, 'withToken', 'jwtToken'],
             'AdminClientInterface::login $password' => [AdminClientInterface::class, 'login', 'password'],
             'AdminClientInterface::verifyEmail $token' => [AdminClientInterface::class, 'verifyEmail', 'token'],
@@ -45,6 +49,7 @@ class SensitiveParameterTest extends TestCase
             'AdminClientInterface::resetPassword $newPassword' => [AdminClientInterface::class, 'resetPassword', 'newPassword'],
             'AdminClientInterface::updateMyPassword $currentPassword' => [AdminClientInterface::class, 'updateMyPassword', 'currentPassword'],
             'AdminClientInterface::updateMyPassword $newPassword' => [AdminClientInterface::class, 'updateMyPassword', 'newPassword'],
+            'AdminClientInterface::updateMe $payload' => [AdminClientInterface::class, 'updateMe', 'payload'],
             'AnalyticsClient::__construct $jwtToken' => [AnalyticsClient::class, '__construct', 'jwtToken'],
             'AnalyticsClient::withToken $jwtToken' => [AnalyticsClient::class, 'withToken', 'jwtToken'],
             'AnalyticsClientInterface::withToken $jwtToken' => [AnalyticsClientInterface::class, 'withToken', 'jwtToken'],
@@ -62,8 +67,8 @@ class SensitiveParameterTest extends TestCase
             'Psr18Transport::__construct $authHeaderName' => [Psr18Transport::class, '__construct', 'authHeaderName'],
             'Psr18Transport::__construct $authHeaderValueOrClient' => [Psr18Transport::class, '__construct', 'authHeaderValueOrClient'],
             'Psr18Transport::withAuthHeaderValue $authHeaderValue' => [Psr18Transport::class, 'withAuthHeaderValue', 'authHeaderValue'],
-            'AdminClient::createTransport $jwtToken' => [AdminClient::class, 'createTransport', 'jwtToken'],
-            'AnalyticsClient::createTransport $jwtToken' => [AnalyticsClient::class, 'createTransport', 'jwtToken'],
+            'AdminClient::createBearerTransport $jwtToken' => [AdminClient::class, 'createBearerTransport', 'jwtToken'],
+            'AnalyticsClient::createBearerTransport $jwtToken' => [AnalyticsClient::class, 'createBearerTransport', 'jwtToken'],
             'HttpTransport::createDiscoveredTransport $authHeaderName' => [HttpTransport::class, 'createDiscoveredTransport', 'authHeaderName'],
             'HttpTransport::createDiscoveredTransport $authHeaderValue' => [HttpTransport::class, 'createDiscoveredTransport', 'authHeaderValue'],
         ];

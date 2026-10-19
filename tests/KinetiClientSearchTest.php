@@ -12,7 +12,7 @@ use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
-use KinetiStack\Sdk\Exception\RateLimitException;
+use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\ValidationException;
@@ -242,8 +242,8 @@ class KinetiClientSearchTest extends TestCase
 
         try {
             $kineti->search('query');
-            $this->fail('Expected RateLimitException');
-        } catch (RateLimitException $e) {
+            $this->fail('Expected RateLimitExceededException');
+        } catch (RateLimitExceededException $e) {
             $this->assertSame('Rate limit exceeded. Please retry after the specified duration.', $e->getMessage());
             $this->assertSame(45, $e->retryAfter);
         }

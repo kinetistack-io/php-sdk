@@ -78,4 +78,13 @@ class SearchQueryDtoTest extends TestCase
 
         SearchQueryDto::create('   ');
     }
+
+    public function testPagePropertyAndMethodsDoNotExist(): void
+    {
+        $ref = new \ReflectionClass(SearchQueryDto::class);
+        $this->assertFalse($ref->hasProperty('page'));
+        $this->assertFalse($ref->hasMethod('withPage'));
+        $this->assertFalse($ref->hasMethod('setPage'));
+        $this->assertFalse($ref->hasMethod('getPage'));
+    }
 }

@@ -4,14 +4,58 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
-use KinetiStack\Sdk\Client\ModuleClientInterface as BaseModuleClientInterface;
+use KinetiStack\Sdk\Dto\ModuleDto;
+use KinetiStack\Sdk\Exception\KinetiException;
+use KinetiStack\Sdk\Transport\TransportInterface;
 
 /**
- * Public facade interface for ModuleClient.
+ * Interface defining the contract for module catalog operations.
  *
- * Extends the base client contract {@see BaseModuleClientInterface}. Consumers should type-hint
- * against this facade in client applications and unit tests.
+ * Consumers should type-hint against this interface in client applications and unit tests.
  */
-interface ModuleClientInterface extends BaseModuleClientInterface
+interface ModuleClientInterface
 {
+    public function getTransport(): TransportInterface;
+
+    /**
+     * Fetch all available modules with their accessibility status.
+     *
+     * @return list<ModuleDto>
+     * @throws KinetiException
+     */
+    public function list(bool $forceRefresh = false): array;
+
+    /**
+     * Clear the cached modules.
+     */
+    public function clearCache(): void;
+
+    /**
+     * Alias for list() to fetch all available modules.
+     *
+     * @return list<ModuleDto>
+     * @throws KinetiException
+     */
+    public function getAll(bool $forceRefresh = false): array;
+
+    /**
+     * Get a specific module by its identifier.
+     *
+     * @throws KinetiException
+     */
+    public function get(string $moduleIdentifier, bool $forceRefresh = false): ?ModuleDto;
+
+    /**
+     * Check if a specific module is enabled and accessible to the current organization.
+     *
+     * @throws KinetiException
+     */
+    public function isEnabled(string $moduleIdentifier, bool $forceRefresh = false): bool;
+
+    /**
+     * Check if a specific module is accessible to the authenticated organization.
+     *
+     * @throws KinetiException
+     */
+    public function isAccessible(string $moduleIdentifier, bool $forceRefresh = false): bool;
 }

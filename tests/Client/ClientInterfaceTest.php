@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Client;
 
-use KinetiStack\Sdk\Client\KinetiClientInterface as BaseKinetiClientInterface;
-use KinetiStack\Sdk\Client\ModuleClientInterface as BaseModuleClientInterface;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\KinetiClientInterface;
@@ -24,18 +22,16 @@ class ClientInterfaceTest extends TestCase
         $mockKinetiClient->method('modules')->willReturn($mockModuleClient);
 
         $this->assertInstanceOf(KinetiClientInterface::class, $mockKinetiClient);
-        $this->assertInstanceOf(BaseKinetiClientInterface::class, $mockKinetiClient);
         $this->assertInstanceOf(ModuleClientInterface::class, $mockModuleClient);
-        $this->assertInstanceOf(BaseModuleClientInterface::class, $mockModuleClient);
         $this->assertSame($mockModuleClient, $mockKinetiClient->modules());
     }
 
-    public function testInterfaceInheritanceHierarchy(): void
+    public function testInterfaceDefinitions(): void
     {
         $kinetiRef = new \ReflectionClass(KinetiClientInterface::class);
         $moduleRef = new \ReflectionClass(ModuleClientInterface::class);
-        $this->assertTrue($kinetiRef->isSubclassOf(BaseKinetiClientInterface::class));
-        $this->assertTrue($moduleRef->isSubclassOf(BaseModuleClientInterface::class));
+        $this->assertTrue($kinetiRef->isInterface());
+        $this->assertTrue($moduleRef->isInterface());
     }
 
     public function testClientClassesImplementInterfaces(): void
@@ -44,12 +40,10 @@ class ClientInterfaceTest extends TestCase
 
         $kinetiClient = new KinetiClient('https://api.test', 'secret-key', $transport);
         $this->assertInstanceOf(KinetiClientInterface::class, $kinetiClient);
-        $this->assertInstanceOf(BaseKinetiClientInterface::class, $kinetiClient);
 
         $moduleClient = $kinetiClient->modules();
         $this->assertInstanceOf(ModuleClient::class, $moduleClient);
         $this->assertInstanceOf(ModuleClientInterface::class, $moduleClient);
-        $this->assertInstanceOf(BaseModuleClientInterface::class, $moduleClient);
     }
 
     public function testAnalyticsGroupingPascalCaseAliases(): void
@@ -69,5 +63,10 @@ class ClientInterfaceTest extends TestCase
         $returnType = $refMethod->getReturnType();
         $this->assertInstanceOf(\ReflectionNamedType::class, $returnType);
         $this->assertSame(ModuleClientInterface::class, $returnType->getName());
+
+        $clientRefMethod = new \ReflectionMethod(KinetiClient::class, 'modules');
+        $clientReturnType = $clientRefMethod->getReturnType();
+        $this->assertInstanceOf(\ReflectionNamedType::class, $clientReturnType);
+        $this->assertSame(ModuleClientInterface::class, $clientReturnType->getName());
     }
 }

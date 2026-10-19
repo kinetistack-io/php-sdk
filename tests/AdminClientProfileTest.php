@@ -95,6 +95,41 @@ class AdminClientProfileTest extends TestCase
         $this->assertFalse($user->isVerified);
     }
 
+    public function testUpdateMeNormalizesCurrentPasswordKey(): void
+    {
+        $updatedData = [
+            'id' => 'user-me-123',
+            'email' => 'new-email@agency.com',
+            'role' => 'member',
+            'roles' => ['ROLE_USER'],
+            'must_change_password' => false,
+            'is_verified' => false,
+            'created_at' => '2026-09-18T10:00:00+00:00',
+        ];
+
+        $mockResponse = new MockResponse(json_encode($updatedData, JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => ['content-type' => 'application/json'],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $client = new AdminClient('https://api.test', 'mock-jwt-token', $httpClient);
+
+        $client->updateMe([
+            'email' => 'new-email@agency.com',
+            'currentPassword' => 'OldSecretPass123',
+        ]);
+
+        /** @var string $body */
+        $body = $mockResponse->getRequestOptions()['body'];
+        /** @var array<string, mixed> $payload */
+        $payload = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('current_password', $payload);
+        $this->assertArrayNotHasKey('currentPassword', $payload);
+        $this->assertSame('OldSecretPass123', $payload['current_password']);
+        $this->assertSame('new-email@agency.com', $payload['email']);
+    }
+
     public function testUpdateMeConflictThrowsConflictException(): void
     {
         $errorBody = json_encode([

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Exception;
 
+use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ServiceModuleDisabledException::class)]
+#[UsesClass(AuthorizationException::class)]
 final class ServiceModuleDisabledExceptionTest extends TestCase
 {
     public function testInstantiationAndGetters(): void
@@ -21,6 +24,7 @@ final class ServiceModuleDisabledExceptionTest extends TestCase
             $previous
         );
 
+        $this->assertInstanceOf(AuthorizationException::class, $exception);
         $this->assertInstanceOf(KinetiException::class, $exception);
         $this->assertSame("Service module 'rag' is not enabled for your organization.", $exception->getMessage());
         $this->assertSame(403, $exception->getCode());

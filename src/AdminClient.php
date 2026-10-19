@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
+use KinetiStack\Sdk\Client\ClientHelperTrait;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
@@ -25,13 +26,14 @@ use KinetiStack\Sdk\Exception\ConflictException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\NotFoundException;
 use KinetiStack\Sdk\Exception\ValidationException;
-use KinetiStack\Sdk\Transport\HttpTransport;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class AdminClient implements AdminClientInterface
 {
+    use ClientHelperTrait;
+
     private TransportInterface $transport;
     private ?AnalyticsClientInterface $analyticsClient = null;
 
@@ -46,9 +48,10 @@ class AdminClient implements AdminClientInterface
         private readonly HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
         private readonly array $options = []
     ) {
-        $this->transport = $this->createTransport(
+        $this->transport = $this->createBearerTransport(
             $this->apiHost,
             $this->jwtToken,
+            null,
             $this->httpClient,
             $this->options
         );
@@ -278,38 +281,6 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
-     * Create a new organization.
-     *
-     * @deprecated Organizations cannot be created directly. Organizations are single-tenant roots initialized during registration via register() and retrieved via getOrganization($id). This method will be removed in the next major version.
-     *
-     * @param array<string, mixed>|string $name
-     * @throws \BadMethodCallException Because organization creation via this endpoint is not supported by the backend.
-     * @throws KinetiException
-     */
-    public function createOrganization(
-        array|string $name,
-        ?string $billingTier = null,
-        ?int $monthlyQuotaCap = null
-    ): OrganizationDto {
-        throw new \BadMethodCallException('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
-    }
-
-    /**
-     * List organizations.
-     *
-     * @deprecated Organizations cannot be listed directly. Organizations are single-tenant roots initialized during registration and retrieved via getOrganization($id). This method will be removed in the next major version.
-     *
-     * @param array<string, mixed> $options
-     * @return list<OrganizationDto>
-     * @throws \BadMethodCallException Because organization listing is not supported by the backend.
-     * @throws KinetiException
-     */
-    public function listOrganizations(array $options = []): array
-    {
-        throw new \BadMethodCallException('Organizations cannot be created or listed directly. Organizations are created during registration and retrieved via getOrganization($id).');
-    }
-
-    /**
      * Get details of a single organization.
      *
      * @throws KinetiException
@@ -332,10 +303,7 @@ class AdminClient implements AdminClientInterface
      */
     public function updateOrganization(string $id, array $data): OrganizationDto
     {
-        if (array_key_exists('monthlyQuotaCap', $data) && !array_key_exists('monthly_quota_cap', $data)) {
-            $data['monthly_quota_cap'] = $data['monthlyQuotaCap'];
-            unset($data['monthlyQuotaCap']);
-        }
+        $data = $this->normalizePayloadKeys($data, ['monthlyQuotaCap' => 'monthly_quota_cap']);
 
         $response = $this->transport->request(
             'PATCH',
@@ -396,10 +364,7 @@ class AdminClient implements AdminClientInterface
             }
         }
 
-        if (array_key_exists('monthlyQuotaCap', $payload) && !array_key_exists('monthly_quota_cap', $payload)) {
-            $payload['monthly_quota_cap'] = $payload['monthlyQuotaCap'];
-            unset($payload['monthlyQuotaCap']);
-        }
+        $payload = $this->normalizePayloadKeys($payload, ['monthlyQuotaCap' => 'monthly_quota_cap']);
 
         $response = $this->transport->request('POST', '/api/v1/admin/projects', [
             'json' => $payload,
@@ -457,10 +422,7 @@ class AdminClient implements AdminClientInterface
      */
     public function updateProject(string $id, array $data): ProjectDto
     {
-        if (array_key_exists('monthlyQuotaCap', $data) && !array_key_exists('monthly_quota_cap', $data)) {
-            $data['monthly_quota_cap'] = $data['monthlyQuotaCap'];
-            unset($data['monthlyQuotaCap']);
-        }
+        $data = $this->normalizePayloadKeys($data, ['monthlyQuotaCap' => 'monthly_quota_cap']);
 
         $response = $this->transport->request(
             'PATCH',
@@ -532,10 +494,7 @@ class AdminClient implements AdminClientInterface
             }
         }
 
-        if (array_key_exists('dailyTokenQuotaOverride', $payload) && !array_key_exists('daily_token_quota_override', $payload)) {
-            $payload['daily_token_quota_override'] = $payload['dailyTokenQuotaOverride'];
-            unset($payload['dailyTokenQuotaOverride']);
-        }
+        $payload = $this->normalizePayloadKeys($payload, ['dailyTokenQuotaOverride' => 'daily_token_quota_override']);
 
         $path = sprintf('/api/v1/admin/projects/%s/api-keys', $this->encodePathSegment($projectId, 'Project ID'));
 
@@ -604,16 +563,16 @@ class AdminClient implements AdminClientInterface
     /**
      * Revoke an API key.
      *
-     * @param string $projectIdOrKeyId The project identifier (named $projectIdOrKeyId for backwards compatibility).
-     * @param string|null $keyId The API key identifier. Must not be empty.
-     * @throws \InvalidArgumentException When $projectIdOrKeyId or $keyId is empty.
+     * @param string $projectId The project identifier.
+     * @param string $keyId The API key identifier. Must not be empty.
+     * @throws \InvalidArgumentException When $projectId or $keyId is empty.
      * @throws KinetiException
      */
-    public function revokeApiKey(string $projectIdOrKeyId, ?string $keyId = null): void
+    public function revokeApiKey(string $projectId, string $keyId): void
     {
         $path = sprintf(
             '/api/v1/admin/projects/%s/api-keys/%s',
-            $this->encodePathSegment($projectIdOrKeyId, 'Project ID'),
+            $this->encodePathSegment($projectId, 'Project ID'),
             $this->encodePathSegment($keyId, 'API key ID')
         );
 
@@ -656,15 +615,10 @@ class AdminClient implements AdminClientInterface
     ): array {
         $query = [];
         if (is_array($fromOrOptions)) {
-            $query = $fromOrOptions;
-            if (isset($query['apiKeyId']) && !isset($query['api_key_id'])) {
-                $query['api_key_id'] = $query['apiKeyId'];
-                unset($query['apiKeyId']);
-            }
-            if (isset($query['projectId']) && !isset($query['project_id'])) {
-                $query['project_id'] = $query['projectId'];
-                unset($query['projectId']);
-            }
+            $query = $this->normalizePayloadKeys($fromOrOptions, [
+                'apiKeyId' => 'api_key_id',
+                'projectId' => 'project_id',
+            ]);
             if ($apiKeyId !== null && !isset($query['api_key_id'])) {
                 $query['api_key_id'] = $apiKeyId;
             }
@@ -904,10 +858,7 @@ class AdminClient implements AdminClientInterface
     {
         $path = sprintf('/api/v1/admin/projects/%s/members', $this->encodePathSegment($projectId, 'Project ID'));
 
-        if (isset($payload['userId']) && !isset($payload['user_id'])) {
-            $payload['user_id'] = $payload['userId'];
-            unset($payload['userId']);
-        }
+        $payload = $this->normalizePayloadKeys($payload, ['userId' => 'user_id']);
 
         $response = $this->transport->request('POST', $path, [
             'json' => $payload,
@@ -990,8 +941,12 @@ class AdminClient implements AdminClientInterface
      * @throws ValidationException When payload fails validation (HTTP 422).
      * @throws KinetiException
      */
-    public function updateMe(array $payload): UserDto
-    {
+    public function updateMe(
+        #[\SensitiveParameter]
+        array $payload
+    ): UserDto {
+        $payload = $this->normalizePayloadKeys($payload, ['currentPassword' => 'current_password']);
+
         $response = $this->transport->request(
             'PATCH',
             '/api/v1/admin/me',
@@ -1035,54 +990,21 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
-     * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
-     * @param array<string, mixed> $options
+     * @param array<string, mixed> $payload
+     * @param array<string, string> $keyMap Map from legacy/camelCase key to snake_case key
+     * @return array<string, mixed>
      */
-    private function createTransport(
-        string $apiHost,
-        #[\SensitiveParameter]
-        string $jwtToken,
-        HttpClientInterface|ClientInterface|TransportInterface|null $httpClient,
-        array $options
-    ): TransportInterface {
-        if ($httpClient instanceof TransportInterface) {
-            return $jwtToken !== '' ? $httpClient->withAuthHeaderValue('Bearer ' . $jwtToken) : $httpClient;
-        }
-
-        $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
-
-        return new HttpTransport($apiHost, 'Authorization', $authHeaderValue, $httpClient, $options);
-    }
-
-    private function encodePathSegment(?string $value, string $name = 'ID'): string
+    private function normalizePayloadKeys(array $payload, array $keyMap): array
     {
-        if ($value === null || trim($value) === '') {
-            throw new \InvalidArgumentException(sprintf('%s cannot be empty.', $name));
+        foreach ($keyMap as $sourceKey => $targetKey) {
+            if (array_key_exists($sourceKey, $payload)) {
+                if (!array_key_exists($targetKey, $payload)) {
+                    $payload[$targetKey] = $payload[$sourceKey];
+                }
+                unset($payload[$sourceKey]);
+            }
         }
 
-        return rawurlencode($value);
-    }
-
-    /**
-     * @param array<string, mixed>|list<array<string, mixed>> $data
-     * @return list<array<string, mixed>>
-     */
-    private function extractCollection(array $data): array
-    {
-        if (isset($data['hydra:member']) && is_array($data['hydra:member'])) {
-            /** @var list<array<string, mixed>> $items */
-            $items = array_values($data['hydra:member']);
-            return $items;
-        }
-
-        if (isset($data['data']) && is_array($data['data'])) {
-            /** @var list<array<string, mixed>> $items */
-            $items = array_values($data['data']);
-            return $items;
-        }
-
-        /** @var list<array<string, mixed>> $items */
-        $items = array_values($data);
-        return $items;
+        return $payload;
     }
 }

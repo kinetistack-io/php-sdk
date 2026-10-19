@@ -13,7 +13,6 @@ use KinetiStack\Sdk\Dto\ExtractsResponseDataTrait;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\RateLimitExceededException;
-use KinetiStack\Sdk\Exception\RateLimitException;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Middleware\RateLimitRetryMiddleware;
 use KinetiStack\Sdk\Transport\HttpTransport;
@@ -29,7 +28,6 @@ use Psr\Http\Message\ResponseInterface;
 #[CoversClass(RateLimitRetryMiddleware::class)]
 #[UsesClass(RateLimitInfoDto::class)]
 #[UsesClass(RateLimitExceededException::class)]
-#[UsesClass(RateLimitException::class)]
 #[UsesClass(KinetiClient::class)]
 #[UsesClass(HealthStatusDto::class)]
 #[UsesClass(ExtractsResponseDataTrait::class)]
@@ -371,7 +369,7 @@ final class RateLimitRetryMiddlewareTest extends TestCase
             $this->assertSame(100, $e->getLimit());
             $this->assertSame(0, $e->getRemaining());
             $this->assertSame(1726955000, $e->getReset());
-            $this->assertInstanceOf(RateLimitException::class, $e);
+            $this->assertInstanceOf(RateLimitExceededException::class, $e);
         }
     }
 

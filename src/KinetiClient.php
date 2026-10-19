@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
+use KinetiStack\Sdk\Client\ClientHelperTrait;
 use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
@@ -29,6 +30,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class KinetiClient implements KinetiClientInterface
 {
+    use ClientHelperTrait;
+
     public const MAX_BATCH_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB (10485760 bytes)
     public const DEFAULT_POLL_INTERVAL_SECONDS = 2;
     public const DEFAULT_MAX_POLL_INTERVAL_SECONDS = 10;
@@ -36,7 +39,7 @@ class KinetiClient implements KinetiClientInterface
     public const MAX_SEARCH_OFFSET = 1000;
 
     private TransportInterface $transport;
-    private ?ModuleClient $moduleClient = null;
+    private ?ModuleClientInterface $moduleClient = null;
 
     /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
@@ -81,7 +84,7 @@ class KinetiClient implements KinetiClientInterface
         return $this->transport->getLastRateLimitInfo();
     }
 
-    public function modules(): ModuleClient
+    public function modules(): ModuleClientInterface
     {
         return $this->moduleClient ??= new ModuleClient($this->transport);
     }
@@ -439,10 +442,6 @@ class KinetiClient implements KinetiClientInterface
             $query = SearchQueryDto::create($query);
         }
 
-        if ($query->offset === null && $query->page !== null && $query->page > 1) {
-            $query = $query->withOffset(($query->page - 1) * max(1, $query->limit ?? 10));
-        }
-
         $response = $this->transport->request('POST', '/api/v1/search/query', [
             'json' => $query->toArray(),
         ]);
@@ -468,13 +467,13 @@ class KinetiClient implements KinetiClientInterface
         }
 
         $limit = max(1, $query->limit ?? 10);
-        $offset = max(0, $query->offset ?? ($query->page !== null && $query->page > 1 ? ($query->page - 1) * $limit : 0));
+        $offset = max(0, $query->offset ?? 0);
 
         if ($offset > self::MAX_SEARCH_OFFSET) {
             return;
         }
 
-        $baseQuery = $query->withPage(null)->withLimit($limit);
+        $baseQuery = $query->withLimit($limit);
 
         while (true) {
             $response = $this->search($baseQuery->withOffset($offset));
@@ -591,14 +590,5 @@ class KinetiClient implements KinetiClientInterface
         $clean = str_replace(["\r", "\n", "\0"], '', $value);
 
         return addcslashes($clean, "\\\"");
-    }
-
-    private function encodePathSegment(string $value, string $name = 'ID'): string
-    {
-        if (trim($value) === '') {
-            throw new \InvalidArgumentException(sprintf('%s cannot be empty.', $name));
-        }
-
-        return rawurlencode($value);
     }
 }

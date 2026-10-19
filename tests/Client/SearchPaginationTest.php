@@ -382,18 +382,17 @@ class SearchPaginationTest extends TestCase
         $client = new MockHttpClient($callback);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
 
-        // Given SearchQueryDto::create('query')->setLimit(50)->setPage(2)
-        $query = SearchQueryDto::create('query')->setLimit(50)->setPage(2);
+        // Given SearchQueryDto::create('query')->setLimit(50)->setOffset(50)
+        $query = SearchQueryDto::create('query')->setLimit(50)->setOffset(50);
 
         // When calling KinetiClient::search($query)
         $response = $kineti->search($query);
 
-        // Then the request payload accurately reflects the requested page and limit
+        // Then the request payload accurately reflects the requested offset and limit
         $this->assertNotNull($capturedRequest);
         $this->assertSame('POST', $capturedRequest['method']);
         $this->assertSame('query', $capturedRequest['body']['query']);
         $this->assertSame(50, $capturedRequest['body']['limit']);
-        $this->assertSame(2, $capturedRequest['body']['page']);
         $this->assertSame(50, $capturedRequest['body']['offset']);
 
         $this->assertSame(2, $response->getPage());
@@ -563,12 +562,11 @@ class SearchPaginationTest extends TestCase
         $this->assertSame('doc:23', $items[2]->externalId);
     }
 
-    public function testSearchAllStartingPageFallbackComputesOffset(): void
+    public function testSearchAllStartingOffsetComputesCorrectFirstWindow(): void
     {
         /** @var list<array<string, mixed>> $requests */
         $requests = [];
         $responses = [
-            // Fallback: page 3 with limit 2 starts at offset (3-1)*2 = 4
             new MockResponse((string) json_encode([
                 'results' => [
                     ['external_id' => 'doc:5', 'title' => 'Doc 5', 'content' => 'C5', 'chunk_index' => 0, 'score' => 0.8],
@@ -595,7 +593,7 @@ class SearchPaginationTest extends TestCase
         $client = new MockHttpClient($callback);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
 
-        $query = SearchQueryDto::create('page fallback')->withPage(3)->withLimit(2);
+        $query = SearchQueryDto::create('offset query')->withOffset(4)->withLimit(2);
         $items = iterator_to_array($kineti->searchAll($query), false);
 
         $this->assertCount(1, $requests);

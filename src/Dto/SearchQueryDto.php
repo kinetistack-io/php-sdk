@@ -21,10 +21,6 @@ class SearchQueryDto
         public readonly ?bool $synthesizeAnswer = null,
         public readonly ?SearchFilterDto $filters = null,
         public readonly ?bool $stream = null,
-        /**
-         * @deprecated Use $offset instead. Backend vector search uses top-K offset pagination.
-         */
-        public readonly ?int $page = null,
         public readonly ?int $offset = null,
         public readonly ?FacetRequestDto $facets = null,
         public readonly ?bool $rerank = null,
@@ -54,7 +50,6 @@ class SearchQueryDto
             array_key_exists('synthesizeAnswer', $overrides) ? (is_bool($overrides['synthesizeAnswer']) ? $overrides['synthesizeAnswer'] : null) : $this->synthesizeAnswer,
             array_key_exists('filters', $overrides) ? ($overrides['filters'] instanceof SearchFilterDto ? $overrides['filters'] : null) : $this->filters,
             array_key_exists('stream', $overrides) ? (is_bool($overrides['stream']) ? $overrides['stream'] : null) : $this->stream,
-            array_key_exists('page', $overrides) ? (is_int($overrides['page']) ? $overrides['page'] : null) : $this->page,
             array_key_exists('offset', $overrides) ? (is_int($overrides['offset']) ? $overrides['offset'] : null) : $this->offset,
             array_key_exists('facets', $overrides) ? ($overrides['facets'] instanceof FacetRequestDto ? $overrides['facets'] : null) : $this->facets,
             array_key_exists('rerank', $overrides) ? (is_bool($overrides['rerank']) ? $overrides['rerank'] : null) : $this->rerank,
@@ -64,14 +59,6 @@ class SearchQueryDto
     public function withLimit(?int $limit): self
     {
         return $this->cloneWith(['limit' => $limit]);
-    }
-
-    /**
-     * @deprecated Use withOffset() instead. Backend vector search uses top-K offset pagination.
-     */
-    public function withPage(?int $page): self
-    {
-        return $this->cloneWith(['page' => $page]);
     }
 
     public function withOffset(?int $offset): self
@@ -84,25 +71,9 @@ class SearchQueryDto
         return $this->withLimit($limit);
     }
 
-    /**
-     * @deprecated Use setOffset() or withOffset() instead. Backend vector search uses top-K offset pagination.
-     */
-    public function setPage(?int $page): self
-    {
-        return $this->withPage($page);
-    }
-
     public function setOffset(?int $offset): self
     {
         return $this->withOffset($offset);
-    }
-
-    /**
-     * @deprecated Use getOffset() instead. Backend vector search uses top-K offset pagination.
-     */
-    public function getPage(): ?int
-    {
-        return $this->page;
     }
 
     public function getLimit(): ?int
@@ -228,10 +199,6 @@ class SearchQueryDto
             $data['limit'] = $this->limit;
         }
 
-        if ($this->page !== null) {
-            $data['page'] = $this->page;
-        }
-
         if ($this->offset !== null) {
             $data['offset'] = $this->offset;
         }
@@ -293,15 +260,6 @@ class SearchQueryDto
                 throw new \InvalidArgumentException('limit must be an integer.');
             }
             $limit = (int) $rawLimit;
-        }
-
-        $rawPage = $data['page'] ?? null;
-        $page = null;
-        if ($rawPage !== null) {
-            if (!is_int($rawPage) && !is_numeric($rawPage)) {
-                throw new \InvalidArgumentException('page must be an integer.');
-            }
-            $page = (int) $rawPage;
         }
 
         $rawOffset = $data['offset'] ?? null;
@@ -413,7 +371,6 @@ class SearchQueryDto
             $synthesizeAnswer,
             $filters,
             $stream,
-            $page,
             $offset,
             $facets,
             $rerank

@@ -11,7 +11,7 @@ use GuzzleHttp\Psr7\Response;
 use KinetiStack\Sdk\Dto\JobDto;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
-use KinetiStack\Sdk\Exception\RateLimitException;
+use KinetiStack\Sdk\Exception\RateLimitExceededException;
 use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\TransportException;
@@ -189,7 +189,7 @@ class Psr18TransportTest extends TestCase
         }
     }
 
-    public function testRateLimitExceptionWithRetryAfter(): void
+    public function testRateLimitExceededExceptionWithRetryAfter(): void
     {
         $mock = new MockHandler([
             new Response(429, [
@@ -202,15 +202,15 @@ class Psr18TransportTest extends TestCase
 
         try {
             $transport->request('GET', '/v1/test');
-            $this->fail('Expected RateLimitException');
-        } catch (RateLimitException $e) {
+            $this->fail('Expected RateLimitExceededException');
+        } catch (RateLimitExceededException $e) {
             $this->assertSame('Too Many Requests', $e->getMessage());
             $this->assertSame(60, $e->retryAfter);
             $this->assertSame(60, $e->getRetryAfter());
         }
     }
 
-    public function testRateLimitExceptionWithAllRateLimitHeaders(): void
+    public function testRateLimitExceededExceptionWithAllRateLimitHeaders(): void
     {
         $mock = new MockHandler([
             new Response(429, [
@@ -226,8 +226,8 @@ class Psr18TransportTest extends TestCase
 
         try {
             $transport->request('GET', '/v1/test');
-            $this->fail('Expected RateLimitException');
-        } catch (RateLimitException $e) {
+            $this->fail('Expected RateLimitExceededException');
+        } catch (RateLimitExceededException $e) {
             $this->assertSame('Too Many Requests', $e->getMessage());
             $this->assertSame(100, $e->limit);
             $this->assertSame(100, $e->getLimit());
