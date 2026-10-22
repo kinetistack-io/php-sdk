@@ -168,6 +168,37 @@ class StreamParsingTest extends TestCase
         iterator_to_array($this->parser->parse($chunks));
     }
 
+    public function testStructuredSseErrorEventThrowsServerException(): void
+    {
+        $chunks = [
+            "data: {\"chunk\": \"\", \"is_done\": true, \"error\": \"Synthesis failed.\", \"citations\": []}\n\n",
+        ];
+
+        $this->expectException(ServerException::class);
+        $this->expectExceptionMessage('Synthesis failed.');
+
+        iterator_to_array($this->parser->parse($chunks));
+    }
+
+    public function testStreamYieldsChunksBeforeStructuredSseError(): void
+    {
+        $chunks = [
+            "data: {\"chunk\": \"Introductory text \"}\n\n",
+            "data: {\"chunk\": \"\", \"is_done\": true, \"error\": \"Synthesis failed.\", \"citations\": []}\n\n",
+        ];
+
+        $generator = $this->parser->parse($chunks);
+
+        $firstChunk = $generator->current();
+        $this->assertInstanceOf(RagStreamChunkDto::class, $firstChunk);
+        $this->assertSame('Introductory text ', $firstChunk->text);
+
+        $this->expectException(ServerException::class);
+        $this->expectExceptionMessage('Synthesis failed.');
+
+        $generator->next();
+    }
+
     public function testPlainPlainTextErrorThrowsServerException(): void
     {
         $chunks = [

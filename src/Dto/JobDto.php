@@ -115,7 +115,7 @@ class JobDto
         $type = $rawType instanceof JobType ? $rawType->value : self::extractNullableString($rawType);
 
         return new self(
-            self::extractString($data['job_id'] ?? $data['jobId'] ?? ''),
+            self::extractString($data['job_id'] ?? $data['jobId'] ?? $data['id'] ?? ''),
             $status,
             $type,
             self::extractNullableInt($data['total_images'] ?? $data['totalImages'] ?? null),

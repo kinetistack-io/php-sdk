@@ -6,6 +6,8 @@ namespace KinetiStack\Sdk\Dto;
 
 class DocumentDto
 {
+    public const METADATA_KEY_REGEX = '/\A[a-zA-Z0-9_-]{1,64}\z/';
+
     /**
      * @param list<string>|null $permissions
      * @param array<string, mixed>|null $metadata
@@ -26,6 +28,58 @@ class DocumentDto
         }
         if (trim($this->content) === '') {
             throw new \InvalidArgumentException('content cannot be empty.');
+        }
+        if ($this->metadata !== null) {
+            self::validateMetadata($this->metadata);
+        }
+    }
+
+    /**
+     * @param array<mixed, mixed> $metadata
+     *
+     * @throws \InvalidArgumentException
+     */
+    private static function validateMetadata(array $metadata): void
+    {
+        foreach ($metadata as $key => $value) {
+            $keyStr = (string) $key;
+            if (preg_match(self::METADATA_KEY_REGEX, $keyStr) !== 1) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Invalid metadata key "%s". Keys must be 1-64 characters matching %s.',
+                    $keyStr,
+                    self::METADATA_KEY_REGEX
+                ));
+            }
+
+            if (is_scalar($value) || $value === null) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                if (!array_is_list($value)) {
+                    throw new \InvalidArgumentException(sprintf(
+                        'Metadata value for key "%s" cannot be an associative array.',
+                        $keyStr
+                    ));
+                }
+
+                foreach ($value as $index => $item) {
+                    if (!is_scalar($item)) {
+                        throw new \InvalidArgumentException(sprintf(
+                            'Metadata array element at index %d for key "%s" must be a scalar value.',
+                            $index,
+                            $keyStr
+                        ));
+                    }
+                }
+
+                continue;
+            }
+
+            throw new \InvalidArgumentException(sprintf(
+                'Metadata value for key "%s" must be a scalar or flat array of scalars.',
+                $keyStr
+            ));
         }
     }
 

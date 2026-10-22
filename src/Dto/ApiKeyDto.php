@@ -39,6 +39,23 @@ class ApiKeyDto
         }
     }
 
+    public function isExpired(?\DateTimeImmutable $now = null): bool
+    {
+        if ($this->expiresAt === null || trim($this->expiresAt) === '') {
+            return false;
+        }
+
+        try {
+            $expiry = new \DateTimeImmutable($this->expiresAt);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $now ??= new \DateTimeImmutable();
+
+        return $expiry <= $now;
+    }
+
     /**
      * @return array<string, mixed>
      */

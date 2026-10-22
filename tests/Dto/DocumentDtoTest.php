@@ -92,6 +92,111 @@ class DocumentDtoTest extends TestCase
         new DocumentDto('node:1', 'Title', '');
     }
 
+    public function testDocumentDtoAcceptsFlatScalarArrayMetadata(): void
+    {
+        $metadata = [
+            'tags' => ['php', 'symfony'],
+            'content-type' => 'article',
+            'views' => 1500,
+            'rating' => 4.8,
+            'is_published' => true,
+            'empty_list' => [],
+            'nullable_field' => null,
+        ];
+
+        $dto = new DocumentDto('node:100', 'Title', 'Content', metadata: $metadata);
+
+        $this->assertSame($metadata, $dto->metadata);
+        $array = $dto->toArray();
+        $this->assertSame($metadata, $array['metadata']);
+    }
+
+    public function testDocumentDtoRejectsInvalidMetadataKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid metadata key "invalid.key!". Keys must be 1-64 characters matching /\A[a-zA-Z0-9_-]{1,64}\z/.');
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: ['invalid.key!' => 'value']);
+    }
+
+    public function testDocumentDtoRejectsEmptyMetadataKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid metadata key "". Keys must be 1-64 characters matching /\A[a-zA-Z0-9_-]{1,64}\z/.');
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: ['' => 'value']);
+    }
+
+    public function testDocumentDtoRejectsTooLongMetadataKey(): void
+    {
+        $longKey = str_repeat('a', 65);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(sprintf('Invalid metadata key "%s". Keys must be 1-64 characters matching /\A[a-zA-Z0-9_-]{1,64}\z/.', $longKey));
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: [$longKey => 'value']);
+    }
+
+    public function testDocumentDtoRejectsAssociativeArrayMetadataValue(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Metadata value for key "nested" cannot be an associative array.');
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: ['nested' => ['foo' => 'bar']]);
+    }
+
+    public function testDocumentDtoRejectsNestedArrayInScalarList(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Metadata array element at index 1 for key "tags" must be a scalar value.');
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: ['tags' => ['php', ['nested']]]);
+    }
+
+    public function testDocumentDtoRejectsNullElementInMetadataList(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Metadata array element at index 1 for key "tags" must be a scalar value.');
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: ['tags' => ['php', null]]);
+    }
+
+    public function testDocumentDtoRejectsObjectInMetadata(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Metadata value for key "obj" must be a scalar or flat array of scalars.');
+
+        new DocumentDto('node:1', 'Title', 'Content', metadata: ['obj' => new \stdClass()]);
+    }
+
+    public function testDocumentDtoFromArrayWithValidAndInvalidMetadata(): void
+    {
+        $validData = [
+            'external_id' => 'doc:1',
+            'title' => 'Doc Title',
+            'content' => 'Doc Content',
+            'metadata' => [
+                'tags' => ['unit-test', 'coverage'],
+                'priority' => 1,
+            ],
+        ];
+
+        $dto = DocumentDto::fromArray($validData);
+        $this->assertSame(['tags' => ['unit-test', 'coverage'], 'priority' => 1], $dto->metadata);
+
+        $invalidData = [
+            'external_id' => 'doc:2',
+            'title' => 'Doc Title',
+            'content' => 'Doc Content',
+            'metadata' => [
+                'bad.key' => 'error',
+            ],
+        ];
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid metadata key "bad.key".');
+        DocumentDto::fromArray($invalidData);
+    }
+
     public function testDocumentResponseDtoFromArrayAndFixture(): void
     {
         $data = $this->loadFixtureArray('Documents/document_created_201.json');

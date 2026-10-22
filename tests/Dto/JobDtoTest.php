@@ -98,6 +98,48 @@ class JobDtoTest extends TestCase
         $this->assertFalse($dto->isPending());
     }
 
+    public function testFromArrayHydratesIdFallback(): void
+    {
+        $payloadWithId = [
+            'id' => 'uuid-1',
+            'status' => 'pending',
+        ];
+        $dto = JobDto::fromArray($payloadWithId);
+        $this->assertSame('uuid-1', $dto->jobId);
+
+        $payloadWithJobId = [
+            'job_id' => 'uuid-2',
+            'status' => 'pending',
+        ];
+        $dto2 = JobDto::fromArray($payloadWithJobId);
+        $this->assertSame('uuid-2', $dto2->jobId);
+
+        $payloadWithCamelJobId = [
+            'jobId' => 'uuid-3',
+            'status' => 'pending',
+        ];
+        $dto3 = JobDto::fromArray($payloadWithCamelJobId);
+        $this->assertSame('uuid-3', $dto3->jobId);
+
+        // Precedence: job_id > jobId > id
+        $payloadWithMultiple = [
+            'job_id' => 'primary-job-id',
+            'jobId' => 'secondary-job-id',
+            'id' => 'fallback-id',
+            'status' => 'pending',
+        ];
+        $dto4 = JobDto::fromArray($payloadWithMultiple);
+        $this->assertSame('primary-job-id', $dto4->jobId);
+
+        $payloadWithJobIdAndId = [
+            'jobId' => 'camel-job-id',
+            'id' => 'fallback-id',
+            'status' => 'pending',
+        ];
+        $dto5 = JobDto::fromArray($payloadWithJobIdAndId);
+        $this->assertSame('camel-job-id', $dto5->jobId);
+    }
+
     public function testFromArrayWithDirectEnumInstancesAndCamelCase(): void
     {
         $data = [
