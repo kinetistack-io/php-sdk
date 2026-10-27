@@ -207,6 +207,25 @@ try {
 }
 ```
 
+#### Document ACL & Role Assertions
+
+When executing searches across protected documents, integrating servers assert end-user roles via `withUserRoles()` or `SearchFilterDto::withPermissions()`:
+
+```php
+use KinetiStack\Sdk\Dto\SearchQueryDto;
+use KinetiStack\Sdk\Exception\AuthorizationException;
+
+$query = SearchQueryDto::create('Internal quarterly review')
+    ->withUserRoles(['editor', 'finance']);
+
+try {
+    $results = $client->search($query);
+} catch (AuthorizationException $e) {
+    // Thrown if the API key has an allowed_asserted_roles whitelist and one of the asserted roles is unauthorized (HTTP 403)
+    echo "Unauthorized role assertion: {$e->getMessage()}\n";
+}
+```
+
 ### Webhook Verification
 
 Verify incoming HMAC-SHA256 signatures for webhook events from the `Kineti-Signature` header (`v1={timestamp}.{hmac}`), with replay protection and automatic fallback to legacy `X-Kineti-Signature`:
@@ -298,28 +317,36 @@ $orgId = 'org-uuid-123'; // Obtained from registration response or user profile
 $currentOrg = $admin->getOrganization($orgId);
 $updatedOrg = $admin->updateOrganization($orgId, ['name' => 'Acme Global Agency']);
 
-// Projects
-$project = $admin->createProject('Client Portal', 'portal.example.com', 'https://webhook.example.com/events');
+// Projects (supports optional defaultDocumentVisibility: 'restricted' | 'public')
+$project = $admin->createProject('Client Portal', 'portal.example.com', 'https://webhook.example.com/events', defaultDocumentVisibility: 'restricted');
 $projects = $admin->listProjects();
 $projectDetails = $admin->getProject($project->id);
-$admin->updateProject($project->id, ['settings' => ['theme' => 'dark']]);
+$admin->updateProject($project->id, ['settings' => ['theme' => 'dark'], 'defaultDocumentVisibility' => 'public']);
 $admin->deleteProject($project->id); // Soft-delete and revokes associated API keys
 ```
 
 #### API Key Management
 
 ```php
-// Create API key (returns ApiKeyCreatedDto with plaintext token)
-$newKey = $admin->createApiKey($project->id, 'Production Drupal Key', 'all', rateLimitPerMinute: 120);
+// Create API key with optional allowed asserted roles whitelist (returns ApiKeyCreatedDto with plaintext token)
+$newKey = $admin->createApiKey(
+    $project->id,
+    'Production Drupal Key',
+    'all',
+    rateLimitPerMinute: 120,
+    allowedAssertedRoles: ['authenticated', 'editor']
+);
 echo $newKey->token; // Secret plaintext token — save this now!
 echo $newKey->tokenSuffix; // e.g. '1234'
+print_r($newKey->allowedAssertedRoles); // ['authenticated', 'editor'] (or null for unrestricted key)
 
-// List API keys (returns ApiKeyDto[] without plaintext token, with optional usage metrics)
+// List API keys (returns ApiKeyDto[] without plaintext token, with optional usage metrics and allowedAssertedRoles)
 $keys = $admin->listApiKeys($project->id);
 foreach ($keys as $key) {
     $tokens = $key->tokensConsumedToday ?? 0;
     $requests = $key->requestsToday ?? 0;
-    echo "{$key->name}: {$tokens} tokens consumed today across {$requests} requests\n";
+    $roles = $key->allowedAssertedRoles !== null ? implode(', ', $key->allowedAssertedRoles) : 'unrestricted';
+    echo "{$key->name}: {$tokens} tokens consumed today across {$requests} requests (roles: {$roles})\n";
 }
 
 // Rotate API key (old key continues working during grace period)

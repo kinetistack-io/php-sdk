@@ -7,7 +7,11 @@ namespace KinetiStack\Sdk\Dto;
 class SearchFilterDto
 {
     /**
-     * @param list<string>|null $permissions
+     * @param list<string>|null $permissions End-user permission/role filters asserted by the integrating client (server-to-server trust model).
+     *                                       If the API key has allowed_asserted_roles configured, the backend validates
+     *                                       both userRoles and filters.permissions against the whitelist. Asserting
+     *                                       unauthorized roles triggers HTTP 403 AuthorizationException.
+     *                                       When allowed_asserted_roles is null, the key is unrestricted.
      * @param array<string, mixed>|null $custom
      */
     public function __construct(
@@ -23,7 +27,11 @@ class SearchFilterDto
     }
 
     /**
-     * @param string|array<mixed>|null $permissions
+     * @param string|array<mixed>|null $permissions End-user permission/role filters asserted by the integrating client (server-to-server trust model).
+     *                                              If the API key has allowed_asserted_roles configured, the backend validates
+     *                                              both userRoles and filters.permissions against the whitelist. Asserting
+     *                                              unauthorized roles triggers HTTP 403 AuthorizationException.
+     *                                              When allowed_asserted_roles is null, the key is unrestricted.
      */
     public function withPermissions(string|array|null $permissions): self
     {

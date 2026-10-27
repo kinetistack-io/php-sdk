@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Dto;
 
+use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
 use PHPUnit\Framework\TestCase;
 
@@ -117,5 +118,132 @@ class ApiKeyDtoTest extends TestCase
         $this->assertFalse($dto->isExpired($before));
         $this->assertTrue($dto->isExpired($exact));
         $this->assertTrue($dto->isExpired($after));
+    }
+
+    public function testConstructorAndToArrayWithAllowedAssertedRoles(): void
+    {
+        // 1. Array of strings
+        $dtoWithRoles = new ApiKeyDto('key-1', 'Key', 'abcd', allowedAssertedRoles: ['authenticated', 'editor']);
+        $this->assertSame(['authenticated', 'editor'], $dtoWithRoles->allowedAssertedRoles);
+        $array = $dtoWithRoles->toArray();
+        $this->assertArrayHasKey('allowed_asserted_roles', $array);
+        $this->assertSame(['authenticated', 'editor'], $array['allowed_asserted_roles']);
+
+        // 2. Empty array
+        $dtoEmpty = new ApiKeyDto('key-2', 'Key', 'abcd', allowedAssertedRoles: []);
+        $this->assertSame([], $dtoEmpty->allowedAssertedRoles);
+        $arrayEmpty = $dtoEmpty->toArray();
+        $this->assertArrayHasKey('allowed_asserted_roles', $arrayEmpty);
+        $this->assertSame([], $arrayEmpty['allowed_asserted_roles']);
+
+        // 3. Null (default / explicit)
+        $dtoNull = new ApiKeyDto('key-3', 'Key', 'abcd', allowedAssertedRoles: null);
+        $this->assertNull($dtoNull->allowedAssertedRoles);
+        $arrayNull = $dtoNull->toArray();
+        $this->assertArrayNotHasKey('allowed_asserted_roles', $arrayNull);
+    }
+
+    public function testFromArrayWithAllowedAssertedRoles(): void
+    {
+        // 1. Array of strings via snake_case
+        $dtoSnake = ApiKeyDto::fromArray([
+            'id' => 'k1',
+            'name' => 'Key 1',
+            'token_suffix' => '1111',
+            'allowed_asserted_roles' => ['admin', 'manager'],
+        ]);
+        $this->assertSame(['admin', 'manager'], $dtoSnake->allowedAssertedRoles);
+        $this->assertSame(['admin', 'manager'], $dtoSnake->toArray()['allowed_asserted_roles']);
+
+        // 2. Array of strings via camelCase
+        $dtoCamel = ApiKeyDto::fromArray([
+            'id' => 'k2',
+            'name' => 'Key 2',
+            'token_suffix' => '2222',
+            'allowedAssertedRoles' => ['viewer', 'editor'],
+        ]);
+        $this->assertSame(['viewer', 'editor'], $dtoCamel->allowedAssertedRoles);
+        $this->assertSame(['viewer', 'editor'], $dtoCamel->toArray()['allowed_asserted_roles']);
+
+        // 3. Empty array
+        $dtoEmpty = ApiKeyDto::fromArray([
+            'id' => 'k3',
+            'name' => 'Key 3',
+            'token_suffix' => '3333',
+            'allowed_asserted_roles' => [],
+        ]);
+        $this->assertSame([], $dtoEmpty->allowedAssertedRoles);
+        $this->assertSame([], $dtoEmpty->toArray()['allowed_asserted_roles']);
+
+        // 4. Null
+        $dtoNull = ApiKeyDto::fromArray([
+            'id' => 'k4',
+            'name' => 'Key 4',
+            'token_suffix' => '4444',
+            'allowed_asserted_roles' => null,
+        ]);
+        $this->assertNull($dtoNull->allowedAssertedRoles);
+        $this->assertArrayNotHasKey('allowed_asserted_roles', $dtoNull->toArray());
+
+        // 5. Absent
+        $dtoAbsent = ApiKeyDto::fromArray([
+            'id' => 'k5',
+            'name' => 'Key 5',
+            'token_suffix' => '5555',
+        ]);
+        $this->assertNull($dtoAbsent->allowedAssertedRoles);
+        $this->assertArrayNotHasKey('allowed_asserted_roles', $dtoAbsent->toArray());
+    }
+
+    public function testFromArrayWithCoercibleItemsInAllowedAssertedRoles(): void
+    {
+        $dto = ApiKeyDto::fromArray([
+            'id' => 'k-coercible',
+            'name' => 'Coercible Key',
+            'token_suffix' => '7777',
+            'allowed_asserted_roles' => ['admin', 123, null, ['nested'], (object) ['foo' => 'bar']],
+        ]);
+
+        $this->assertSame(['admin', '123'], $dto->allowedAssertedRoles);
+        $this->assertSame(['admin', '123'], $dto->toArray()['allowed_asserted_roles']);
+    }
+
+    public function testApiKeyCreatedDtoPassesThroughAllowedAssertedRoles(): void
+    {
+        // Constructor and toArray
+        $dto = new ApiKeyCreatedDto(
+            id: 'created-1',
+            name: 'Created Key',
+            tokenSuffix: '1234',
+            token: 'secret-token-val',
+            allowedAssertedRoles: ['authenticated', 'moderator']
+        );
+        $this->assertSame(['authenticated', 'moderator'], $dto->allowedAssertedRoles);
+        $this->assertSame('secret-token-val', $dto->token);
+        $array = $dto->toArray();
+        $this->assertSame(['authenticated', 'moderator'], $array['allowed_asserted_roles']);
+        $this->assertSame('secret-token-val', $array['token']);
+
+        // fromArray with allowed_asserted_roles
+        $fromArray = ApiKeyCreatedDto::fromArray([
+            'id' => 'created-2',
+            'name' => 'Created Key 2',
+            'token_suffix' => '5678',
+            'token' => 'plain-token-2',
+            'allowed_asserted_roles' => ['guest'],
+        ]);
+        $this->assertSame(['guest'], $fromArray->allowedAssertedRoles);
+        $this->assertSame('plain-token-2', $fromArray->token);
+        $this->assertSame(['guest'], $fromArray->toArray()['allowed_asserted_roles']);
+
+        // fromArray without allowed_asserted_roles
+        $fromArrayAbsent = ApiKeyCreatedDto::fromArray([
+            'id' => 'created-3',
+            'name' => 'Created Key 3',
+            'token_suffix' => '9999',
+            'token' => 'plain-token-3',
+        ]);
+        $this->assertNull($fromArrayAbsent->allowedAssertedRoles);
+        $this->assertArrayNotHasKey('allowed_asserted_roles', $fromArrayAbsent->toArray());
     }
 }

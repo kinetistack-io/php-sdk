@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented `__debugInfo(): array` across secret-bearing classes (`AdminClient`, `AnalyticsClient`, `HttpTransport`, `Psr18Transport`, `SymfonyTransport`, `AuthTokenDto`, `ApiKeyCreatedDto`) to redact sensitive credentials (`jwtToken`, `authHeaderValue`, `token`, `refreshToken`) from `print_r()`, `var_dump()`, and debug output (PHPSDK-56).
 
 ### Added
+- Added `allowedAssertedRoles` property (`list<string>|null`) to `ApiKeyDto` and `ApiKeyCreatedDto`, with support in constructor, `fromArray()`, and `toArray()` (PHPSDK-68).
+- Added `defaultDocumentVisibility` property (`?string`) and `getDefaultDocumentVisibility(): ?string` getter to `ProjectDto`, with support in constructor, `fromArray()`, and `toArray()` (PHPSDK-68).
+- Added optional `allowedAssertedRoles` parameter to `AdminClient::createApiKey()` and `AdminClientInterface::createApiKey()`, supporting key normalization (`allowedAssertedRoles` to `allowed_asserted_roles`) and payload inclusion when specified (PHPSDK-68).
+- Added optional `defaultDocumentVisibility` parameter to `AdminClient::createProject()` and `AdminClientInterface::createProject()`, and supported payload normalization for `defaultDocumentVisibility` across `createProject()` and `updateProject()` (PHPSDK-68).
+- Documented role assertion semantics and trust model in `SearchQueryDto` and `SearchFilterDto` docblocks (PHPSDK-68).
 - Added `make coverage` target and `composer test:coverage` script generating text code coverage via `pcov` (PHPSDK-60).
 - Added `KinetiClient::withApiKey(#[\SensitiveParameter] string $apiKey): static` and method signature to `KinetiClientInterface` (PHPSDK-59).
 - Added `KinetiClient::MAX_SEARCH_OFFSET = 1000` constant and replaced magic numbers in `searchAll()` (PHPSDK-59).

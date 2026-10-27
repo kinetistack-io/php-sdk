@@ -819,6 +819,93 @@ class AdminClientTest extends TestCase
         $this->assertArrayNotHasKey('monthlyQuotaCap', $body);
     }
 
+    public function testCreateProjectWithDefaultDocumentVisibility(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'proj-vis',
+            'name' => 'Visibility Project',
+            'domain' => 'vis.test',
+            'default_document_visibility' => 'restricted',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $project = $admin->createProject('Visibility Project', 'vis.test', defaultDocumentVisibility: 'restricted');
+
+        $this->assertSame('proj-vis', $project->id);
+        $this->assertSame('restricted', $project->defaultDocumentVisibility);
+        $this->assertSame('restricted', $project->getDefaultDocumentVisibility());
+
+        /** @var array<string, mixed> $body */
+        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('restricted', $body['default_document_visibility']);
+    }
+
+    public function testCreateProjectWithArrayDefaultDocumentVisibilityNormalizes(): void
+    {
+        $responseBody = json_encode([
+            'id' => 'proj-camel-vis',
+            'name' => 'Camel Vis Project',
+            'domain' => 'camelvis.test',
+            'default_document_visibility' => 'public',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($responseBody, ['http_code' => 201]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $project = $admin->createProject([
+            'name' => 'Camel Vis Project',
+            'domain' => 'camelvis.test',
+            'defaultDocumentVisibility' => 'public',
+        ]);
+
+        $this->assertSame('public', $project->defaultDocumentVisibility);
+        $this->assertSame('public', $project->getDefaultDocumentVisibility());
+
+        /** @var array<string, mixed> $body */
+        $body = json_decode((string) $mockResponse->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('public', $body['default_document_visibility']);
+        $this->assertArrayNotHasKey('defaultDocumentVisibility', $body);
+    }
+
+    public function testUpdateProjectWithDefaultDocumentVisibility(): void
+    {
+        $mockPatchCamel = new MockResponse(json_encode([
+            'id' => 'p1',
+            'name' => 'Project 1',
+            'domain' => 'p1.test',
+            'default_document_visibility' => 'restricted',
+        ], JSON_THROW_ON_ERROR));
+
+        $mockPatchSnake = new MockResponse(json_encode([
+            'id' => 'p1',
+            'name' => 'Project 1',
+            'domain' => 'p1.test',
+            'default_document_visibility' => 'public',
+        ], JSON_THROW_ON_ERROR));
+
+        $httpClient = new MockHttpClient([$mockPatchCamel, $mockPatchSnake]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        // Update using camelCase key
+        $updatedCamel = $admin->updateProject('p1', ['defaultDocumentVisibility' => 'restricted']);
+        $this->assertSame('restricted', $updatedCamel->defaultDocumentVisibility);
+        /** @var array<string, mixed> $patchCamelBody */
+        $patchCamelBody = json_decode((string) $mockPatchCamel->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('restricted', $patchCamelBody['default_document_visibility']);
+        $this->assertArrayNotHasKey('defaultDocumentVisibility', $patchCamelBody);
+
+        // Update using snake_case key
+        $updatedSnake = $admin->updateProject('p1', ['default_document_visibility' => 'public']);
+        $this->assertSame('public', $updatedSnake->defaultDocumentVisibility);
+        /** @var array<string, mixed> $patchSnakeBody */
+        $patchSnakeBody = json_decode((string) $mockPatchSnake->getRequestOptions()['body'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('public', $patchSnakeBody['default_document_visibility']);
+    }
+
     public function testListProjects(): void
     {
         $mockResponse = new MockResponse(json_encode([
@@ -1019,6 +1106,105 @@ class AdminClientTest extends TestCase
         $this->assertArrayHasKey('daily_token_quota_override', $requestBody);
         $this->assertNull($requestBody['daily_token_quota_override']);
         $this->assertArrayNotHasKey('dailyTokenQuotaOverride', $requestBody);
+    }
+
+    public function testCreateApiKeyWithAllowedAssertedRoles(): void
+    {
+        $mockCreateResponse = new MockResponse(json_encode([
+            'id' => 'key-uuid-roles',
+            'name' => 'Roles Key',
+            'token' => 'token-roles-123',
+            'token_suffix' => '8888',
+            'allowed_asserted_roles' => ['authenticated'],
+        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+
+        $httpClient = new MockHttpClient([$mockCreateResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $createdKey = $admin->createApiKey(
+            'proj-1',
+            'Roles Key',
+            allowedAssertedRoles: ['authenticated']
+        );
+
+        $this->assertSame(['authenticated'], $createdKey->allowedAssertedRoles);
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
+        $this->assertArrayHasKey('allowed_asserted_roles', $requestBody);
+        $this->assertSame(['authenticated'], $requestBody['allowed_asserted_roles']);
+    }
+
+    public function testCreateApiKeyWithEmptyAllowedAssertedRolesSendsEmptyArrayPayload(): void
+    {
+        $mockCreateResponse = new MockResponse(json_encode([
+            'id' => 'key-uuid-empty-roles',
+            'name' => 'Empty Roles Key',
+            'token' => 'token-empty-roles-123',
+            'token_suffix' => '5555',
+            'allowed_asserted_roles' => [],
+        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+
+        $httpClient = new MockHttpClient([$mockCreateResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $createdKey = $admin->createApiKey(
+            'proj-1',
+            'Empty Roles Key',
+            allowedAssertedRoles: []
+        );
+
+        $this->assertSame([], $createdKey->allowedAssertedRoles);
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
+        $this->assertArrayHasKey('allowed_asserted_roles', $requestBody);
+        $this->assertSame([], $requestBody['allowed_asserted_roles']);
+    }
+
+    public function testCreateApiKeyWithoutAllowedAssertedRolesOmittedFromPayload(): void
+    {
+        $mockCreateResponse = new MockResponse(json_encode([
+            'id' => 'key-uuid-noroles',
+            'name' => 'No Roles Key',
+            'token' => 'token-noroles-123',
+            'token_suffix' => '7777',
+        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+
+        $httpClient = new MockHttpClient([$mockCreateResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $createdKey = $admin->createApiKey('proj-1', 'No Roles Key');
+
+        $this->assertNull($createdKey->allowedAssertedRoles);
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
+        $this->assertArrayNotHasKey('allowed_asserted_roles', $requestBody);
+        $this->assertArrayNotHasKey('allowedAssertedRoles', $requestBody);
+    }
+
+    public function testCreateApiKeyWithArrayDataNormalizesAllowedAssertedRoles(): void
+    {
+        $mockCreateResponse = new MockResponse(json_encode([
+            'id' => 'key-uuid-camel-roles',
+            'name' => 'Camel Roles Key',
+            'token' => 'token-camel-roles',
+            'token_suffix' => '6666',
+            'allowed_asserted_roles' => ['authenticated', 'admin'],
+        ], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+
+        $httpClient = new MockHttpClient([$mockCreateResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $createdKey = $admin->createApiKey('proj-1', [
+            'name' => 'Camel Roles Key',
+            'allowedAssertedRoles' => ['authenticated', 'admin'],
+        ]);
+
+        $this->assertSame(['authenticated', 'admin'], $createdKey->allowedAssertedRoles);
+        $requestBody = json_decode((string) ($mockCreateResponse->getRequestOptions()['body'] ?? '{}'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertIsArray($requestBody);
+        $this->assertArrayHasKey('allowed_asserted_roles', $requestBody);
+        $this->assertSame(['authenticated', 'admin'], $requestBody['allowed_asserted_roles']);
+        $this->assertArrayNotHasKey('allowedAssertedRoles', $requestBody);
     }
 
     public function testRevokeApiKey(): void

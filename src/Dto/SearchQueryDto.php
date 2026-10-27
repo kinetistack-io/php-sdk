@@ -9,7 +9,11 @@ class SearchQueryDto
     use ExtractsResponseDataTrait;
 
     /**
-     * @param list<string>|null $userRoles
+     * @param list<string>|null $userRoles End-user roles asserted by the integrating client (server-to-server trust model).
+     *                                     If the API key has allowed_asserted_roles configured, the backend validates
+     *                                     both userRoles and filters.permissions against the whitelist. Asserting
+     *                                     unauthorized roles triggers HTTP 403 AuthorizationException.
+     *                                     When allowed_asserted_roles is null, the key is unrestricted.
      */
     public function __construct(
         public readonly string $query,
@@ -92,7 +96,11 @@ class SearchQueryDto
     }
 
     /**
-     * @param string|array<mixed>|null $userRoles
+     * @param string|array<mixed>|null $userRoles End-user roles asserted by the integrating client (server-to-server trust model).
+     *                                            If the API key has allowed_asserted_roles configured, the backend validates
+     *                                            both userRoles and filters.permissions against the whitelist. Asserting
+     *                                            unauthorized roles triggers HTTP 403 AuthorizationException.
+     *                                            When allowed_asserted_roles is null, the key is unrestricted.
      */
     public function withUserRoles(string|array|null $userRoles): self
     {
@@ -153,7 +161,11 @@ class SearchQueryDto
     }
 
     /**
-     * @param string|array<mixed>|null $permissions
+     * @param string|array<mixed>|null $permissions End-user permission/role filters asserted by the integrating client (server-to-server trust model).
+     *                                              If the API key has allowed_asserted_roles configured, the backend validates
+     *                                              both userRoles and filters.permissions against the whitelist. Asserting
+     *                                              unauthorized roles triggers HTTP 403 AuthorizationException.
+     *                                              When allowed_asserted_roles is null, the key is unrestricted.
      */
     public function withPermissions(string|array|null $permissions): self
     {

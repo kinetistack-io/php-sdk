@@ -227,6 +227,29 @@ class KinetiClientSearchTest extends TestCase
         $kineti->search('query');
     }
 
+    public function testSearchDisallowedAssertedRolesThrowsAuthorizationExceptionWithProblemDetail(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'https://kinetistack.io/errors/forbidden',
+            'title' => 'Forbidden',
+            'status' => 403,
+            'detail' => "The asserted role 'administrator' is not permitted for this API key.",
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client);
+
+        $this->expectException(AuthorizationException::class);
+        $this->expectExceptionMessage("The asserted role 'administrator' is not permitted for this API key.");
+
+        $query = (new SearchQueryDto('security docs'))->withUserRoles(['administrator']);
+        $kineti->search($query);
+    }
+
     public function testSearchRateLimit429WithRetryAfter(): void
     {
         $fixture = $this->loadFixture('Errors/rfc9457_rate_limit_429.json');

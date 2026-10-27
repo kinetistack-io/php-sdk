@@ -8,6 +8,9 @@ class ApiKeyDto
 {
     use ExtractsResponseDataTrait;
 
+    /**
+     * @param list<string>|null $allowedAssertedRoles
+     */
     public function __construct(
         public readonly string $id,
         public readonly string $name,
@@ -21,6 +24,7 @@ class ApiKeyDto
         public readonly ?int $dailyTokenQuotaOverride = null,
         public readonly ?int $tokensConsumedToday = null,
         public readonly ?int $requestsToday = null,
+        public readonly ?array $allowedAssertedRoles = null,
     ) {
         if (trim($this->id) === '') {
             throw new \InvalidArgumentException('id cannot be empty.');
@@ -100,6 +104,10 @@ class ApiKeyDto
             $data['requests_today'] = $this->requestsToday;
         }
 
+        if ($this->allowedAssertedRoles !== null) {
+            $data['allowed_asserted_roles'] = $this->allowedAssertedRoles;
+        }
+
         return $data;
     }
 
@@ -123,6 +131,8 @@ class ApiKeyDto
         $dailyTokenQuotaOverride = self::extractNullableInt($data['daily_token_quota_override'] ?? $data['dailyTokenQuotaOverride'] ?? null);
         $tokensConsumedToday = self::extractNullableInt($data['tokens_consumed_today'] ?? $data['tokensConsumedToday'] ?? null);
         $requestsToday = self::extractNullableInt($data['requests_today'] ?? $data['requestsToday'] ?? null);
+        $rawRoles = $data['allowed_asserted_roles'] ?? $data['allowedAssertedRoles'] ?? null;
+        $allowedAssertedRoles = is_array($rawRoles) ? self::extractStringList($rawRoles) : null;
 
         return new self(
             $id,
@@ -136,7 +146,8 @@ class ApiKeyDto
             $gracePeriodUntil,
             $dailyTokenQuotaOverride,
             $tokensConsumedToday,
-            $requestsToday
+            $requestsToday,
+            $allowedAssertedRoles
         );
     }
 }

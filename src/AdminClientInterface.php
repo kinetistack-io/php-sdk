@@ -119,7 +119,11 @@ interface AdminClientInterface
 
     /**
      * @param array<string, mixed>|string $nameOrData
+     * @param string|null $domain
+     * @param string|null $webhookUrl
      * @param array<string, mixed>|null $settings
+     * @param int|null $monthlyQuotaCap
+     * @param string|null $defaultDocumentVisibility Default document visibility ('public'|'restricted')
      * @throws KinetiException
      */
     public function createProject(
@@ -127,7 +131,8 @@ interface AdminClientInterface
         ?string $domain = null,
         ?string $webhookUrl = null,
         ?array $settings = null,
-        ?int $monthlyQuotaCap = null
+        ?int $monthlyQuotaCap = null,
+        ?string $defaultDocumentVisibility = null,
     ): ProjectDto;
 
     /**
@@ -143,7 +148,13 @@ interface AdminClientInterface
     public function getProject(string $id): ProjectDto;
 
     /**
-     * @param array<string, mixed> $data
+     * Update project settings, name, domain, webhook, quota, or document visibility.
+     *
+     * @param string $id Project ID.
+     * @param array<string, mixed> $data Updatable project fields. Recognized keys include 'name' (string),
+     *                                   'domain' (string), 'webhook_url'|'webhookUrl' (?string),
+     *                                   'settings' (?array), 'monthly_quota_cap'|'monthlyQuotaCap' (?int),
+     *                                   and 'default_document_visibility'|'defaultDocumentVisibility' (?string, 'public'|'restricted').
      * @throws KinetiException
      */
     public function updateProject(string $id, array $data): ProjectDto;
@@ -161,6 +172,7 @@ interface AdminClientInterface
      * @param int|null $rateLimitPerMinute Optional rate limit override (requests per minute)
      * @param string|null $expiresAt Optional ISO 8601 expiration date string
      * @param int|null $dailyTokenQuotaOverride Optional per-key daily token quota override (must be > 0)
+     * @param list<string>|null $allowedAssertedRoles
      * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException
      */
@@ -171,6 +183,7 @@ interface AdminClientInterface
         ?int $rateLimitPerMinute = null,
         ?string $expiresAt = null,
         ?int $dailyTokenQuotaOverride = null,
+        ?array $allowedAssertedRoles = null,
     ): ApiKeyCreatedDto;
 
     /**

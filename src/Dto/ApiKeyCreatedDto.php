@@ -6,6 +6,9 @@ namespace KinetiStack\Sdk\Dto;
 
 class ApiKeyCreatedDto extends ApiKeyDto
 {
+    /**
+     * @param list<string>|null $allowedAssertedRoles
+     */
     public function __construct(
         string $id,
         string $name,
@@ -21,6 +24,7 @@ class ApiKeyCreatedDto extends ApiKeyDto
         ?int $dailyTokenQuotaOverride = null,
         ?int $tokensConsumedToday = null,
         ?int $requestsToday = null,
+        ?array $allowedAssertedRoles = null,
     ) {
         if (trim($token) === '') {
             throw new \InvalidArgumentException('token cannot be empty.');
@@ -38,7 +42,8 @@ class ApiKeyCreatedDto extends ApiKeyDto
             $gracePeriodUntil,
             $dailyTokenQuotaOverride,
             $tokensConsumedToday,
-            $requestsToday
+            $requestsToday,
+            $allowedAssertedRoles,
         );
     }
 
@@ -73,7 +78,8 @@ class ApiKeyCreatedDto extends ApiKeyDto
             $base->gracePeriodUntil,
             $base->dailyTokenQuotaOverride,
             $base->tokensConsumedToday,
-            $base->requestsToday
+            $base->requestsToday,
+            $base->allowedAssertedRoles
         );
     }
 

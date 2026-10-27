@@ -340,6 +340,7 @@ class AdminClient implements AdminClientInterface
      *
      * @param array<string, mixed>|string $nameOrData
      * @param array<string, mixed>|null $settings
+     * @param string|null $defaultDocumentVisibility
      * @throws KinetiException
      */
     public function createProject(
@@ -347,10 +348,14 @@ class AdminClient implements AdminClientInterface
         ?string $domain = null,
         ?string $webhookUrl = null,
         ?array $settings = null,
-        ?int $monthlyQuotaCap = null
+        ?int $monthlyQuotaCap = null,
+        ?string $defaultDocumentVisibility = null,
     ): ProjectDto {
         if (is_array($nameOrData)) {
             $payload = $nameOrData;
+            if ($defaultDocumentVisibility !== null && !isset($payload['default_document_visibility']) && !isset($payload['defaultDocumentVisibility'])) {
+                $payload['default_document_visibility'] = $defaultDocumentVisibility;
+            }
         } else {
             $payload = [
                 'name' => $nameOrData,
@@ -365,9 +370,15 @@ class AdminClient implements AdminClientInterface
             if ($monthlyQuotaCap !== null) {
                 $payload['monthly_quota_cap'] = $monthlyQuotaCap;
             }
+            if ($defaultDocumentVisibility !== null) {
+                $payload['default_document_visibility'] = $defaultDocumentVisibility;
+            }
         }
 
-        $payload = $this->normalizePayloadKeys($payload, ['monthlyQuotaCap' => 'monthly_quota_cap']);
+        $payload = $this->normalizePayloadKeys($payload, [
+            'monthlyQuotaCap' => 'monthly_quota_cap',
+            'defaultDocumentVisibility' => 'default_document_visibility',
+        ]);
 
         $response = $this->request('POST', '/api/v1/admin/projects', [
             'json' => $payload,
@@ -418,14 +429,21 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
-     * Update project settings, name, domain, or webhook.
+     * Update project settings, name, domain, webhook, quota, or document visibility.
      *
-     * @param array<string, mixed> $data
+     * @param string $id Project ID.
+     * @param array<string, mixed> $data Updatable project fields. Recognized keys include 'name' (string),
+     *                                   'domain' (string), 'webhook_url'|'webhookUrl' (?string),
+     *                                   'settings' (?array), 'monthly_quota_cap'|'monthlyQuotaCap' (?int),
+     *                                   and 'default_document_visibility'|'defaultDocumentVisibility' (?string, 'public'|'restricted').
      * @throws KinetiException
      */
     public function updateProject(string $id, array $data): ProjectDto
     {
-        $data = $this->normalizePayloadKeys($data, ['monthlyQuotaCap' => 'monthly_quota_cap']);
+        $data = $this->normalizePayloadKeys($data, [
+            'monthlyQuotaCap' => 'monthly_quota_cap',
+            'defaultDocumentVisibility' => 'default_document_visibility',
+        ]);
 
         $response = $this->request(
             'PATCH',
@@ -464,6 +482,7 @@ class AdminClient implements AdminClientInterface
      * @param int|null $rateLimitPerMinute Optional rate limit override (requests per minute)
      * @param string|null $expiresAt Optional ISO 8601 expiration date string
      * @param int|null $dailyTokenQuotaOverride Optional per-key daily token quota override (must be > 0)
+     * @param list<string>|null $allowedAssertedRoles Optional allowed asserted roles for search permission filtering
      * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException
      */
@@ -474,6 +493,7 @@ class AdminClient implements AdminClientInterface
         ?int $rateLimitPerMinute = null,
         ?string $expiresAt = null,
         ?int $dailyTokenQuotaOverride = null,
+        ?array $allowedAssertedRoles = null,
     ): ApiKeyCreatedDto {
         $projectId = '';
         if (is_array($projectOrData)) {
@@ -481,9 +501,15 @@ class AdminClient implements AdminClientInterface
             $projectId = is_scalar($rawProj) ? (string) $rawProj : '';
             $payload = $projectOrData;
             unset($payload['project_id'], $payload['projectId']);
+            if ($allowedAssertedRoles !== null && !isset($payload['allowed_asserted_roles']) && !isset($payload['allowedAssertedRoles'])) {
+                $payload['allowed_asserted_roles'] = $allowedAssertedRoles;
+            }
         } elseif (is_array($nameOrData)) {
             $projectId = $projectOrData;
             $payload = $nameOrData;
+            if ($allowedAssertedRoles !== null && !isset($payload['allowed_asserted_roles']) && !isset($payload['allowedAssertedRoles'])) {
+                $payload['allowed_asserted_roles'] = $allowedAssertedRoles;
+            }
         } else {
             $projectId = $projectOrData;
             $payload = [
@@ -499,9 +525,15 @@ class AdminClient implements AdminClientInterface
             if ($dailyTokenQuotaOverride !== null) {
                 $payload['daily_token_quota_override'] = $dailyTokenQuotaOverride;
             }
+            if ($allowedAssertedRoles !== null) {
+                $payload['allowed_asserted_roles'] = $allowedAssertedRoles;
+            }
         }
 
-        $payload = $this->normalizePayloadKeys($payload, ['dailyTokenQuotaOverride' => 'daily_token_quota_override']);
+        $payload = $this->normalizePayloadKeys($payload, [
+            'dailyTokenQuotaOverride' => 'daily_token_quota_override',
+            'allowedAssertedRoles' => 'allowed_asserted_roles',
+        ]);
 
         $path = sprintf('/api/v1/admin/projects/%s/api-keys', $this->encodePathSegment($projectId, 'Project ID'));
 

@@ -10,6 +10,7 @@ class ProjectDto
 
     /**
      * @param array<string, mixed>|null $settings
+     * @param string|null $defaultDocumentVisibility Default document visibility ('public'|'restricted')
      */
     public function __construct(
         public readonly string $id,
@@ -19,6 +20,7 @@ class ProjectDto
         public readonly ?array $settings = null,
         public readonly ?string $createdAt = null,
         public readonly ?int $monthlyQuotaCap = null,
+        public readonly ?string $defaultDocumentVisibility = null,
     ) {
         if (trim($this->id) === '') {
             throw new \InvalidArgumentException('id cannot be empty.');
@@ -37,6 +39,11 @@ class ProjectDto
     public function getMonthlyQuotaCap(): ?int
     {
         return $this->monthlyQuotaCap;
+    }
+
+    public function getDefaultDocumentVisibility(): ?string
+    {
+        return $this->defaultDocumentVisibility;
     }
 
     /**
@@ -66,6 +73,10 @@ class ProjectDto
             $data['monthly_quota_cap'] = $this->monthlyQuotaCap;
         }
 
+        if ($this->defaultDocumentVisibility !== null) {
+            $data['default_document_visibility'] = $this->defaultDocumentVisibility;
+        }
+
         return $data;
     }
 
@@ -82,7 +93,8 @@ class ProjectDto
         $settings = isset($data['settings']) && is_array($data['settings']) ? $data['settings'] : null;
         $createdAt = self::extractNullableString($data['created_at'] ?? $data['createdAt'] ?? null);
         $monthlyQuotaCap = self::extractNullableInt($data['monthly_quota_cap'] ?? $data['monthlyQuotaCap'] ?? null);
+        $defaultDocumentVisibility = self::extractNullableString($data['default_document_visibility'] ?? $data['defaultDocumentVisibility'] ?? null);
 
-        return new self($id, $name, $domain, $webhookUrl, $settings, $createdAt, $monthlyQuotaCap);
+        return new self($id, $name, $domain, $webhookUrl, $settings, $createdAt, $monthlyQuotaCap, $defaultDocumentVisibility);
     }
 }

@@ -231,6 +231,87 @@ class AdminDtoTest extends TestCase
         new ProjectDto('id', 'Name', '');
     }
 
+    public function testProjectDtoWithDefaultDocumentVisibility(): void
+    {
+        // 1. Constructor with 'restricted'
+        $dtoRestricted = new ProjectDto(
+            id: 'proj-1',
+            name: 'Restricted Project',
+            domain: 'restricted.test',
+            defaultDocumentVisibility: 'restricted'
+        );
+        $this->assertSame('restricted', $dtoRestricted->defaultDocumentVisibility);
+        $this->assertSame('restricted', $dtoRestricted->getDefaultDocumentVisibility());
+        $arrayRestricted = $dtoRestricted->toArray();
+        $this->assertSame('restricted', $arrayRestricted['default_document_visibility']);
+
+        // 2. Constructor with 'public'
+        $dtoPublic = new ProjectDto(
+            id: 'proj-2',
+            name: 'Public Project',
+            domain: 'public.test',
+            defaultDocumentVisibility: 'public'
+        );
+        $this->assertSame('public', $dtoPublic->defaultDocumentVisibility);
+        $this->assertSame('public', $dtoPublic->getDefaultDocumentVisibility());
+        $arrayPublic = $dtoPublic->toArray();
+        $this->assertSame('public', $arrayPublic['default_document_visibility']);
+
+        // 3. Constructor with null
+        $dtoNull = new ProjectDto(
+            id: 'proj-3',
+            name: 'Default Project',
+            domain: 'default.test',
+            defaultDocumentVisibility: null
+        );
+        $this->assertNull($dtoNull->defaultDocumentVisibility);
+        $this->assertNull($dtoNull->getDefaultDocumentVisibility());
+        $this->assertArrayNotHasKey('default_document_visibility', $dtoNull->toArray());
+
+        // 4. fromArray with snake_case 'restricted'
+        $fromSnake = ProjectDto::fromArray([
+            'id' => 'proj-4',
+            'name' => 'Snake Project',
+            'domain' => 'snake.test',
+            'default_document_visibility' => 'restricted',
+        ]);
+        $this->assertSame('restricted', $fromSnake->defaultDocumentVisibility);
+        $this->assertSame('restricted', $fromSnake->getDefaultDocumentVisibility());
+        $this->assertSame('restricted', $fromSnake->toArray()['default_document_visibility']);
+
+        // 5. fromArray with camelCase 'public'
+        $fromCamel = ProjectDto::fromArray([
+            'id' => 'proj-5',
+            'name' => 'Camel Project',
+            'domain' => 'camel.test',
+            'defaultDocumentVisibility' => 'public',
+        ]);
+        $this->assertSame('public', $fromCamel->defaultDocumentVisibility);
+        $this->assertSame('public', $fromCamel->getDefaultDocumentVisibility());
+        $this->assertSame('public', $fromCamel->toArray()['default_document_visibility']);
+
+        // 6. fromArray with null
+        $fromNull = ProjectDto::fromArray([
+            'id' => 'proj-6',
+            'name' => 'Null Project',
+            'domain' => 'null.test',
+            'default_document_visibility' => null,
+        ]);
+        $this->assertNull($fromNull->defaultDocumentVisibility);
+        $this->assertNull($fromNull->getDefaultDocumentVisibility());
+        $this->assertArrayNotHasKey('default_document_visibility', $fromNull->toArray());
+
+        // 7. fromArray with absent
+        $fromAbsent = ProjectDto::fromArray([
+            'id' => 'proj-7',
+            'name' => 'Absent Project',
+            'domain' => 'absent.test',
+        ]);
+        $this->assertNull($fromAbsent->defaultDocumentVisibility);
+        $this->assertNull($fromAbsent->getDefaultDocumentVisibility());
+        $this->assertArrayNotHasKey('default_document_visibility', $fromAbsent->toArray());
+    }
+
     public function testApiKeyDtoDoesNotExposeToken(): void
     {
         $dto = new ApiKeyDto(
