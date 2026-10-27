@@ -18,6 +18,7 @@ use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
+use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
@@ -509,10 +510,17 @@ class KinetiClient implements KinetiClientInterface
     /**
      * Execute a semantic vector search with streaming RAG synthesis.
      *
+     * Note on API key scopes:
+     * RAG synthesis (`/api/v1/search/rag`) requires an API key scoped to `rag` or `all`.
+     * Standard vector search (`/api/v1/search/query`) requires `search` or `all`.
+     * Calling RAG endpoints with a `search`-only API key results in an HTTP 403 Forbidden error,
+     * which throws an AuthorizationException on the first stream iteration.
+     *
      * @param SearchQueryDto|string $query Search query or query string
      * @param string $path Endpoint path (defaults to '/api/v1/search/rag')
      * @return \Generator<int, RagStreamChunkDto>
      *
+     * @throws AuthorizationException When the API key lacks the required scope (`rag` or `all`) or access is denied (HTTP 403)
      * @throws KinetiException
      */
     public function searchStream(SearchQueryDto|string $query, string $path = '/api/v1/search/rag'): \Generator

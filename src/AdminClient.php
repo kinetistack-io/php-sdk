@@ -458,7 +458,11 @@ class AdminClient implements AdminClientInterface
      * Create an API key for a project. Returns plaintext token in ApiKeyCreatedDto.
      *
      * @param array<string, mixed>|string $projectOrData Project ID string or full data array
-     * @param array<string, mixed>|string $nameOrData
+     * @param array<string, mixed>|string $nameOrData Key name string or payload array
+     * @param string $scope Scope restricting API key permissions. Valid values: 'all', 'search', 'rag', 'ingest', 'vision'.
+     *                      RAG endpoints require 'rag' or 'all', while standard search requires 'search' or 'all'.
+     * @param int|null $rateLimitPerMinute Optional rate limit override (requests per minute)
+     * @param string|null $expiresAt Optional ISO 8601 expiration date string
      * @param int|null $dailyTokenQuotaOverride Optional per-key daily token quota override (must be > 0)
      * @throws \InvalidArgumentException When project ID is empty.
      * @throws KinetiException

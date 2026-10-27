@@ -183,6 +183,30 @@ foreach ($stream as $chunk) {
 }
 ```
 
+#### API Key Scopes
+
+RAG streaming and semantic search enforce granular API key scopes:
+- **RAG synthesis** (`searchStream()` calling `/api/v1/search/rag`) requires an API key scoped to `rag` or `all`.
+- **Standard vector search** (`search()` and `searchAll()` calling `/api/v1/search/query`) requires `search` or `all`.
+
+Calling RAG endpoints with a `search`-only key returns an HTTP `403 Forbidden` response. Because `searchStream()` returns a lazy PHP generator, the HTTP request executes on the first stream iteration and throws an `AuthorizationException` (code `403`) before any chunks are yielded:
+
+```php
+use KinetiStack\Sdk\Exception\AuthorizationException;
+
+try {
+    $stream = $client->searchStream('Explain commercial solar financing options');
+
+    foreach ($stream as $chunk) {
+        echo $chunk->text;
+        flush();
+    }
+} catch (AuthorizationException $e) {
+    // Thrown on first iteration when API key lacks 'rag' or 'all' scope (HTTP 403)
+    echo "Authorization error (HTTP {$e->getCode()}): {$e->getMessage()}\n";
+}
+```
+
 ### Webhook Verification
 
 Verify incoming HMAC-SHA256 signatures for webhook events from the `Kineti-Signature` header (`v1={timestamp}.{hmac}`), with replay protection and automatic fallback to legacy `X-Kineti-Signature`:

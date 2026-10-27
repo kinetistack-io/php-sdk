@@ -13,6 +13,7 @@ use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\ServerException;
+use KinetiStack\Sdk\Exception\ServiceModuleDisabledException;
 use KinetiStack\Sdk\Exception\ValidationException;
 use KinetiStack\Sdk\KinetiClient;
 use PHPUnit\Framework\TestCase;
@@ -197,6 +198,191 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->expectExceptionMessage('Access denied for this resource or project.');
 
         iterator_to_array($generator);
+    }
+
+    public function testSearchStreamForbidden403ThrowsOnFirstIterationAndYieldsNoChunks(): void
+    {
+        $fixture = $this->loadFixture('Errors/rfc9457_forbidden_403.json');
+        $mockResponse = new MockResponse($fixture, [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client);
+
+        $generator = $kineti->searchStream('query');
+        $this->assertInstanceOf(\Generator::class, $generator);
+
+        /** @var RagStreamChunkDto[] $yielded */
+        $yielded = [];
+        $caught = false;
+
+        try {
+            foreach ($generator as $chunk) {
+                $yielded[] = $chunk;
+            }
+        } catch (AuthorizationException $e) {
+            $caught = true;
+            $this->assertSame(403, $e->getCode());
+            $this->assertSame('Access denied for this resource or project.', $e->getMessage());
+        }
+
+        $this->assertTrue($caught, 'Expected AuthorizationException on first iteration.');
+        $this->assertEmpty($yielded, 'No RagStreamChunkDto should be yielded on 403.');
+    }
+
+    public function testSearchStreamForbidden403ScopeMismatchThrowsAuthorizationException(): void
+    {
+        $problemBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Forbidden',
+            'status' => 403,
+            'detail' => 'Insufficient permissions. Required scope: rag:read.',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemBody, [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'search-only-key', $client);
+
+        $generator = $kineti->searchStream('query requiring rag scope');
+        $this->assertInstanceOf(\Generator::class, $generator);
+
+        /** @var RagStreamChunkDto[] $yielded */
+        $yielded = [];
+        $caught = false;
+
+        try {
+            foreach ($generator as $chunk) {
+                $yielded[] = $chunk;
+            }
+        } catch (AuthorizationException $e) {
+            $caught = true;
+            $this->assertSame(403, $e->getCode());
+            $this->assertSame('Insufficient permissions. Required scope: rag:read.', $e->getMessage());
+        }
+
+        $this->assertTrue($caught, 'Expected AuthorizationException when API key lacks rag scope.');
+        $this->assertEmpty($yielded, 'No RagStreamChunkDto should be yielded on scope mismatch.');
+    }
+
+    public function testSearchStreamDisabledModule403ThrowsServiceModuleDisabledException(): void
+    {
+        $problemBody = json_encode([
+            'type' => 'https://kinetistack.io/errors/module-disabled',
+            'title' => 'Service Module Disabled',
+            'status' => 403,
+            'detail' => "Service module 'rag' is not enabled for your organization.",
+            'module' => 'rag',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemBody, [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client);
+
+        $generator = $kineti->searchStream('query');
+        $this->assertInstanceOf(\Generator::class, $generator);
+
+        /** @var RagStreamChunkDto[] $yielded */
+        $yielded = [];
+        $caught = false;
+
+        try {
+            foreach ($generator as $chunk) {
+                $yielded[] = $chunk;
+            }
+        } catch (ServiceModuleDisabledException $e) {
+            $caught = true;
+            $this->assertInstanceOf(AuthorizationException::class, $e);
+            $this->assertSame(403, $e->getCode());
+            $this->assertSame('rag', $e->moduleIdentifier);
+            $this->assertSame('rag', $e->getModuleIdentifier());
+            $this->assertSame("Service module 'rag' is not enabled for your organization.", $e->getMessage());
+        }
+
+        $this->assertTrue($caught, 'Expected ServiceModuleDisabledException when RAG module is disabled.');
+        $this->assertEmpty($yielded, 'No RagStreamChunkDto should be yielded when module is disabled.');
+    }
+
+    public function testSearchStreamForbidden403WithGuzzlePsr18ThrowsAuthorizationException(): void
+    {
+        $problemBody = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Forbidden',
+            'status' => 403,
+            'detail' => 'Insufficient permissions. Required scope: rag:read.',
+        ], JSON_THROW_ON_ERROR);
+
+        $mock = new MockHandler([
+            new Response(403, ['Content-Type' => 'application/problem+json'], $problemBody),
+        ]);
+        $guzzleClient = new Client(['handler' => HandlerStack::create($mock)]);
+        $kineti = new KinetiClient('https://api.test', 'search-only-key', $guzzleClient);
+
+        $generator = $kineti->searchStream('query');
+        $this->assertInstanceOf(\Generator::class, $generator);
+
+        /** @var RagStreamChunkDto[] $yielded */
+        $yielded = [];
+        $caught = false;
+
+        try {
+            foreach ($generator as $chunk) {
+                $yielded[] = $chunk;
+            }
+        } catch (AuthorizationException $e) {
+            $caught = true;
+            $this->assertSame(403, $e->getCode());
+            $this->assertSame('Insufficient permissions. Required scope: rag:read.', $e->getMessage());
+        }
+
+        $this->assertTrue($caught, 'Expected AuthorizationException on first iteration with PSR-18 transport.');
+        $this->assertEmpty($yielded, 'No RagStreamChunkDto should be yielded on 403 with PSR-18 transport.');
+    }
+
+    public function testSearchStreamDisabledModule403WithGuzzlePsr18ThrowsServiceModuleDisabledException(): void
+    {
+        $problemBody = json_encode([
+            'type' => 'https://kinetistack.io/errors/module-disabled',
+            'title' => 'Service Module Disabled',
+            'status' => 403,
+            'detail' => "Service module 'rag' is not enabled for your organization.",
+            'module' => 'rag',
+        ], JSON_THROW_ON_ERROR);
+
+        $mock = new MockHandler([
+            new Response(403, ['Content-Type' => 'application/problem+json'], $problemBody),
+        ]);
+        $guzzleClient = new Client(['handler' => HandlerStack::create($mock)]);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $guzzleClient);
+
+        $generator = $kineti->searchStream('query');
+        $this->assertInstanceOf(\Generator::class, $generator);
+
+        /** @var RagStreamChunkDto[] $yielded */
+        $yielded = [];
+        $caught = false;
+
+        try {
+            foreach ($generator as $chunk) {
+                $yielded[] = $chunk;
+            }
+        } catch (ServiceModuleDisabledException $e) {
+            $caught = true;
+            $this->assertInstanceOf(AuthorizationException::class, $e);
+            $this->assertSame(403, $e->getCode());
+            $this->assertSame('rag', $e->moduleIdentifier);
+            $this->assertSame('rag', $e->getModuleIdentifier());
+            $this->assertSame("Service module 'rag' is not enabled for your organization.", $e->getMessage());
+        }
+
+        $this->assertTrue($caught, 'Expected ServiceModuleDisabledException on first iteration with PSR-18 transport.');
+        $this->assertEmpty($yielded, 'No RagStreamChunkDto should be yielded when module is disabled with PSR-18 transport.');
     }
 
     public function testSearchStreamValidationError422ThrowsDuringIteration(): void
