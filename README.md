@@ -228,14 +228,14 @@ try {
 
 ### Webhook Verification
 
-Verify incoming HMAC-SHA256 signatures for webhook events from the `Kineti-Signature` header (`v1={timestamp}.{hmac}`), with replay protection and automatic fallback to legacy `X-Kineti-Signature`:
+Verify incoming HMAC-SHA256 signatures for webhook events from the `Kineti-Signature` header (`v1={timestamp}.{hmac}`), with replay protection:
 
 ```php
 use KinetiStack\Sdk\WebhookVerifier;
 
 $payload = file_get_contents('php://input');
 
-// Prefer modern Kineti-Signature (v1={timestamp}.{hmac}) with replay protection
+// Modern Kineti-Signature (v1={timestamp}.{hmac}) with replay protection
 $signatureHeader = $_SERVER['HTTP_KINETI_SIGNATURE'] ?? '';
 
 $webhookSecret = 'whsec_your_secret_key';
@@ -252,8 +252,40 @@ if (!$isValid) {
 }
 ```
 
+#### Secret Rotation and Dual-Secret Verification
+
+During secret rotation, the backend generates a new secret while webhooks in flight may still be signed with the prior secret. `WebhookVerifier::verify()` accepts a list of secrets (`string|list<string>`), enabling zero-downtime rolling verification against either the current or prior secret:
+
+```php
+// Rotate secret via AdminClient
+$secretDto = $admin->rotateProjectWebhookSecret($projectId);
+$newSecret = $secretDto->webhookSecret;
+
+// Verify incoming webhooks against either secret during rotation rollout:
+$isValid = WebhookVerifier::verify(
+    $payload,
+    $signatureHeader,
+    [$newSecret, $priorSecret]
+);
+```
+
+#### Event Deduplication with Delivery ID
+
+Each webhook delivery includes a unique UUID in the `Kineti-Delivery-Id` header to detect and prevent duplicate processing across retries:
+
+```php
+$deliveryId = $_SERVER['HTTP_KINETI_DELIVERY_ID'] ?? '';
+
+if ($deliveryId !== '' && $idempotencyStore->has($deliveryId)) {
+    // Event was already processed; acknowledge immediately
+    http_response_code(200);
+    exit('Already processed');
+}
+```
+
 #### Available Constants
 - `WebhookVerifier::HEADER_SIGNATURE`: `'Kineti-Signature'`
+- `WebhookVerifier::HEADER_DELIVERY_ID`: `'Kineti-Delivery-Id'`
 - `WebhookVerifier::DEFAULT_TOLERANCE_SECONDS`: `300`
 
 ### Error Handling
@@ -325,6 +357,7 @@ $project = $admin->createProject('Client Portal', 'portal.example.com', 'https:/
 $projects = $admin->listProjects();
 $projectDetails = $admin->getProject($project->id);
 $admin->updateProject($project->id, ['settings' => ['theme' => 'dark'], 'defaultDocumentVisibility' => 'public']);
+$secretDto = $admin->rotateProjectWebhookSecret($project->id); // Rotates project webhook signing secret
 $admin->deleteProject($project->id); // Soft-delete and revokes associated API keys
 ```
 

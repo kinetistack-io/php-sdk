@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented `__debugInfo(): array` across secret-bearing classes (`AdminClient`, `AnalyticsClient`, `HttpTransport`, `Psr18Transport`, `SymfonyTransport`, `AuthTokenDto`, `ApiKeyCreatedDto`) to redact sensitive credentials (`jwtToken`, `authHeaderValue`, `token`, `refreshToken`) from `print_r()`, `var_dump()`, and debug output (PHPSDK-56).
 
 ### Added
+- Added `rotateProjectWebhookSecret(string $projectId): WebhookSecretDto` to `AdminClient` and `AdminClientInterface` (`POST /api/v1/admin/projects/{id}/webhook-secret/rotate`) with URL path parameter encoding and RFC 9457 error handling (PHPSDK-66).
+- Added `WebhookSecretDto` (`src/Dto/WebhookSecretDto.php`) with `#[\SensitiveParameter]` protection and redacted `__debugInfo()` masking (PHPSDK-66).
+- Added `WebhookVerifier::HEADER_DELIVERY_ID = 'Kineti-Delivery-Id'` constant for webhook delivery deduplication (PHPSDK-66).
+- Added dual/multi-secret verification support (`string|array $secret`) to `WebhookVerifier::verify()` for zero-downtime secret rotation rollouts (PHPSDK-66).
 - Added `AdminClient::logout(): void` and `AdminClientInterface::logout(): void` (`POST /api/v1/admin/logout`) for backend session revocation (PHPSDK-69).
 - Added `allowedAssertedRoles` property (`list<string>|null`) to `ApiKeyDto` and `ApiKeyCreatedDto`, with support in constructor, `fromArray()`, and `toArray()` (PHPSDK-68).
 - Added `defaultDocumentVisibility` property (`?string`) and `getDefaultDocumentVisibility(): ?string` getter to `ProjectDto`, with support in constructor, `fromArray()`, and `toArray()` (PHPSDK-68).
@@ -32,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `deleteOrganization(string $id): void` to `AdminClient` and `AdminClientInterface` (`DELETE /api/v1/admin/organizations/{id}`) for parity with the backend organization soft-deletion endpoint (PHPSDK-52).
 
 ### Changed
+- Removed outdated claim of automatic fallback to legacy `X-Kineti-Signature` in `README.md`, documented multi-secret webhook verification and `Kineti-Delivery-Id` deduplication (PHPSDK-66).
 - Documented RAG scope requirement (`rag` or `all` scope required, rejecting `search`-only keys with HTTP 403) on `KinetiClientInterface::searchStream()` and `KinetiClient::searchStream()`, documented valid `$scope` values on `AdminClientInterface::createApiKey()` and `AdminClient::createApiKey()`, and verified HTTP 403 `AuthorizationException` handling during stream iteration (PHPSDK-67).
 - Removed hardcoded version from `composer.json` and aligned `make release` with Packagist VCS tag-based release practices without mutating repository files (PHPSDK-60).
 - Upgraded CI `quality-checks` in `ci.yml` and `release.yml` to PHP 8.4, updated Composer cache hashing to `composer.lock`, added `composer check-platform-reqs`, and enforced `composer validate --strict` (PHPSDK-60).

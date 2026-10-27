@@ -19,6 +19,7 @@ use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
 use KinetiStack\Sdk\Dto\UserDto;
 use KinetiStack\Sdk\Dto\UserProjectAssignmentDto;
+use KinetiStack\Sdk\Dto\WebhookSecretDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
@@ -483,6 +484,32 @@ class AdminClient implements AdminClientInterface
     public function deleteProject(string $id): void
     {
         $this->request('DELETE', sprintf('/api/v1/admin/projects/%s', $this->encodePathSegment($id, 'Project ID')));
+    }
+
+    /**
+     * Rotate the webhook signing secret for a project.
+     *
+     * Dispatches POST /api/v1/admin/projects/{projectId}/webhook-secret/rotate
+     *
+     * @param string $projectId Project identifier. Must not be empty.
+     *
+     * @return WebhookSecretDto Contains the newly generated plaintext webhook secret and rotation timestamp.
+     *
+     * @throws \InvalidArgumentException When $projectId is empty or whitespace.
+     * @throws AuthenticationException When the admin session or JWT token is expired, invalid, or unauthenticated (HTTP 401).
+     * @throws AuthorizationException When the authenticated user lacks admin privileges (HTTP 403).
+     * @throws NotFoundException When the project does not exist (HTTP 404).
+     * @throws KinetiException
+     */
+    public function rotateProjectWebhookSecret(string $projectId): WebhookSecretDto
+    {
+        $path = sprintf('/api/v1/admin/projects/%s/webhook-secret/rotate', $this->encodePathSegment($projectId, 'Project ID'));
+        $response = $this->request('POST', $path);
+
+        /** @var array<string, mixed> $data */
+        $data = $response->toArray();
+
+        return WebhookSecretDto::fromArray($data);
     }
 
     /**

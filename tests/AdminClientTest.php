@@ -16,6 +16,7 @@ use KinetiStack\Sdk\Dto\RegisterDto;
 use KinetiStack\Sdk\Dto\RegisterResponseDto;
 use KinetiStack\Sdk\Dto\RegistrationStatusDto;
 use KinetiStack\Sdk\Dto\UsageSummaryDto;
+use KinetiStack\Sdk\Dto\WebhookSecretDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Enum\RegistrationMode;
 use KinetiStack\Sdk\Exception\AuthenticationException;
@@ -1015,6 +1016,141 @@ class AdminClientTest extends TestCase
         $this->assertStringEndsWith('/api/v1/admin/projects/p1', $mockDelete->getRequestUrl());
     }
 
+    public function testRotateProjectWebhookSecretHappyPath(): void
+    {
+        $mockResponseSnake = new MockResponse(json_encode([
+            'webhook_secret' => 'whsec_live_1234567890abcdef',
+            'rotated_at' => '2026-10-27T12:00:00Z',
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'Cache-Control' => 'no-store',
+            ],
+        ]);
+
+        $mockResponseCamel = new MockResponse(json_encode([
+            'webhookSecret' => 'whsec_live_fedcba0987654321',
+            'rotatedAt' => '2026-10-27T13:00:00Z',
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 200,
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+            ],
+        ]);
+
+        $httpClient = new MockHttpClient([$mockResponseSnake, $mockResponseCamel]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        // Test snake_case response
+        $dto1 = $admin->rotateProjectWebhookSecret('proj-uuid-1');
+        $this->assertInstanceOf(WebhookSecretDto::class, $dto1);
+        $this->assertSame('whsec_live_1234567890abcdef', $dto1->webhookSecret);
+        $this->assertSame('2026-10-27T12:00:00Z', $dto1->rotatedAt);
+        $this->assertSame('POST', $mockResponseSnake->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj-uuid-1/webhook-secret/rotate', $mockResponseSnake->getRequestUrl());
+
+        // Test camelCase response
+        $dto2 = $admin->rotateProjectWebhookSecret('proj-uuid-2');
+        $this->assertInstanceOf(WebhookSecretDto::class, $dto2);
+        $this->assertSame('whsec_live_fedcba0987654321', $dto2->webhookSecret);
+        $this->assertSame('2026-10-27T13:00:00Z', $dto2->rotatedAt);
+        $this->assertSame('POST', $mockResponseCamel->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj-uuid-2/webhook-secret/rotate', $mockResponseCamel->getRequestUrl());
+    }
+
+    public function testRotateProjectWebhookSecretUrlEncoding(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'webhook_secret' => 'whsec_encoded_test',
+            'rotated_at' => '2026-10-27T14:00:00Z',
+        ], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $dto = $admin->rotateProjectWebhookSecret('proj 42/special+chars');
+        $this->assertInstanceOf(WebhookSecretDto::class, $dto);
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/projects/proj%2042%2Fspecial%2Bchars/webhook-secret/rotate', $mockResponse->getRequestUrl());
+        $this->assertStringNotContainsString(' ', $mockResponse->getRequestUrl());
+    }
+
+    public function testRotateProjectWebhookSecretRequiresParameter(): void
+    {
+        $clientRefMethod = new \ReflectionMethod(AdminClient::class, 'rotateProjectWebhookSecret');
+        $this->assertSame(1, $clientRefMethod->getNumberOfParameters());
+        $this->assertSame(1, $clientRefMethod->getNumberOfRequiredParameters());
+        $clientParams = $clientRefMethod->getParameters();
+        $this->assertSame('projectId', $clientParams[0]->getName());
+
+        $interfaceRefMethod = new \ReflectionMethod(AdminClientInterface::class, 'rotateProjectWebhookSecret');
+        $this->assertSame(1, $interfaceRefMethod->getNumberOfParameters());
+        $this->assertSame(1, $interfaceRefMethod->getNumberOfRequiredParameters());
+        $interfaceParams = $interfaceRefMethod->getParameters();
+        $this->assertSame('projectId', $interfaceParams[0]->getName());
+    }
+
+    public function testRotateProjectWebhookSecret401AuthenticationException(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'title' => 'Unauthorized',
+            'detail' => 'Invalid or expired admin JWT token.',
+            'status' => 401,
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 401,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'expired-jwt', $httpClient);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid or expired admin JWT token.');
+
+        $admin->rotateProjectWebhookSecret('proj-1');
+    }
+
+    public function testRotateProjectWebhookSecret403AuthorizationException(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'title' => 'Forbidden',
+            'detail' => 'Access denied. Administrator privileges required.',
+            'status' => 403,
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 403,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt-regular-user', $httpClient);
+
+        $this->expectException(AuthorizationException::class);
+        $this->expectExceptionMessage('Access denied. Administrator privileges required.');
+
+        $admin->rotateProjectWebhookSecret('proj-1');
+    }
+
+    public function testRotateProjectWebhookSecret404NotFoundException(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'title' => 'Not Found',
+            'detail' => 'Project not found.',
+            'status' => 404,
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 404,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(NotFoundException::class);
+        $this->expectExceptionMessage('Project not found.');
+
+        $admin->rotateProjectWebhookSecret('non-existent-proj');
+    }
+
     /**
      * S4: createApiKey() returns ApiKeyCreatedDto with plaintext token;
      *     listApiKeys() returns ApiKeyDto[] without token.
@@ -1514,6 +1650,18 @@ class AdminClientTest extends TestCase
         $this->expectExceptionMessage('Project ID cannot be empty.');
 
         $admin->deleteProject($emptyId);
+    }
+
+    #[DataProvider('provideEmptyKeyIdentifiers')]
+    public function testRotateProjectWebhookSecretEmptyIdThrowsException(string $emptyId): void
+    {
+        $httpClient = new MockHttpClient([]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Project ID cannot be empty.');
+
+        $admin->rotateProjectWebhookSecret($emptyId);
     }
 
     #[DataProvider('provideEmptyKeyIdentifiers')]

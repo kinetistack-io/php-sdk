@@ -34,6 +34,7 @@ final class WebhookVerifierTest extends TestCase
     public function testConstants(): void
     {
         $this->assertSame('Kineti-Signature', WebhookVerifier::HEADER_SIGNATURE);
+        $this->assertSame('Kineti-Delivery-Id', WebhookVerifier::HEADER_DELIVERY_ID);
         $this->assertSame(300, WebhookVerifier::DEFAULT_TOLERANCE_SECONDS);
     }
 
@@ -224,6 +225,87 @@ final class WebhookVerifierTest extends TestCase
     public function testVerifyV1MalformedHeaders(string $malformedHeader): void
     {
         $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $malformedHeader, self::SECRET));
+    }
+
+    public function testVerifyMultiSecretsFirstSecretMatches(): void
+    {
+        $currentSecret = 'whsec_current_secret_key_11111';
+        $priorSecret = 'whsec_prior_secret_key_22222';
+
+        $timestamp = time();
+        $hash = hash_hmac('sha256', $timestamp . '.' . self::PAYLOAD, $currentSecret);
+        $header = "v1={$timestamp}.{$hash}";
+
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, [$currentSecret, $priorSecret]));
+    }
+
+    public function testVerifyMultiSecretsSecondSecretMatches(): void
+    {
+        $currentSecret = 'whsec_current_secret_key_11111';
+        $priorSecret = 'whsec_prior_secret_key_22222';
+
+        $timestamp = time();
+        $hash = hash_hmac('sha256', $timestamp . '.' . self::PAYLOAD, $priorSecret);
+        $header = "v1={$timestamp}.{$hash}";
+
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, [$currentSecret, $priorSecret]));
+    }
+
+    public function testVerifyMultiSecretsNeitherMatches(): void
+    {
+        $currentSecret = 'whsec_current_secret_key_11111';
+        $priorSecret = 'whsec_prior_secret_key_22222';
+        $differentSecret = 'whsec_other_secret_key_33333';
+
+        $timestamp = time();
+        $hash = hash_hmac('sha256', $timestamp . '.' . self::PAYLOAD, $differentSecret);
+        $header = "v1={$timestamp}.{$hash}";
+
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, [$currentSecret, $priorSecret]));
+    }
+
+    public function testVerifyMultiSecretsAssociativeArray(): void
+    {
+        $currentSecret = 'whsec_current_secret_key_11111';
+        $priorSecret = 'whsec_prior_secret_key_22222';
+
+        $timestamp = time();
+        $hash = hash_hmac('sha256', $timestamp . '.' . self::PAYLOAD, $priorSecret);
+        $header = "v1={$timestamp}.{$hash}";
+
+        $this->assertTrue(WebhookVerifier::verify(self::PAYLOAD, $header, [
+            'current' => $currentSecret,
+            'prior' => $priorSecret,
+        ]));
+    }
+
+    public function testVerifyEmptySecretListReturnsFalse(): void
+    {
+        $timestamp = time();
+        $hash = hash_hmac('sha256', $timestamp . '.' . self::PAYLOAD, self::SECRET);
+        $header = "v1={$timestamp}.{$hash}";
+
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, []));
+    }
+
+    public function testVerifyEmptyStringSecretsInListReturnsFalse(): void
+    {
+        $timestamp = time();
+        $hash = hash_hmac('sha256', $timestamp . '.' . self::PAYLOAD, self::SECRET);
+        $header = "v1={$timestamp}.{$hash}";
+
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, ['', '']));
+    }
+
+    public function testVerifyLegacySha256WithMultiSecretsReturnsFalse(): void
+    {
+        $currentSecret = 'whsec_current_secret_key_11111';
+        $priorSecret = 'whsec_prior_secret_key_22222';
+
+        $signature = hash_hmac('sha256', self::PAYLOAD, $currentSecret);
+        $header = 'sha256=' . $signature;
+
+        $this->assertFalse(WebhookVerifier::verify(self::PAYLOAD, $header, [$currentSecret, $priorSecret]));
     }
 
     /**

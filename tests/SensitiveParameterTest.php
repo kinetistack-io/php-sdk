@@ -10,6 +10,7 @@ use KinetiStack\Sdk\AnalyticsClient;
 use KinetiStack\Sdk\AnalyticsClientInterface;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\AuthTokenDto;
+use KinetiStack\Sdk\Dto\WebhookSecretDto;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\KinetiClientInterface;
 use KinetiStack\Sdk\Transport\HttpTransport;
@@ -61,6 +62,7 @@ class SensitiveParameterTest extends TestCase
             'AuthTokenDto::__construct $token' => [AuthTokenDto::class, '__construct', 'token'],
             'AuthTokenDto::__construct $refreshToken' => [AuthTokenDto::class, '__construct', 'refreshToken'],
             'ApiKeyCreatedDto::__construct $token' => [ApiKeyCreatedDto::class, '__construct', 'token'],
+            'WebhookSecretDto::__construct $webhookSecret' => [WebhookSecretDto::class, '__construct', 'webhookSecret'],
             'TransportInterface::withAuthHeaderValue $authHeaderValue' => [TransportInterface::class, 'withAuthHeaderValue', 'authHeaderValue'],
             'HttpTransport::__construct $authHeaderName' => [HttpTransport::class, '__construct', 'authHeaderName'],
             'HttpTransport::__construct $authHeaderValue' => [HttpTransport::class, '__construct', 'authHeaderValue'],
@@ -284,6 +286,24 @@ class SensitiveParameterTest extends TestCase
 
         $varExportDebug = var_export($debugInfo, true);
         $this->assertStringNotContainsString($secretToken, $varExportDebug);
+    }
+
+    public function testWebhookSecretDtoDebugInfoRedactsSecret(): void
+    {
+        $secret = 'whsec_test_sensitive_secret_value_123';
+        $rotatedAt = '2026-10-27T12:00:00Z';
+        $dto = new WebhookSecretDto($secret, $rotatedAt);
+
+        $debugInfo = $dto->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['webhookSecret']);
+        $this->assertSame($rotatedAt, $debugInfo['rotatedAt']);
+
+        $printOutput = print_r($dto, true);
+        $this->assertStringNotContainsString($secret, $printOutput);
+        $this->assertStringContainsString('[REDACTED]', $printOutput);
+
+        $varExportDebug = var_export($debugInfo, true);
+        $this->assertStringNotContainsString($secret, $varExportDebug);
     }
 
     public function testKinetiClientDebugInfoRecursivelyRedactsApiKeyViaTransport(): void
