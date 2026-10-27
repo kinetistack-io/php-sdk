@@ -55,6 +55,16 @@ interface AdminClientInterface
     public function refreshToken(): AuthTokenDto;
 
     /**
+     * Revoke the current admin session on the server side (bumps user's token_version).
+     *
+     * Dispatches POST /api/v1/admin/logout with Bearer token.
+     *
+     * @throws AuthenticationException On 401 (invalid/expired token).
+     * @throws KinetiException
+     */
+    public function logout(): void;
+
+    /**
      * Verify whether the current admin session or JWT token is valid and active.
      *
      * @return bool True if session is valid and active.

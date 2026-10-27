@@ -145,6 +145,19 @@ class AdminClient implements AdminClientInterface
     }
 
     /**
+     * Revoke the current admin session on the server side (bumps user's token_version).
+     *
+     * Dispatches POST /api/v1/admin/logout with Bearer token.
+     *
+     * @throws AuthenticationException When the existing JWT token is expired, invalid, or unauthenticated (HTTP 401).
+     * @throws KinetiException
+     */
+    public function logout(): void
+    {
+        $this->request('POST', '/api/v1/admin/logout');
+    }
+
+    /**
      * Verify whether the current admin session or JWT token is valid and active.
      *
      * Dispatches an HTTP GET request to /api/v1/admin/ping.

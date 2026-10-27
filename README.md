@@ -301,11 +301,14 @@ use KinetiStack\Sdk\AdminClient;
 $admin = new AdminClient('https://api.kinetistack.io');
 $auth = $admin->login('admin@agency.com', 'SuperSecret123!');
 
-// 2. Obtain an immutable client instance with the JWT token
+// 2. Obtain an authenticated client instance with the JWT token
 $authenticatedAdmin = $admin->withToken($auth->token);
 
-// Or initialize directly if you already hold a valid token
-$admin = new AdminClient('https://api.kinetistack.io', $jwtToken);
+// Or initialize directly if you already hold a valid token:
+// $authenticatedAdmin = new AdminClient('https://api.kinetistack.io', $jwtToken);
+
+// 3. Revoke session server-side (logout)
+$authenticatedAdmin->logout();
 ```
 
 #### Organizations & Projects

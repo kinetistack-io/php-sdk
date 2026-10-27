@@ -163,4 +163,54 @@ class AdminClientPsr18Test extends TestCase
 
         $admin->refreshToken();
     }
+
+    public function testLogoutSuccessWithPsr18(): void
+    {
+        /** @var list<array{request: RequestInterface, response: Response}> $container */
+        $container = [];
+        $history = Middleware::history($container);
+
+        $mock = new MockHandler([
+            new Response(204),
+        ]);
+
+        $stack = HandlerStack::create($mock);
+        $stack->push($history);
+
+        $guzzleClient = new Client(['handler' => $stack]);
+        $admin = new AdminClient('https://api.test', 'valid-psr18-jwt', $guzzleClient);
+
+        $admin->logout();
+
+        assert(is_array($container));
+        $this->assertCount(1, $container);
+        $request = $container[0]['request'];
+        $this->assertSame('POST', $request->getMethod());
+        $this->assertSame('/api/v1/admin/logout', $request->getUri()->getPath());
+        $this->assertTrue($request->hasHeader('Authorization'));
+        $this->assertSame('Bearer valid-psr18-jwt', $request->getHeaderLine('Authorization'));
+    }
+
+    public function testLogoutUnauthorizedWithPsr18ThrowsAuthenticationException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:unauthorized',
+            'title' => 'Unauthorized',
+            'status' => 401,
+            'detail' => 'Invalid or expired JWT token',
+        ], JSON_THROW_ON_ERROR);
+
+        $mock = new MockHandler([
+            new Response(401, ['Content-Type' => 'application/problem+json'], $problemJson),
+        ]);
+
+        $stack = HandlerStack::create($mock);
+        $guzzleClient = new Client(['handler' => $stack]);
+        $admin = new AdminClient('https://api.test', 'revoked-psr18-jwt', $guzzleClient);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid or expired JWT token');
+
+        $admin->logout();
+    }
 }

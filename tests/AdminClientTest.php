@@ -324,6 +324,44 @@ class AdminClientTest extends TestCase
         $admin->refreshToken();
     }
 
+    public function testLogoutSuccess(): void
+    {
+        $mockResponse = new MockResponse('', [
+            'http_code' => 204,
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'valid-admin-jwt', $httpClient);
+
+        $admin->logout();
+
+        $this->assertSame(1, $httpClient->getRequestsCount());
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/admin/logout', $mockResponse->getRequestUrl());
+        $this->assertContains('Authorization: Bearer valid-admin-jwt', $mockResponse->getRequestOptions()['headers']);
+    }
+
+    public function testLogoutUnauthorizedThrowsAuthenticationException(): void
+    {
+        $problemJson = json_encode([
+            'type' => 'urn:problem-type:unauthorized',
+            'title' => 'Unauthorized',
+            'status' => 401,
+            'detail' => 'Invalid or expired JWT token',
+        ], JSON_THROW_ON_ERROR);
+
+        $mockResponse = new MockResponse($problemJson, [
+            'http_code' => 401,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'expired-jwt', $httpClient);
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid or expired JWT token');
+
+        $admin->logout();
+    }
+
     public function testPingSuccessReturnsTrue(): void
     {
         $responseBody = json_encode(['status' => 'pong'], JSON_THROW_ON_ERROR);
