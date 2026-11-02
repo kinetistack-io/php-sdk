@@ -6,7 +6,7 @@ Thank you for contributing to the KinetiStack PHP SDK! This document provides gu
 
 ## 1. Development Environment
 
-The SDK is framework-agnostic, supporting PHP 8.1 through 8.4. Local development is fully containerized using Docker Compose and managed via `make`.
+The SDK is framework-agnostic, supporting PHP 8.2 through 8.5. Local development is fully containerized using Docker Compose and managed via `make`.
 
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) & Docker Compose
@@ -16,10 +16,10 @@ The SDK is framework-agnostic, supporting PHP 8.1 through 8.4. Local development
 Run all commands from the `php-sdk/` directory:
 
 ```bash
-# Build the primary PHP 8.3 container
+# Build the primary PHP 8.4 container
 make build
 
-# Build all PHP version matrix containers (8.1, 8.2, 8.3, 8.4)
+# Build all PHP version matrix containers (8.2, 8.3, 8.4, 8.5)
 make build-all
 
 # Install dependencies in the container
@@ -66,7 +66,7 @@ All unit and functional tests must pass:
 # Run PHPUnit tests
 make test
 
-# Run PHPUnit tests across all supported PHP versions (8.1, 8.2, 8.3, 8.4)
+# Run PHPUnit tests across all supported PHP versions (8.2, 8.3, 8.4, 8.5)
 make test-all
 
 # Run PHPUnit with code coverage summary via pcov
@@ -92,7 +92,7 @@ make check
    - Bug fixes: `fix/<short-description>`
 3. **Pull Requests**:
    - Never push directly to `main` without a pull request.
-   - GitHub Actions CI automatically runs `.github/workflows/ci.yml` across PHP 8.1, 8.2, 8.3, and 8.4, validating tests, code style, and static analysis.
+   - GitHub Actions CI automatically runs `.github/workflows/ci.yml` across PHP 8.2, 8.3, 8.4, and 8.5, validating tests, code style, and static analysis.
    - Ensure all CI checks pass before requesting review and merging.
 
 ---
@@ -161,6 +161,6 @@ The automated target performs the following safeguards and actions sequentially:
 Once `v<VERSION>` is pushed to `origin`:
 
 1. **`.github/workflows/release.yml`** is triggered automatically.
-2. It validates the tag across PHP 8.1, 8.2, 8.3, and 8.4 test matrices, code style, and PHPStan.
+2. It validates the tag across PHP 8.2, 8.3, 8.4, and 8.5 test matrices, code style, and PHPStan.
 3. Upon successful validation, it creates the official Release with auto-generated release notes.
 4. If configured, it triggers the Packagist API webhook to update the package index on [packagist.org](https://packagist.org/packages/kinetistack-io/php-sdk).

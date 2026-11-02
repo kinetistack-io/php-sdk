@@ -435,7 +435,7 @@ make install
 # Run PHPUnit tests
 make test
 
-# Run tests across PHP matrix (8.1, 8.2, 8.3, 8.4)
+# Run tests across PHP matrix (8.2, 8.3, 8.4, 8.5)
 make test-all
 
 # Static analysis (PHPStan)
@@ -462,9 +462,9 @@ make shell
 
 The SDK uses automated CI/CD workflows for testing, static analysis, and releases:
 
-- **CI Pipeline (`.github/workflows/ci.yml`)**: Runs on pushes and pull requests targeting `main`. Executes test matrices across PHP 8.1, 8.2, 8.3, and 8.4, followed by PHP CS Fixer and PHPStan static analysis.
+- **CI Pipeline (`.github/workflows/ci.yml`)**: Runs on pushes and pull requests targeting `main`. Executes test matrices across PHP 8.2, 8.3, 8.4, and 8.5, followed by PHP CS Fixer and PHPStan static analysis.
 - **Release Pipeline (`.github/workflows/release.yml`)**: Triggered automatically when a version tag matching `v*.*.*` (e.g., `v1.0.0`) is pushed to the repository.
-  1. **Validation (`validate`)**: Checks platform requirements via `composer check-platform-reqs` and runs PHPUnit across PHP 8.1, 8.2, 8.3, and 8.4.
+  1. **Validation (`validate`)**: Checks platform requirements via `composer check-platform-reqs` and runs PHPUnit across PHP 8.2, 8.3, 8.4, and 8.5.
   2. **Quality Checks (`quality-checks`)**: Ensures code conforms to PSR-12 and passes PHPStan Level 9 static analysis.
   3. **Release (`release`)**: Requires both `validate` and `quality-checks` to pass. Publishes a GitHub Release (with auto-generated release notes and automatic pre-release detection) and triggers a synchronization webhook to the Packagist API via authenticated cURL.
 

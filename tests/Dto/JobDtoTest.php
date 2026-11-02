@@ -215,8 +215,10 @@ class JobDtoTest extends TestCase
         $this->assertArrayNotHasKey('completed_at', $array);
         $this->assertSame('https://api.test/jobs/job-100', $array['poll_url']);
         $this->assertIsArray($array['results']);
-        $this->assertSame('img-1', $array['results'][0]['external_id']);
-        $this->assertSame('Photo', $array['results'][0]['alt_text']);
+        $firstResult = $array['results'][0];
+        $this->assertIsArray($firstResult);
+        $this->assertSame('img-1', $firstResult['external_id']);
+        $this->assertSame('Photo', $firstResult['alt_text']);
     }
 
     public function testToArrayOmitsNullOptionalFields(): void

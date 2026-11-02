@@ -10,7 +10,7 @@ help: ## Show this help message
 build: ## Build the default PHP Docker image
 	docker compose build php
 
-build-all: ## Build all PHP matrix images (8.1, 8.2, 8.3, 8.4)
+build-all: ## Build all PHP matrix images (8.2, 8.3, 8.4, 8.5)
 	docker compose build
 
 install: ## Install composer dependencies
@@ -25,11 +25,11 @@ composer: ## Run arbitrary composer commands (e.g. make composer cmd="require sy
 test: ## Run PHPUnit tests
 	$(DC) vendor/bin/phpunit
 
-test-all: ## Run PHPUnit tests across all PHP versions (8.1, 8.2, 8.3, 8.4)
-	docker compose run --rm php81 vendor/bin/phpunit
+test-all: ## Run PHPUnit tests across all PHP versions (8.2, 8.3, 8.4, 8.5)
 	docker compose run --rm php82 vendor/bin/phpunit
 	docker compose run --rm php83 vendor/bin/phpunit
 	docker compose run --rm php84 vendor/bin/phpunit
+	docker compose run --rm php85 vendor/bin/phpunit
 
 coverage: ## Run PHPUnit with code coverage
 	$(DC) vendor/bin/phpunit --coverage-text

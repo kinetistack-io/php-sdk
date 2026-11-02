@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING**: Dropped support for PHP 8.1 (minimum required PHP is now >= 8.2) (PHPSDK-70).
+
+### Changed
+- Upgraded PHPUnit from `^10.5 || ^11.3` to `^11.5` (PHPSDK-70).
+- Added PHP 8.5 to CI/CD and Docker test matrices (PHPSDK-70).
+
 ## [1.0.12] - 2026-10-27
 
 ### Security

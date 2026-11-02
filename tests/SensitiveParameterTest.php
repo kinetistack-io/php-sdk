@@ -116,12 +116,8 @@ class SensitiveParameterTest extends TestCase
         );
     }
 
-    public function testStackTraceRedactsSensitiveParameterOnPhp82(): void
+    public function testStackTraceRedactsSensitiveParameter(): void
     {
-        if (\PHP_VERSION_ID < 80200) {
-            $this->markTestSkipped('Native SensitiveParameterValue stack trace redaction requires PHP 8.2+.');
-        }
-
         $previousIgnoreArgs = ini_set('zend.exception_ignore_args', '0');
 
         try {

@@ -81,9 +81,13 @@ final class Psr18TransportResponseTest extends TestCase
 
         $response = new Psr18TransportResponse($psrResponse);
 
-        $this->assertSame('cached content body', $response->getContent());
-        $this->assertSame('cached content body', $response->getContent());
-        $this->assertSame('cached content body', $response->getContent());
+        $first = $response->getContent();
+        $second = $response->getContent();
+        $third = $response->getContent();
+
+        $this->assertSame('cached content body', $first);
+        $this->assertSame($first, $second);
+        $this->assertSame($first, $third);
     }
 
     public function testGetContentThrowsTransportExceptionWhenStreamThrows(): void

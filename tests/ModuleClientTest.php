@@ -53,6 +53,7 @@ class ModuleClientTest extends TestCase
         $modules = $moduleClient->list();
 
         $this->assertCount(3, $modules);
+        /** @phpstan-ignore method.alreadyNarrowedType */
         $this->assertContainsOnlyInstancesOf(ModuleDto::class, $modules);
 
         $this->assertSame('vision', $modules[0]->identifier);
