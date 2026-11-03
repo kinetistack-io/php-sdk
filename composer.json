@@ -27,12 +27,12 @@
     },
     "suggest": {
         "symfony/http-client": "To use Symfony's HTTP Client (^6.4 || ^7.0 || ^8.0)",
-        "guzzlehttp/guzzle": "To use Guzzle HTTP Client (^7.8)"
+        "guzzlehttp/guzzle": "To use Guzzle HTTP Client (^7.8 || ^8.0)"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.60",
-        "guzzlehttp/guzzle": "^7.8",
-        "guzzlehttp/psr7": "^2.6",
+        "guzzlehttp/guzzle": "^7.8 || ^8.0",
+        "guzzlehttp/psr7": "^2.6 || ^3.0",
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^11.5",
         "symfony/http-client": "^6.4 || ^7.0 || ^8.0",

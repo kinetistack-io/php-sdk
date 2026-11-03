@@ -14,6 +14,7 @@ use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Transport\SseParser;
 use KinetiStack\Sdk\Transport\TransportHelperTrait;
 use KinetiStack\Sdk\Transport\TransportInterface;
+use KinetiStack\Sdk\Transport\TransportResponseInterface;
 
 class RagClient implements RagClientInterface
 {
@@ -62,6 +63,10 @@ class RagClient implements RagClientInterface
         $response = $this->transport->request($httpMethod, '/api/v1/rag/query', [
             'json' => $query->toArray(),
         ]);
+
+        if ($this->isEventStreamResponse($response)) {
+            return $this->aggregateSseResponse($response);
+        }
 
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
@@ -125,5 +130,66 @@ class RagClient implements RagClientInterface
         $parser = new SseParser();
 
         yield from $parser->parse($response->getStreamIterator());
+    }
+
+    private function isEventStreamResponse(TransportResponseInterface $response): bool
+    {
+        $hasContentType = false;
+
+        foreach ($response->getHeaders() as $name => $values) {
+            if (strtolower($name) !== 'content-type') {
+                continue;
+            }
+
+            $hasContentType = true;
+
+            foreach ($values as $value) {
+                if (str_contains(strtolower($value), 'text/event-stream')) {
+                    return true;
+                }
+            }
+        }
+
+        if ($hasContentType) {
+            return false;
+        }
+
+        $trimmed = ltrim($response->getContent());
+
+        return $trimmed !== ''
+            && (
+                str_starts_with($trimmed, 'data:')
+                || str_starts_with($trimmed, 'event:')
+                || str_starts_with($trimmed, ':')
+            );
+    }
+
+    private function aggregateSseResponse(TransportResponseInterface $response): RagSynthesisDto
+    {
+        $parser = new SseParser();
+        $answer = '';
+        $seenCitations = [];
+        $citations = [];
+        $tokensConsumed = null;
+
+        foreach ($parser->parse([$response->getContent()]) as $chunk) {
+            $answer .= $chunk->text;
+            foreach ($chunk->citations as $citation) {
+                if (!isset($seenCitations[$citation])) {
+                    $seenCitations[$citation] = true;
+                    $citations[] = $citation;
+                }
+            }
+            if ($chunk->tokensConsumed !== null) {
+                $tokensConsumed = $chunk->tokensConsumed;
+            }
+        }
+
+        return new RagSynthesisDto(
+            answer: $answer,
+            citations: $citations,
+            successful: true,
+            tokensConsumed: $tokensConsumed,
+        );
     }
 }

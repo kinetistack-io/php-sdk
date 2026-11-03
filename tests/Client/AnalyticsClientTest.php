@@ -299,7 +299,7 @@ class AnalyticsClientTest extends TestCase
 
     public function testAnalyticsClientWithGuzzlePsr18(): void
     {
-        /** @var list<array{request: RequestInterface, response: GuzzleResponse}> $container */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $container */
         $container = [];
         $history = Middleware::history($container);
 

@@ -84,7 +84,7 @@ class TransportGeneralizationTest extends TestCase
 
     public function testPsr18TransportWithCustomAuthHeader(): void
     {
-        /** @var list<array{request: RequestInterface}> $container */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $container */
         $container = [];
         $history = Middleware::history($container);
 
@@ -112,7 +112,7 @@ class TransportGeneralizationTest extends TestCase
 
     public function testPsr18TransportWithClean5ArgConstructor(): void
     {
-        /** @var list<array{request: RequestInterface}> $container */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $container */
         $container = [];
         $history = Middleware::history($container);
 

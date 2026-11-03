@@ -88,7 +88,7 @@ make check
    All development takes place within this repository. Never commit changes or artifacts intended for other projects.
 2. **Branch Naming**:
    Create branches branching from `main`:
-   - Features: `feature/<short-description>` (e.g. `feature/PHPSDK-17-local-release-automation`)
+   - Features: `feature/<short-description>` (e.g. `feature/local-release-automation`)
    - Bug fixes: `fix/<short-description>`
 3. **Pull Requests**:
    - Never push directly to `main` without a pull request.
@@ -116,7 +116,7 @@ Releases must follow [Semantic Versioning](https://semver.org/) (`X.Y.Z`).
 3. Ensure your local working tree is clean (`git status` shows no uncommitted changes).
 4. Run the release command specifying the target `VERSION`:
    ```bash
-   make release VERSION=1.2.4
+   make release VERSION=2.0.0
    ```
 
 ### What `make release` Does Under the Hood
@@ -125,7 +125,7 @@ The automated target performs the following safeguards and actions sequentially:
 
 1. **Input Validation**:
    - Verifies that `VERSION` was provided.
-   - Strips optional `v` prefix and validates that the version strictly adheres to SemVer (e.g. `1.2.4` or `1.2.4-rc.1`).
+   - Strips optional `v` prefix and validates that the version strictly adheres to SemVer (e.g. `2.0.0` or `2.0.0-rc.1`).
 2. **Pre-flight Git Safety Checks**:
    - Confirms that the Git working directory is clean (`git status --porcelain`).
    - Ensures execution is on the `main` branch (override with `ALLOW_BRANCH=1` if necessary).
@@ -146,12 +146,12 @@ The automated target performs the following safeguards and actions sequentially:
 - **Dry Run**:
   To test the validation, `make check`, strict composer validation, and local tag creation without pushing to remote:
   ```bash
-  make release VERSION=1.2.4 DRY_RUN=1
+  make release VERSION=2.0.0 DRY_RUN=1
   ```
 - **Allow Non-Main Branch**:
   To allow releasing from a branch other than `main` (for hotfixes or dry-run testing):
   ```bash
-  make release VERSION=1.2.4 ALLOW_BRANCH=1
+  make release VERSION=2.0.0 ALLOW_BRANCH=1
   ```
 
 ---

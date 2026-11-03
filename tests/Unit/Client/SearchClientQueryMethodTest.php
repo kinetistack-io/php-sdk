@@ -19,6 +19,7 @@ use KinetiStack\Sdk\Dto\RagSynthesisDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
+use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\KinetiClient;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
@@ -143,7 +144,7 @@ class SearchClientQueryMethodTest extends TestCase
 
     public function testScenario1SearchDispatchesHttpQueryByDefaultWithGuzzlePsr18(): void
     {
-        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface}> $history */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $history */
         $history = [];
         $mock = new MockHandler([
             new GuzzleResponse(200, ['Content-Type' => 'application/json'], $this->createSampleSearchResponseBody()),
@@ -251,7 +252,7 @@ class SearchClientQueryMethodTest extends TestCase
 
     public function testScenario2RagDispatchesHttpQueryByDefaultWithGuzzlePsr18(): void
     {
-        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface}> $history */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $history */
         $history = [];
         $mock = new MockHandler([
             new GuzzleResponse(200, ['Content-Type' => 'application/json'], $this->createSampleRagResponseBody()),
@@ -295,7 +296,7 @@ class SearchClientQueryMethodTest extends TestCase
 
     public function testScenario2RagStreamMethodDispatchesHttpQuery(): void
     {
-        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface}> $history */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $history */
         $history = [];
         $mock = new MockHandler([
             new GuzzleResponse(200, ['Content-Type' => 'text/event-stream'], $this->createSampleSseStreamBody()),
@@ -446,6 +447,62 @@ class SearchClientQueryMethodTest extends TestCase
         $this->assertSame(150, $result->tokensConsumed);
     }
 
+    public function testRagQueryAggregatesSseEventStreamResponseIntoRagSynthesisDto(): void
+    {
+        $sseBody = "data: {\"chunk\":\"Perovskite \"}\n\n"
+            . "data: {\"chunk\":\"solar cells.\"}\n\n"
+            . "data: {\"is_done\":true,\"citations\":[\"doc:1\",\"doc:2\",\"123\"],\"tokens_consumed\":42}\n\n";
+
+        $mockResponse = new MockResponse($sseBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $result = $client->rag()->query('What are the key advantages of perovskite solar cells?');
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertSame('Perovskite solar cells.', $result->answer);
+        $this->assertSame(['doc:1', 'doc:2', '123'], $result->citations);
+        $this->assertTrue($result->successful);
+        $this->assertSame(42, $result->tokensConsumed);
+        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
+    }
+
+    public function testRagQueryAggregatesSseBodyWithoutExplicitContentTypeHeader(): void
+    {
+        $sseBody = "data: {\"chunk\":\"Aggregated \"}\n\n"
+            . "data: {\"chunk\":\"answer.\",\"citations\":[\"doc:10\"]}\n\n"
+            . "data: {\"is_done\":true,\"citations\":[\"doc:10\",\"doc:20\"]}\n\n";
+
+        $mock = new MockHandler([
+            new GuzzleResponse(200, [], $sseBody),
+        ]);
+        $guzzle = new GuzzleClient(['handler' => HandlerStack::create($mock)]);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $guzzle);
+
+        $result = $client->rag()->query('Unheadered SSE stream');
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertSame('Aggregated answer.', $result->answer);
+        $this->assertSame(['doc:10', 'doc:20'], $result->citations);
+        $this->assertTrue($result->successful);
+    }
+
+    public function testRagQueryDoesNotSniffBodyAsSseWhenNonEventStreamContentTypeIsPresent(): void
+    {
+        $mockResponse = new MockResponse(':malformed json body', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $this->expectException(TransportException::class);
+        $client->rag()->query('Should fail JSON decoding instead of treating as SSE comment');
+    }
+
     // =========================================================================
     // Scenario 3: Fallback configuration forces POST method for Search and RAG
     // =========================================================================
@@ -472,7 +529,7 @@ class SearchClientQueryMethodTest extends TestCase
 
     public function testScenario3FallbackForcesPostForSearchWithGuzzlePsr18(): void
     {
-        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface}> $history */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $history */
         $history = [];
         $mock = new MockHandler([
             new GuzzleResponse(200, ['Content-Type' => 'application/json'], $this->createSampleSearchResponseBody()),
@@ -513,7 +570,7 @@ class SearchClientQueryMethodTest extends TestCase
 
     public function testScenario3FallbackForcesPostForRagWithGuzzlePsr18(): void
     {
-        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface}> $history */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $history */
         $history = [];
         $mock = new MockHandler([
             new GuzzleResponse(200, ['Content-Type' => 'application/json'], $this->createSampleRagResponseBody()),

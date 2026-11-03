@@ -27,7 +27,7 @@ class AdminClientPsr18Test extends TestCase
 {
     public function testAdminClientWithGuzzlePsr18(): void
     {
-        /** @var list<array{request: RequestInterface, response: Response}> $container */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $container */
         $container = [];
         $history = Middleware::history($container);
 
@@ -112,7 +112,7 @@ class AdminClientPsr18Test extends TestCase
 
     public function testRefreshTokenWithPsr18(): void
     {
-        /** @var list<array{request: RequestInterface, response: Response}> $container */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $container */
         $container = [];
         $history = Middleware::history($container);
 
@@ -166,7 +166,7 @@ class AdminClientPsr18Test extends TestCase
 
     public function testLogoutSuccessWithPsr18(): void
     {
-        /** @var list<array{request: RequestInterface, response: Response}> $container */
+        /** @var array<int, array{request: RequestInterface, response: \Psr\Http\Message\ResponseInterface|null, error: mixed, options: array<string, mixed>}> $container */
         $container = [];
         $history = Middleware::history($container);
 

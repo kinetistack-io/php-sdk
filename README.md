@@ -236,11 +236,11 @@ $queryClient = $postClient->withConfiguration(['use_http_query_method' => true])
 
 #### API Key Scopes
 
-RAG streaming and semantic search enforce granular API key scopes:
-- **RAG synthesis** (`searchStream()` calling `/api/v1/search/rag`) requires an API key scoped to `rag` or `all`.
-- **Standard vector search** (`search()` and `searchAll()` calling `/api/v1/search/query`) requires `search` or `all`.
+RAG synthesis and semantic search enforce granular API key scopes:
+- **RAG synthesis** (`$client->rag()->query()`, `$client->rag()->stream()`, `$client->search()->stream()`, and `$client->searchStream()` calling `/api/v1/rag/query` or `/api/v1/search/rag`) requires an API key scoped to `rag` or `all`.
+- **Standard vector search** (`$client->search()->query()`, `$client->search()->all()`, `$client->search($query)`, and `$client->searchAll()` calling `/api/v1/search/query`) requires `search` or `all`.
 
-Calling RAG endpoints with a `search`-only key returns an HTTP `403 Forbidden` response. Because `searchStream()` returns a lazy PHP generator, the HTTP request executes on the first stream iteration and throws an `AuthorizationException` (code `403`) before any chunks are yielded:
+Calling RAG endpoints with a `search`-only key returns an HTTP `403 Forbidden` response. Because `searchStream()`, `$client->search()->stream()`, and `$client->rag()->stream()` return a lazy PHP generator, the HTTP request executes on the first stream iteration and throws an `AuthorizationException` (code `403`) before any chunks are yielded:
 
 ```php
 use KinetiStack\Sdk\Exception\AuthorizationException;
@@ -257,6 +257,22 @@ try {
     echo "Authorization error (HTTP {$e->getCode()}): {$e->getMessage()}\n";
 }
 ```
+
+#### Upgrading from v1.x to v2.0
+
+When upgrading from `kinetistack-io/php-sdk` `^1.0` to `^2.0`:
+
+1. **Minimum PHP Version (`>= 8.2`)**: PHP 8.1 support has been dropped. Ensure your runtime environment runs PHP 8.2, 8.3, 8.4, or 8.5.
+2. **RFC 10008 HTTP `QUERY` Default**: Vector search (`/api/v1/search/query`) and RAG (`/api/v1/rag/query`, `/api/v1/search/rag`) now dispatch HTTP `QUERY` requests by default instead of `POST`. If your network passes through legacy proxies or middleboxes that block `QUERY`, pass `['use_http_query_method' => false]` in `$options` or via `Configuration`.
+3. **Sub-Client Accessors (`$client->search()` & `$client->rag()`)**:
+   - Calling `$client->search($query)` with a `SearchQueryDto` or `string` continues to execute the search directly and return `SearchResponseDto` (backward-compatible).
+   - Calling `$client->search()` without arguments returns `SearchClientInterface` (`query()`, `search()`, `all()`, `stream()`).
+   - Calling `$client->rag()` returns `RagClientInterface` (`query()`, `stream()`).
+   - Custom implementations of `KinetiClientInterface` must update their `search()` signature to `search(SearchQueryDto|string|null $query = null): SearchClientInterface|SearchResponseDto` and implement `rag()`, `getConfiguration()`, and `withConfiguration()`.
+4. **Removed Deprecated v1 Symbols**:
+   - Use `SearchQueryDto::withOffset()`, `setOffset()`, and `getOffset()` instead of the removed `$page`, `withPage()`, `setPage()`, and `getPage()`.
+   - Catch `RateLimitExceededException` instead of the removed `RateLimitException`.
+   - Import `KinetiClientInterface`, `AdminClientInterface`, `AnalyticsClientInterface`, and `ModuleClientInterface` from the root `KinetiStack\Sdk` namespace.
 
 #### Document ACL & Role Assertions
 
@@ -503,7 +519,7 @@ make check
 make composer cmd="require symfony/yaml"
 
 # Prepare and publish a release (runs verification checks, validates composer strictly, tags, pushes)
-make release VERSION=1.2.4
+make release VERSION=2.0.0
 
 # Open container shell
 make shell
@@ -514,7 +530,7 @@ make shell
 The SDK uses automated CI/CD workflows for testing, static analysis, and releases:
 
 - **CI Pipeline (`.github/workflows/ci.yml`)**: Runs on pushes and pull requests targeting `main`. Executes test matrices across PHP 8.2, 8.3, 8.4, and 8.5, followed by PHP CS Fixer and PHPStan static analysis.
-- **Release Pipeline (`.github/workflows/release.yml`)**: Triggered automatically when a version tag matching `v*.*.*` (e.g., `v1.0.0`) is pushed to the repository.
+- **Release Pipeline (`.github/workflows/release.yml`)**: Triggered automatically when a version tag matching `v*.*.*` (e.g., `v2.0.0`) is pushed to the repository.
   1. **Validation (`validate`)**: Checks platform requirements via `composer check-platform-reqs` and runs PHPUnit across PHP 8.2, 8.3, 8.4, and 8.5.
   2. **Quality Checks (`quality-checks`)**: Ensures code conforms to PSR-12 and passes PHPStan Level 9 static analysis.
   3. **Release (`release`)**: Requires both `validate` and `quality-checks` to pass. Publishes a GitHub Release (with auto-generated release notes and automatic pre-release detection) and triggers a synchronization webhook to the Packagist API via authenticated cURL.

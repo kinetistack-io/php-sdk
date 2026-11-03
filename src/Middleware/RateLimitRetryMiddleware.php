@@ -16,7 +16,7 @@ class RateLimitRetryMiddleware
     public const DEFAULT_BASE_DELAY_MS = 1000;
     public const DEFAULT_MAX_DELAY_MS = 60000;
 
-    /** @var (callable(int, RequestInterface, ?ResponseInterface, ?\Throwable): bool)|null */
+    /** @var (callable(int, RequestInterface, ?ResponseInterface, mixed=): bool)|null */
     private $decider;
 
     /** @var (callable(int, ?ResponseInterface, ?RequestInterface): int)|null */
@@ -24,7 +24,7 @@ class RateLimitRetryMiddleware
 
     /**
      * @param array<int, int> $retryStatusCodes
-     * @param (callable(int, RequestInterface, ?ResponseInterface, ?\Throwable): bool)|null $decider
+     * @param (callable(int, RequestInterface, ?ResponseInterface, mixed=): bool)|null $decider
      * @param (callable(int, ?ResponseInterface, ?RequestInterface): int)|null $delay
      */
     public function __construct(
@@ -46,7 +46,7 @@ class RateLimitRetryMiddleware
 
     /**
      * @param array<int, int> $retryStatusCodes
-     * @param (callable(int, RequestInterface, ?ResponseInterface, ?\Throwable): bool)|null $decider
+     * @param (callable(int, RequestInterface, ?ResponseInterface, mixed=): bool)|null $decider
      * @param (callable(int, ?ResponseInterface, ?RequestInterface): int)|null $delay
      */
     public static function create(
@@ -71,7 +71,7 @@ class RateLimitRetryMiddleware
 
     /**
      * @param array<int, int> $retryStatusCodes
-     * @param (callable(int, RequestInterface, ?ResponseInterface, ?\Throwable): bool)|null $decider
+     * @param (callable(int, RequestInterface, ?ResponseInterface, mixed=): bool)|null $decider
      * @param (callable(int, ?ResponseInterface, ?RequestInterface): int)|null $delay
      */
     public static function factory(
@@ -96,11 +96,14 @@ class RateLimitRetryMiddleware
 
     public function __invoke(callable $handler): RetryMiddleware
     {
-        return Middleware::retry($this->buildDecider(), $this->buildDelay())($handler);
+        /** @var RetryMiddleware $middleware */
+        $middleware = Middleware::retry($this->buildDecider(), $this->buildDelay())($handler);
+
+        return $middleware;
     }
 
     /**
-     * @return callable(int, RequestInterface, ?ResponseInterface, ?\Throwable): bool
+     * @return callable(int, RequestInterface, ?ResponseInterface, mixed=): bool
      */
     public function buildDecider(): callable
     {
@@ -112,7 +115,7 @@ class RateLimitRetryMiddleware
             int $retries,
             RequestInterface $request,
             ?ResponseInterface $response = null,
-            ?\Throwable $exception = null
+            mixed $exception = null
         ): bool {
             if ($retries >= $this->maxRetries) {
                 return false;
