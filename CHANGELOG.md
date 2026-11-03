@@ -10,9 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **BREAKING**: Dropped support for PHP 8.1 (minimum required PHP is now >= 8.2) (PHPSDK-70).
 
+### Added
+- Implemented RFC 10008 HTTP `QUERY` method support by default for semantic search and RAG operations (PHPSDK-71).
+- Added `Configuration` class (`KinetiStack\Sdk\Configuration`) with `useHttpQueryMethod(): bool`, immutable `withHttpQueryMethod(bool)`, and factory `Configuration::fromOptions()` to control HTTP QUERY vs. POST fallback (PHPSDK-71).
+- Added `SearchClient` and `SearchClientInterface` (`KinetiStack\Sdk\Client\SearchClientInterface`, `SearchClient`) providing `query()`, `search()`, `all()`, and `stream()` methods (PHPSDK-71).
+- Added `RagClient` and `RagClientInterface` (`KinetiStack\Sdk\Client\RagClientInterface`, `RagClient`) providing unified `query()` and `stream()` methods (PHPSDK-71).
+- Added `$client->search(): SearchClientInterface` accessor to `KinetiClient` and `KinetiClientInterface` with backwards-compatible execution when passed `$query` (PHPSDK-71).
+- Added `$client->rag(): RagClientInterface` accessor to `KinetiClient` and `KinetiClientInterface` (PHPSDK-71).
+- Added `$client->getConfiguration(): Configuration` and `$client->withConfiguration(...)` to `KinetiClient` and `KinetiClientInterface` (PHPSDK-71).
+- Added PHP 8.5 to CI/CD and Docker testing matrices (`php82`, `php83`, `php84`, `php85`) (PHPSDK-70, PHPSDK-71).
+
 ### Changed
 - Upgraded PHPUnit from `^10.5 || ^11.3` to `^11.5` (PHPSDK-70).
-- Added PHP 8.5 to CI/CD and Docker test matrices (PHPSDK-70).
+- Vector search and RAG queries default to RFC 10008 HTTP `QUERY` method instead of `POST`. When running behind legacy corporate middleboxes or proxies that reject `QUERY`, pass `['use_http_query_method' => false]` in options or configure `Configuration` (PHPSDK-71).
+- Updated `KinetiClientInterface::search()` signature to `search(SearchQueryDto|string|null $query = null): SearchClientInterface|SearchResponseDto` with conditional return types (PHPSDK-71).
 
 ## [1.0.12] - 2026-10-27
 

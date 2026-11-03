@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk;
 
 use KinetiStack\Sdk\Client\ClientHelperTrait;
+use KinetiStack\Sdk\Client\RagClient;
+use KinetiStack\Sdk\Client\RagClientInterface;
+use KinetiStack\Sdk\Client\SearchClient;
+use KinetiStack\Sdk\Client\SearchClientInterface;
 use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
@@ -24,7 +28,6 @@ use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Transport\HttpTransport;
-use KinetiStack\Sdk\Transport\SseParser;
 use KinetiStack\Sdk\Transport\TransportHelperTrait;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
@@ -39,26 +42,38 @@ class KinetiClient implements KinetiClientInterface
     public const DEFAULT_POLL_INTERVAL_SECONDS = 2;
     public const DEFAULT_MAX_POLL_INTERVAL_SECONDS = 10;
     public const DEFAULT_TIMEOUT_SECONDS = 60;
-    public const MAX_SEARCH_OFFSET = 1000;
+    public const MAX_SEARCH_OFFSET = SearchClient::MAX_SEARCH_OFFSET;
 
+    private readonly string $apiHost;
+    private string $apiKey;
+    private readonly HttpClientInterface|ClientInterface|TransportInterface|null $httpClient;
     private TransportInterface $transport;
+    private Configuration $configuration;
     private ?ModuleClientInterface $moduleClient = null;
+    private ?SearchClientInterface $searchClient = null;
+    private ?RagClientInterface $ragClient = null;
 
     /**
      * @param HttpClientInterface|ClientInterface|TransportInterface|null $httpClient
-     * @param array<string, mixed> $options Default HTTP options (e.g., timeout, headers)
+     * @param Configuration|array<string, mixed> $options Default HTTP options and SDK configuration
      */
     public function __construct(
         string $apiHost,
         #[\SensitiveParameter]
         string $apiKey,
         HttpClientInterface|ClientInterface|TransportInterface|null $httpClient = null,
-        array $options = []
+        Configuration|array $options = []
     ) {
+        $this->apiHost = $apiHost;
+        $this->apiKey = $apiKey;
+        $this->httpClient = $httpClient;
+        $this->configuration = Configuration::fromOptions($options);
+        $httpOptions = $this->configuration->getHttpOptions();
+
         if ($httpClient instanceof TransportInterface) {
             $this->transport = $apiKey !== '' ? $httpClient->withAuthHeaderValue($apiKey) : $httpClient;
         } else {
-            $this->transport = new HttpTransport($apiHost, 'X-Kineti-Key', $apiKey, $httpClient, $options);
+            $this->transport = new HttpTransport($apiHost, 'X-Kineti-Key', $apiKey, $httpClient, $httpOptions);
         }
     }
 
@@ -68,8 +83,44 @@ class KinetiClient implements KinetiClientInterface
     public function withApiKey(#[\SensitiveParameter] string $apiKey): static
     {
         $clone = clone $this;
+        $clone->apiKey = $apiKey;
         $clone->moduleClient = null;
+        $clone->searchClient = null;
+        $clone->ragClient = null;
         $clone->transport = $this->transport->withAuthHeaderValue($apiKey);
+
+        return $clone;
+    }
+
+    /**
+     * Return a new immutable instance configured with the specified SDK configuration.
+     *
+     * @param Configuration|array<string, mixed> $configuration
+     */
+    public function withConfiguration(Configuration|array $configuration): static
+    {
+        $clone = clone $this;
+        if (is_array($configuration)) {
+            $mergedOptions = array_merge($this->configuration->toArray(), $configuration);
+            $clone->configuration = Configuration::fromOptions($mergedOptions);
+        } else {
+            $clone->configuration = $configuration;
+        }
+
+        $clone->moduleClient = null;
+        $clone->searchClient = null;
+        $clone->ragClient = null;
+
+        $newHttpOptions = $clone->configuration->getHttpOptions();
+        if ($newHttpOptions !== $this->configuration->getHttpOptions() && !$this->httpClient instanceof TransportInterface) {
+            $clone->transport = new HttpTransport(
+                $this->apiHost,
+                'X-Kineti-Key',
+                $this->apiKey,
+                $this->httpClient,
+                $newHttpOptions
+            );
+        }
 
         return $clone;
     }
@@ -77,6 +128,27 @@ class KinetiClient implements KinetiClientInterface
     public function getTransport(): TransportInterface
     {
         return $this->transport;
+    }
+
+    /**
+     * Get the SDK configuration.
+     */
+    public function getConfiguration(): Configuration
+    {
+        return $this->configuration;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info = get_object_vars($this);
+        if ($this->apiKey !== '') {
+            $info['apiKey'] = '[REDACTED]';
+        }
+
+        return $info;
     }
 
     /**
@@ -435,24 +507,33 @@ class KinetiClient implements KinetiClientInterface
     }
 
     /**
-     * Execute a semantic vector search and optional RAG synthesis query.
+     * Access search client operations or execute a search query.
+     *
+     * When called without arguments ($query is null), returns SearchClientInterface.
+     * When called with $query, executes the search query for backwards compatibility.
+     *
+     * @param SearchQueryDto|string|null $query
+     * @return ($query is null ? SearchClientInterface : SearchResponseDto)
      *
      * @throws KinetiException
      */
-    public function search(SearchQueryDto|string $query): SearchResponseDto
+    public function search(SearchQueryDto|string|null $query = null): SearchClientInterface|SearchResponseDto
     {
-        if (is_string($query)) {
-            $query = SearchQueryDto::create($query);
+        $client = $this->searchClient ??= new SearchClient($this->transport, $this->configuration);
+
+        if ($query === null) {
+            return $client;
         }
 
-        $response = $this->transport->request('POST', '/api/v1/search/query', [
-            'json' => $query->toArray(),
-        ]);
+        return $client->query($query);
+    }
 
-        /** @var array<string, mixed> $data */
-        $data = $response->toArray();
-
-        return SearchResponseDto::fromArray($data);
+    /**
+     * Access RAG client operations.
+     */
+    public function rag(): RagClientInterface
+    {
+        return $this->ragClient ??= new RagClient($this->transport, $this->configuration);
     }
 
     /**
@@ -465,46 +546,7 @@ class KinetiClient implements KinetiClientInterface
      */
     public function searchAll(SearchQueryDto|string $query): \Generator
     {
-        if (is_string($query)) {
-            $query = SearchQueryDto::create($query);
-        }
-
-        $limit = max(1, $query->limit ?? 10);
-        $offset = max(0, $query->offset ?? 0);
-
-        if ($offset > self::MAX_SEARCH_OFFSET) {
-            return;
-        }
-
-        $baseQuery = $query->withLimit($limit);
-
-        while (true) {
-            $response = $this->search($baseQuery->withOffset($offset));
-
-            $count = count($response->results);
-            foreach ($response->results as $result) {
-                yield $result;
-            }
-
-            if ($count === 0) {
-                break;
-            }
-
-            if ($response->hasMorePresent && !$response->hasMore) {
-                break;
-            }
-
-            if ($count < $limit) {
-                break;
-            }
-
-            $nextOffset = $response->nextOffset ?? ($offset + $limit);
-            if ($nextOffset <= $offset || $nextOffset > self::MAX_SEARCH_OFFSET) {
-                break;
-            }
-
-            $offset = $nextOffset;
-        }
+        return $this->search()->all($query);
     }
 
     /**
@@ -527,24 +569,7 @@ class KinetiClient implements KinetiClientInterface
     {
         $this->validatePath($path);
 
-        return $this->doSearchStream($query, $path);
-    }
-
-    private function doSearchStream(SearchQueryDto|string $query, string $path): \Generator
-    {
-        if (is_string($query)) {
-            $query = SearchQueryDto::create($query)->withStream(true);
-        } elseif (!$query->isStreaming()) {
-            $query = $query->withStream(true);
-        }
-
-        $response = $this->transport->requestStream('POST', $path, [
-            'json' => $query->toArray(),
-        ]);
-
-        $parser = new SseParser();
-
-        yield from $parser->parse($response->getStreamIterator());
+        return $this->search()->stream($query, $path);
     }
 
     /**

@@ -390,7 +390,7 @@ class SearchPaginationTest extends TestCase
 
         // Then the request payload accurately reflects the requested offset and limit
         $this->assertNotNull($capturedRequest);
-        $this->assertSame('POST', $capturedRequest['method']);
+        $this->assertSame('QUERY', $capturedRequest['method']);
         $this->assertSame('query', $capturedRequest['body']['query']);
         $this->assertSame(50, $capturedRequest['body']['limit']);
         $this->assertSame(50, $capturedRequest['body']['offset']);

@@ -63,7 +63,7 @@ class KinetiClientSearchTest extends TestCase
         $this->assertSame(0.75, $item2->score);
         $this->assertNull($item2->metadata);
 
-        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/search/query', $mockResponse->getRequestUrl());
     }
 
@@ -378,5 +378,22 @@ class KinetiClientSearchTest extends TestCase
         $this->assertSame(10, $response->nextOffset);
         $this->assertSame(10, $response->getNextOffset());
         $this->assertTrue($response->isHasMorePresent());
+    }
+
+    public function testSearchWithPostFallback(): void
+    {
+        $fixture = $this->loadFixture('Search/search_response_with_synthesis_200.json');
+        $mockResponse = new MockResponse($fixture, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client, ['use_http_query_method' => false]);
+
+        $response = $kineti->search('solar energy benefits');
+
+        $this->assertInstanceOf(SearchResponseDto::class, $response);
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/search/query', $mockResponse->getRequestUrl());
     }
 }

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk\Tests\Client;
 
+use KinetiStack\Sdk\Client\RagClient;
+use KinetiStack\Sdk\Client\RagClientInterface;
+use KinetiStack\Sdk\Client\SearchClient;
+use KinetiStack\Sdk\Client\SearchClientInterface;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\KinetiClientInterface;
@@ -30,8 +34,12 @@ class ClientInterfaceTest extends TestCase
     {
         $kinetiRef = new \ReflectionClass(KinetiClientInterface::class);
         $moduleRef = new \ReflectionClass(ModuleClientInterface::class);
+        $searchRef = new \ReflectionClass(SearchClientInterface::class);
+        $ragRef = new \ReflectionClass(RagClientInterface::class);
         $this->assertTrue($kinetiRef->isInterface());
         $this->assertTrue($moduleRef->isInterface());
+        $this->assertTrue($searchRef->isInterface());
+        $this->assertTrue($ragRef->isInterface());
     }
 
     public function testClientClassesImplementInterfaces(): void
@@ -44,6 +52,14 @@ class ClientInterfaceTest extends TestCase
         $moduleClient = $kinetiClient->modules();
         $this->assertInstanceOf(ModuleClient::class, $moduleClient);
         $this->assertInstanceOf(ModuleClientInterface::class, $moduleClient);
+
+        $searchClient = $kinetiClient->search();
+        $this->assertInstanceOf(SearchClient::class, $searchClient);
+        $this->assertInstanceOf(SearchClientInterface::class, $searchClient);
+
+        $ragClient = $kinetiClient->rag();
+        $this->assertInstanceOf(RagClient::class, $ragClient);
+        $this->assertInstanceOf(RagClientInterface::class, $ragClient);
     }
 
     public function testAnalyticsGroupingPascalCaseAliases(): void
@@ -68,5 +84,31 @@ class ClientInterfaceTest extends TestCase
         $clientReturnType = $clientRefMethod->getReturnType();
         $this->assertInstanceOf(\ReflectionNamedType::class, $clientReturnType);
         $this->assertSame(ModuleClientInterface::class, $clientReturnType->getName());
+    }
+
+    public function testFacadeSearchAndRagReturnTypeContracts(): void
+    {
+        $kinetiRef = new \ReflectionMethod(KinetiClientInterface::class, 'search');
+        $this->assertSame('KinetiStack\Sdk\Client\SearchClientInterface|KinetiStack\Sdk\Dto\SearchResponseDto', (string) $kinetiRef->getReturnType());
+
+        $ragRef = new \ReflectionMethod(KinetiClientInterface::class, 'rag');
+        $this->assertSame(RagClientInterface::class, (string) $ragRef->getReturnType());
+
+        $clientSearchRef = new \ReflectionMethod(KinetiClient::class, 'search');
+        $this->assertSame('KinetiStack\Sdk\Client\SearchClientInterface|KinetiStack\Sdk\Dto\SearchResponseDto', (string) $clientSearchRef->getReturnType());
+
+        $clientRagRef = new \ReflectionMethod(KinetiClient::class, 'rag');
+        $this->assertSame(RagClientInterface::class, (string) $clientRagRef->getReturnType());
+    }
+
+    public function testSubClientInterfaceAccessors(): void
+    {
+        $searchRef = new \ReflectionClass(SearchClientInterface::class);
+        $this->assertTrue($searchRef->hasMethod('getTransport'));
+        $this->assertTrue($searchRef->hasMethod('getConfiguration'));
+
+        $ragRef = new \ReflectionClass(RagClientInterface::class);
+        $this->assertTrue($ragRef->hasMethod('getTransport'));
+        $this->assertTrue($ragRef->hasMethod('getConfiguration'));
     }
 }

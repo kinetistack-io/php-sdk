@@ -307,6 +307,9 @@ class SensitiveParameterTest extends TestCase
         $secretApiKey = 'secret-kineti-api-key-999';
         $client = new KinetiClient('https://api.test', $secretApiKey);
 
+        $debugInfo = $client->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['apiKey']);
+
         $printOutput = print_r($client, true);
         $this->assertStringNotContainsString($secretApiKey, $printOutput);
         $this->assertStringContainsString('[REDACTED]', $printOutput);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
+use KinetiStack\Sdk\Client\RagClientInterface;
+use KinetiStack\Sdk\Client\SearchClientInterface;
 use KinetiStack\Sdk\Dto\ContextHintsDto;
 use KinetiStack\Sdk\Dto\DocumentCollectionDto;
 use KinetiStack\Sdk\Dto\DocumentDto;
@@ -35,7 +37,19 @@ interface KinetiClientInterface
      */
     public function withApiKey(#[\SensitiveParameter] string $apiKey): static;
 
+    /**
+     * Return a new immutable instance configured with the specified SDK configuration.
+     *
+     * @param Configuration|array<string, mixed> $configuration
+     */
+    public function withConfiguration(Configuration|array $configuration): static;
+
     public function getTransport(): TransportInterface;
+
+    /**
+     * Get the SDK configuration.
+     */
+    public function getConfiguration(): Configuration;
 
     /**
      * Get the rate limit information from the most recent request, or null if unavailable.
@@ -162,11 +176,22 @@ interface KinetiClientInterface
     public function listDocuments(?DocumentListOptionsDto $options = null): DocumentCollectionDto;
 
     /**
-     * Execute a semantic vector search and optional RAG synthesis query.
+     * Access search client operations or execute a search query.
+     *
+     * When called without arguments ($query is null), returns SearchClientInterface.
+     * When called with $query, executes the search query for backwards compatibility.
+     *
+     * @param SearchQueryDto|string|null $query
+     * @return ($query is null ? SearchClientInterface : SearchResponseDto)
      *
      * @throws KinetiException
      */
-    public function search(SearchQueryDto|string $query): SearchResponseDto;
+    public function search(SearchQueryDto|string|null $query = null): SearchClientInterface|SearchResponseDto;
+
+    /**
+     * Access RAG client operations.
+     */
+    public function rag(): RagClientInterface;
 
     /**
      * Execute a semantic vector search and automatically paginate through all results.

@@ -57,7 +57,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->assertSame('Solar energy ', $chunks[0]->text);
         $this->assertSame('is clean.', $chunks[1]->text);
 
-        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
@@ -139,8 +139,25 @@ class KinetiClientSearchStreamTest extends TestCase
         $chunks = iterator_to_array($kineti->searchStream('Custom endpoint test', '/api/v1/search/query'));
 
         $this->assertCount(1, $chunks);
-        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/search/query', $mockResponse->getRequestUrl());
+    }
+
+    public function testSearchStreamWithPostFallback(): void
+    {
+        $body = "data: {\"chunk\": \"Fallback test\"}\n\nevent: done\ndata: [DONE]\n\n";
+        $mockResponse = new MockResponse($body, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client, ['use_http_query_method' => false]);
+
+        $chunks = iterator_to_array($kineti->searchStream('Fallback query'));
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('POST', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
     }
 
     public function testSearchStreamSuccessWithGuzzlePsr18(): void

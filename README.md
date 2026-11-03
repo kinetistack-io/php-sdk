@@ -36,6 +36,7 @@ $client = new KinetiClient(
     options: [
         'timeout' => 30.0,        // Request timeout in seconds (applied when using Symfony HttpClient)
         'max_retries' => 3,       // Automatically retry transient HTTP 429 and 503 errors
+        'use_http_query_method' => true, // Default: true (RFC 10008 HTTP QUERY). Set to false to force POST fallback
     ]
 );
 ```
@@ -141,20 +142,29 @@ Default constants exposed on `KinetiClient`:
 - `KinetiClient::DEFAULT_MAX_POLL_INTERVAL_SECONDS` = `10`
 - `KinetiClient::DEFAULT_TIMEOUT_SECONDS` = `60`
 
-### Semantic Search & RAG Streaming
+### Semantic Search & RAG Streaming (SDK v2)
 
-Execute semantic vector searches or consume progressive Server-Sent Events (SSE) streaming responses from the RAG engine:
+In v2, search and RAG operations utilize the **RFC 10008 HTTP `QUERY`** method by default, providing clean, safe, idempotent query semantics with a JSON request payload. If your application operates behind legacy corporate middleboxes, firewalls, or reverse proxies that reject non-standard HTTP methods, pass `['use_http_query_method' => false]` in `$options` or configure `Configuration` to fall back to `POST`.
+
+The SDK provides dedicated sub-clients via `$client->search()` and `$client->rag()`, while preserving full backward compatibility when calling `$client->search($query)` directly.
+
+#### 1. Search Operations (`SearchClient`)
 
 ```php
-use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 
-// 1. Standard search with optional synthesized answer
+// Direct execution (backward-compatible)
+$response = $client->search('solar panels');
+
+// Access dedicated SearchClient
+$search = $client->search();
+
+// Standard search query (dispatches RFC 10008 HTTP QUERY to /api/v1/search/query)
 $query = SearchQueryDto::create('How does solar net metering work?')
     ->withLimit(5)
     ->withSynthesis(true);
 
-$response = $client->search($query);
+$response = $search->query($query);
 echo "Found {$response->total} results.\n";
 if ($response->tokensConsumed !== null) {
     echo "Tokens consumed: {$response->tokensConsumed}\n";
@@ -166,21 +176,62 @@ if ($response->hasSynthesis()) {
     }
 }
 
-// 2. Streamed RAG synthesis via PHP generator (reduces perceived latency)
-$streamQuery = SearchQueryDto::create('Explain commercial solar financing options')
-    ->withLimit(5)
-    ->withStream(true);
+// Automatic pagination across all matching results
+foreach ($search->all('solar energy') as $item) {
+    echo "{$item->title} (score: {$item->score})\n";
+}
 
-/** @var \Generator<int, RagStreamChunkDto> $stream */
-$stream = $client->searchStream($streamQuery);
-
-foreach ($stream as $chunk) {
+// Streamed RAG synthesis via SSE generator (dispatches HTTP QUERY to /api/v1/search/rag)
+foreach ($search->stream('Explain commercial solar financing options') as $chunk) {
     echo $chunk->text; // Streams partial tokens/words in real-time
     if ($chunk->tokensConsumed !== null) {
         echo "\nTokens consumed: {$chunk->tokensConsumed}\n";
     }
     flush();
 }
+```
+
+#### 2. Retrieval Augmented Generation (`RagClient`)
+
+```php
+use KinetiStack\Sdk\Dto\RagSynthesisDto;
+
+$rag = $client->rag();
+
+// Synchronous RAG query (dispatches HTTP QUERY to /api/v1/rag/query)
+$result = $rag->query('What are the key advantages of perovskite solar cells?');
+if ($result instanceof RagSynthesisDto) {
+    echo "Answer: {$result->answer}\n";
+    echo "Citations: " . implode(', ', $result->citations) . "\n";
+}
+
+// Streaming RAG query
+foreach ($rag->stream('Explain solar ROI calculations') as $chunk) {
+    echo $chunk->text;
+    flush();
+}
+```
+
+#### 3. RFC 10008 HTTP QUERY & POST Fallback Configuration
+
+```php
+use KinetiStack\Sdk\Configuration;
+use KinetiStack\Sdk\KinetiClient;
+
+// Option A: Via constructor array options
+$client = new KinetiClient(
+    'https://api.kinetistack.io',
+    'sk_test_12345',
+    options: ['use_http_query_method' => false] // Forces POST for search & RAG
+);
+
+// Option B: Via typed Configuration instance
+$config = new Configuration(['use_http_query_method' => false]);
+$client = new KinetiClient('https://api.kinetistack.io', 'sk_test_12345', options: $config);
+
+// Option C: Immutable reconfiguration
+$postClient = $client->withConfiguration(['use_http_query_method' => false]);
+$queryClient = $postClient->withConfiguration(['use_http_query_method' => true]);
 ```
 
 #### API Key Scopes
