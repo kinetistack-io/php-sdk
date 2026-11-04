@@ -58,7 +58,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->assertSame('is clean.', $chunks[1]->text);
 
         $this->assertSame('QUERY', $mockResponse->getRequestMethod());
-        $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
+        $this->assertStringEndsWith('/api/v1/rag/query', $mockResponse->getRequestUrl());
 
         $requestBody = json_decode($mockResponse->getRequestOptions()['body'], true);
         $this->assertIsArray($requestBody);
@@ -143,6 +143,27 @@ class KinetiClientSearchStreamTest extends TestCase
         $this->assertStringEndsWith('/api/v1/search/query', $mockResponse->getRequestUrl());
     }
 
+    public function testSearchStreamWithExplicitLegacyEndpoint(): void
+    {
+        $sseChunks = [
+            "data: {\"chunk\": \"Response from legacy endpoint.\"}\n\n",
+            "event: done\ndata: [DONE]\n\n",
+        ];
+
+        $mockResponse = new MockResponse($sseChunks, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
+
+        $chunks = iterator_to_array($kineti->searchStream('Legacy endpoint test', '/api/v1/search/rag'));
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
+    }
+
     public function testSearchStreamWithPostFallback(): void
     {
         $body = "data: {\"chunk\": \"Fallback test\"}\n\nevent: done\ndata: [DONE]\n\n";
@@ -157,7 +178,7 @@ class KinetiClientSearchStreamTest extends TestCase
 
         $this->assertCount(1, $chunks);
         $this->assertSame('POST', $mockResponse->getRequestMethod());
-        $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
+        $this->assertStringEndsWith('/api/v1/rag/query', $mockResponse->getRequestUrl());
     }
 
     public function testSearchStreamSuccessWithGuzzlePsr18(): void

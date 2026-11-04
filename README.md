@@ -181,7 +181,7 @@ foreach ($search->all('solar energy') as $item) {
     echo "{$item->title} (score: {$item->score})\n";
 }
 
-// Streamed RAG synthesis via SSE generator (dispatches HTTP QUERY to /api/v1/search/rag)
+// Streamed RAG synthesis via SSE generator (dispatches HTTP QUERY to /api/v1/rag/query)
 foreach ($search->stream('Explain commercial solar financing options') as $chunk) {
     echo $chunk->text; // Streams partial tokens/words in real-time
     if ($chunk->tokensConsumed !== null) {

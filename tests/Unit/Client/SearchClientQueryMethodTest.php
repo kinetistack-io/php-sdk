@@ -214,6 +214,26 @@ class SearchClientQueryMethodTest extends TestCase
         $this->assertSame('second chunk', $chunks[1]->text);
 
         $this->assertSame('QUERY', $mockResponse->getRequestMethod());
+        $this->assertStringEndsWith('/api/v1/rag/query', $mockResponse->getRequestUrl());
+    }
+
+    public function testScenario1StreamWithExplicitLegacyEndpointDispatchesHttpQueryWithSymfony(): void
+    {
+        $mockResponse = new MockResponse($this->createSampleSseStreamBody(), [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $generator = $client->search()->stream('streaming query', '/api/v1/search/rag');
+        $this->assertInstanceOf(\Generator::class, $generator);
+
+        /** @var RagStreamChunkDto[] $chunks */
+        $chunks = iterator_to_array($generator);
+        $this->assertCount(2, $chunks);
+
+        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
         $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
     }
 

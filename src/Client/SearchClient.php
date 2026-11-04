@@ -116,12 +116,14 @@ class SearchClient implements SearchClientInterface
     }
 
     /**
+     * @param SearchQueryDto|string $query Search query DTO or raw query string
+     * @param string $path Endpoint path (defaults to '/api/v1/rag/query')
      * @return \Generator<int, RagStreamChunkDto>
      *
      * @throws AuthorizationException
      * @throws KinetiException
      */
-    public function stream(SearchQueryDto|string $query, string $path = '/api/v1/search/rag'): \Generator
+    public function stream(SearchQueryDto|string $query, string $path = '/api/v1/rag/query'): \Generator
     {
         $this->validatePath($path);
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Updated default endpoint parameter in `KinetiClientInterface::searchStream()`, `KinetiClient::searchStream()`, `SearchClientInterface::stream()`, and `SearchClient::stream()` from `/api/v1/search/rag` to `/api/v1/rag/query` (PHPSDK-72).
+
 ## [2.0.0] - 2026-11-03
 
 ### Removed
