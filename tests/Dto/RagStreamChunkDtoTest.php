@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests\Dto;
 
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
+use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use PHPUnit\Framework\TestCase;
 
 class RagStreamChunkDtoTest extends TestCase
@@ -126,5 +127,53 @@ class RagStreamChunkDtoTest extends TestCase
         ]);
         $this->assertNull($fromNull->tokensConsumed);
         $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
+    }
+
+    public function testRagStreamChunkDtoWithResults(): void
+    {
+        $resultItem = new SearchResultItemDto(
+            externalId: 'res:1',
+            title: 'Doc Title',
+            content: 'Doc Content',
+            chunkIndex: 0,
+            score: 0.95,
+        );
+
+        $dto = new RagStreamChunkDto(
+            text: '',
+            results: [$resultItem],
+        );
+
+        $this->assertSame('', $dto->text);
+        $this->assertTrue($dto->hasResults());
+        $this->assertCount(1, $dto->getResults());
+        $this->assertSame('res:1', $dto->getResults()[0]->externalId);
+
+        $array = $dto->toArray();
+        $this->assertArrayHasKey('results', $array);
+        $this->assertIsArray($array['results']);
+        /** @var list<array<string, mixed>> $resultsList */
+        $resultsList = $array['results'];
+        $this->assertCount(1, $resultsList);
+        $this->assertSame('res:1', $resultsList[0]['external_id']);
+
+        // Test fromArray() with raw results array
+        $fromData = RagStreamChunkDto::fromArray([
+            'results' => [
+                [
+                    'external_id' => 'res:2',
+                    'title' => 'Title 2',
+                    'content' => 'Content 2',
+                    'chunk_index' => 1,
+                    'score' => 0.89,
+                ],
+            ],
+        ]);
+
+        $this->assertTrue($fromData->hasResults());
+        $this->assertCount(1, $fromData->results);
+        $this->assertInstanceOf(SearchResultItemDto::class, $fromData->results[0]);
+        $this->assertSame('res:2', $fromData->results[0]->externalId);
+        $this->assertSame('Title 2', $fromData->results[0]->title);
     }
 }

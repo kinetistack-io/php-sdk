@@ -305,6 +305,75 @@ class SearchResultDtoTest extends TestCase
         $this->assertArrayNotHasKey('tokens_consumed', $fromNull->toArray());
     }
 
+    public function testRagSynthesisDtoWithResults(): void
+    {
+        $item1 = new SearchResultItemDto(
+            externalId: 'doc:1',
+            title: 'Doc 1',
+            content: 'Content 1',
+            chunkIndex: 0,
+            score: 0.95
+        );
+        $item2 = new SearchResultItemDto(
+            externalId: 'doc:2',
+            title: 'Doc 2',
+            content: 'Content 2',
+            chunkIndex: 1,
+            score: 0.85
+        );
+
+        $dto = new RagSynthesisDto(
+            answer: 'Synthesized answer with results',
+            citations: ['doc:1'],
+            successful: true,
+            fallbackReason: null,
+            tokensConsumed: 50,
+            results: [$item1, $item2]
+        );
+
+        $this->assertTrue($dto->hasResults());
+        $this->assertCount(2, $dto->getResults());
+        $this->assertSame($item1, $dto->getResults()[0]);
+        $this->assertSame($item2, $dto->getResults()[1]);
+
+        $array = $dto->toArray();
+        $this->assertArrayHasKey('results', $array);
+        $this->assertIsArray($array['results']);
+        /** @var list<array<string, mixed>> $rawResults */
+        $rawResults = $array['results'];
+        $this->assertCount(2, $rawResults);
+        $this->assertSame('doc:1', $rawResults[0]['external_id']);
+        $this->assertSame('doc:2', $rawResults[1]['external_id']);
+
+        // Test hydration fromArray with raw array items and DTO instances
+        $fromArray = RagSynthesisDto::fromArray([
+            'answer' => 'Answer from array',
+            'citations' => ['doc:1'],
+            'results' => [
+                [
+                    'external_id' => 'doc:10',
+                    'title' => 'Hydrated 10',
+                    'content' => 'Body 10',
+                    'score' => 0.9,
+                ],
+                $item2,
+            ],
+        ]);
+
+        $this->assertTrue($fromArray->hasResults());
+        $this->assertCount(2, $fromArray->getResults());
+        $this->assertInstanceOf(SearchResultItemDto::class, $fromArray->getResults()[0]);
+        $this->assertSame('doc:10', $fromArray->getResults()[0]->externalId);
+        $this->assertSame('Hydrated 10', $fromArray->getResults()[0]->title);
+        $this->assertSame($item2, $fromArray->getResults()[1]);
+
+        // Test without results
+        $noResults = RagSynthesisDto::fromArray(['answer' => 'Only answer']);
+        $this->assertFalse($noResults->hasResults());
+        $this->assertSame([], $noResults->getResults());
+        $this->assertArrayNotHasKey('results', $noResults->toArray());
+    }
+
     public function testSearchResponseDtoWithSynthesisFixture(): void
     {
         $data = $this->loadFixtureArray('Search/search_response_with_synthesis_200.json');

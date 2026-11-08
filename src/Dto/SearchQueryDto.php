@@ -8,12 +8,17 @@ class SearchQueryDto
 {
     use ExtractsResponseDataTrait;
 
+    /** @var list<ContextItemDto>|null */
+    public readonly ?array $contextItems;
+
     /**
      * @param list<string>|null $userRoles End-user roles asserted by the integrating client (server-to-server trust model).
      *                                     If the API key has allowed_asserted_roles configured, the backend validates
      *                                     both userRoles and filters.permissions against the whitelist. Asserting
      *                                     unauthorized roles triggers HTTP 403 AuthorizationException.
      *                                     When allowed_asserted_roles is null, the key is unrestricted.
+     * @param array<int|string, ContextItemDto|array<string, mixed>>|null $contextItems Pre-retrieved context items for Bring Your Own Context (BYOC) RAG synthesis.
+     * @param bool|null $includeResults Whether to include/stream raw search results alongside RAG synthesis.
      */
     public function __construct(
         public readonly string $query,
@@ -28,9 +33,28 @@ class SearchQueryDto
         public readonly ?int $offset = null,
         public readonly ?FacetRequestDto $facets = null,
         public readonly ?bool $rerank = null,
+        ?array $contextItems = null,
+        public readonly ?bool $includeResults = null,
     ) {
         if (trim($this->query) === '') {
             throw new \InvalidArgumentException('Search query cannot be empty.');
+        }
+
+        if ($contextItems !== null) {
+            $normalizedItems = [];
+            foreach ($contextItems as $item) {
+                if ($item instanceof ContextItemDto) {
+                    $normalizedItems[] = $item;
+                } elseif (is_array($item)) {
+                    /** @var array<string, mixed> $item */
+                    $normalizedItems[] = ContextItemDto::fromArray($item);
+                } else {
+                    throw new \InvalidArgumentException('Each context item must be an instance of ContextItemDto or an associative array.');
+                }
+            }
+            $this->contextItems = $normalizedItems;
+        } else {
+            $this->contextItems = null;
         }
     }
 
@@ -44,6 +68,11 @@ class SearchQueryDto
      */
     private function cloneWith(array $overrides): self
     {
+        /** @var array<int|string, ContextItemDto|array<string, mixed>>|null $contextItems */
+        $contextItems = array_key_exists('contextItems', $overrides)
+            ? (is_array($overrides['contextItems']) ? $overrides['contextItems'] : null)
+            : $this->contextItems;
+
         return new self(
             array_key_exists('query', $overrides) ? (is_string($overrides['query']) ? $overrides['query'] : $this->query) : $this->query,
             array_key_exists('limit', $overrides) ? (is_int($overrides['limit']) ? $overrides['limit'] : null) : $this->limit,
@@ -57,6 +86,8 @@ class SearchQueryDto
             array_key_exists('offset', $overrides) ? (is_int($overrides['offset']) ? $overrides['offset'] : null) : $this->offset,
             array_key_exists('facets', $overrides) ? ($overrides['facets'] instanceof FacetRequestDto ? $overrides['facets'] : null) : $this->facets,
             array_key_exists('rerank', $overrides) ? (is_bool($overrides['rerank']) ? $overrides['rerank'] : null) : $this->rerank,
+            $contextItems,
+            array_key_exists('includeResults', $overrides) ? (is_bool($overrides['includeResults']) ? $overrides['includeResults'] : null) : $this->includeResults,
         );
     }
 
@@ -193,9 +224,40 @@ class SearchQueryDto
         return $this->cloneWith(['rerank' => $rerank]);
     }
 
+    /**
+     * @param array<int|string, ContextItemDto|array<string, mixed>>|null $contextItems Pre-retrieved context items for Bring Your Own Context (BYOC) RAG.
+     */
+    public function withContextItems(?array $contextItems): self
+    {
+        return $this->cloneWith(['contextItems' => $contextItems]);
+    }
+
+    public function withIncludeResults(bool $includeResults = true): self
+    {
+        return $this->cloneWith(['includeResults' => $includeResults]);
+    }
+
     public function getFacets(): ?FacetRequestDto
     {
         return $this->facets;
+    }
+
+    /**
+     * @return list<ContextItemDto>|null
+     */
+    public function getContextItems(): ?array
+    {
+        return $this->contextItems;
+    }
+
+    public function getIncludeResults(): ?bool
+    {
+        return $this->includeResults;
+    }
+
+    public function shouldIncludeResults(): bool
+    {
+        return $this->includeResults === true;
     }
 
     /**
@@ -249,6 +311,17 @@ class SearchQueryDto
 
         if ($this->facets !== null) {
             $data['facets'] = $this->facets->toArray();
+        }
+
+        if ($this->contextItems !== null) {
+            $data['context_items'] = array_map(
+                static fn (ContextItemDto $item): array => $item->toArray(),
+                $this->contextItems
+            );
+        }
+
+        if ($this->includeResults !== null) {
+            $data['include_results'] = $this->includeResults;
         }
 
         return $data;
@@ -373,6 +446,35 @@ class SearchQueryDto
             $facets = FacetRequestDto::fromArray($facetsData);
         }
 
+        /** @var list<ContextItemDto>|null $contextItems */
+        $contextItems = null;
+        $rawContextItems = $data['context_items'] ?? $data['contextItems'] ?? null;
+        if ($rawContextItems !== null) {
+            if (!is_array($rawContextItems)) {
+                throw new \InvalidArgumentException('context_items must be an array.');
+            }
+            $contextItems = [];
+            foreach ($rawContextItems as $item) {
+                if ($item instanceof ContextItemDto) {
+                    $contextItems[] = $item;
+                } elseif (is_array($item)) {
+                    /** @var array<string, mixed> $item */
+                    $contextItems[] = ContextItemDto::fromArray($item);
+                } else {
+                    throw new \InvalidArgumentException('Each item in context_items must be an array or ContextItemDto.');
+                }
+            }
+        }
+
+        $rawIncludeResults = $data['include_results'] ?? $data['includeResults'] ?? null;
+        $includeResults = null;
+        if ($rawIncludeResults !== null) {
+            if (!is_scalar($rawIncludeResults)) {
+                throw new \InvalidArgumentException('include_results must be a boolean.');
+            }
+            $includeResults = self::extractNullableBool($rawIncludeResults);
+        }
+
         return new self(
             $query,
             $limit,
@@ -385,7 +487,9 @@ class SearchQueryDto
             $stream,
             $offset,
             $facets,
-            $rerank
+            $rerank,
+            $contextItems,
+            $includeResults
         );
     }
 }

@@ -43,7 +43,7 @@ class KinetiClientSearchStreamTest extends TestCase
             ->withLimit(5)
             ->withLocale('en');
 
-        $generator = $kineti->searchStream($query);
+        $generator = $kineti->rag()->stream($query);
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $chunks */
@@ -87,7 +87,7 @@ class KinetiClientSearchStreamTest extends TestCase
 
         $this->assertFalse($query->isStreaming());
 
-        $chunks = iterator_to_array($kineti->searchStream($query));
+        $chunks = iterator_to_array($kineti->rag()->stream($query));
 
         $this->assertCount(1, $chunks);
         $this->assertSame('Streamed successfully despite false.', $chunks[0]->text);
@@ -111,7 +111,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
 
-        $chunks = iterator_to_array($kineti->searchStream('What is RAG?'));
+        $chunks = iterator_to_array($kineti->rag()->stream('What is RAG?'));
 
         $this->assertCount(1, $chunks);
         $this->assertSame('Quick answer.', $chunks[0]->text);
@@ -136,7 +136,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
 
-        $chunks = iterator_to_array($kineti->searchStream('Custom endpoint test', '/api/v1/search/query'));
+        $chunks = iterator_to_array($kineti->rag()->stream('Custom endpoint test', '/api/v1/search/query'));
 
         $this->assertCount(1, $chunks);
         $this->assertSame('QUERY', $mockResponse->getRequestMethod());
@@ -157,7 +157,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client);
 
-        $chunks = iterator_to_array($kineti->searchStream('Legacy endpoint test', '/api/v1/search/rag'));
+        $chunks = iterator_to_array($kineti->rag()->stream('Legacy endpoint test', '/api/v1/search/rag'));
 
         $this->assertCount(1, $chunks);
         $this->assertSame('QUERY', $mockResponse->getRequestMethod());
@@ -174,7 +174,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $client, ['use_http_query_method' => false]);
 
-        $chunks = iterator_to_array($kineti->searchStream('Fallback query'));
+        $chunks = iterator_to_array($kineti->rag()->stream('Fallback query'));
 
         $this->assertCount(1, $chunks);
         $this->assertSame('POST', $mockResponse->getRequestMethod());
@@ -190,7 +190,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $guzzleClient = new Client(['handler' => HandlerStack::create($mock)]);
         $kineti = new KinetiClient('https://api.test', 'test-api-key', $guzzleClient);
 
-        $generator = $kineti->searchStream('PSR-18 test');
+        $generator = $kineti->rag()->stream('PSR-18 test');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $chunks */
@@ -211,7 +211,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'invalid-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         $this->expectException(AuthenticationException::class);
@@ -230,7 +230,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
 
         $this->expectException(AuthorizationException::class);
         $this->expectExceptionMessage('Access denied for this resource or project.');
@@ -248,7 +248,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $yielded */
@@ -285,7 +285,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'search-only-key', $client);
 
-        $generator = $kineti->searchStream('query requiring rag scope');
+        $generator = $kineti->rag()->stream('query requiring rag scope');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $yielded */
@@ -323,7 +323,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $yielded */
@@ -362,7 +362,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $guzzleClient = new Client(['handler' => HandlerStack::create($mock)]);
         $kineti = new KinetiClient('https://api.test', 'search-only-key', $guzzleClient);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $yielded */
@@ -399,7 +399,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $guzzleClient = new Client(['handler' => HandlerStack::create($mock)]);
         $kineti = new KinetiClient('https://api.test', 'test-key', $guzzleClient);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
         $this->assertInstanceOf(\Generator::class, $generator);
 
         /** @var RagStreamChunkDto[] $yielded */
@@ -433,7 +433,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
 
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('title: This value should not be blank.');
@@ -451,7 +451,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
 
         $this->expectException(ServerException::class);
         $this->expectExceptionMessage('An unexpected error occurred on the server.');
@@ -474,7 +474,7 @@ class KinetiClientSearchStreamTest extends TestCase
         $client = new MockHttpClient($mockResponse);
         $kineti = new KinetiClient('https://api.test', 'test-key', $client);
 
-        $generator = $kineti->searchStream('query');
+        $generator = $kineti->rag()->stream('query');
 
         $this->expectException(ServerException::class);
         $this->expectExceptionMessage('[Error: Synthesis failed. Ollama backend crashed]');

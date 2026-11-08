@@ -898,10 +898,10 @@ class KinetiClientTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid request path. Must be a relative path starting with a single forward slash and cannot contain traversal segments.');
 
-        $client->searchStream('search query', $invalidPath);
+        $client->rag()->stream('search query', $invalidPath);
     }
 
-    public function testSearchStreamValidPathWithQueryStringContainingDotsDoesNotThrow(): void
+    public function testRagStreamValidPathWithQueryStringContainingDotsDoesNotThrow(): void
     {
         $mockResponse = new MockResponse("event: message\ndata: {\"text\": \"result\"}\n\n", [
             'http_code' => 200,
@@ -909,7 +909,7 @@ class KinetiClientTest extends TestCase
         ]);
         $client = new KinetiClient('https://api.test', 'test-key', new MockHttpClient($mockResponse));
 
-        $generator = $client->searchStream('search query', '/api/v1/search/rag?query=/../test');
+        $generator = $client->rag()->stream('search query', '/api/v1/rag/query?query=/../test');
         $this->assertInstanceOf(\Generator::class, $generator);
         $results = iterator_to_array($generator);
         $this->assertNotEmpty($results);

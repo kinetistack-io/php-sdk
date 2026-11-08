@@ -14,6 +14,7 @@ use KinetiStack\Sdk\Client\RagClientInterface;
 use KinetiStack\Sdk\Client\SearchClient;
 use KinetiStack\Sdk\Client\SearchClientInterface;
 use KinetiStack\Sdk\Configuration;
+use KinetiStack\Sdk\Dto\ContextItemDto;
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Dto\RagSynthesisDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
@@ -21,6 +22,7 @@ use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\KinetiClient;
+use KinetiStack\Sdk\KinetiClientInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -193,48 +195,6 @@ class SearchClientQueryMethodTest extends TestCase
         $this->assertCount(1, $items);
         $this->assertInstanceOf(SearchResultItemDto::class, $items[0]);
         $this->assertSame('QUERY', $mockResponse2->getRequestMethod());
-    }
-
-    public function testScenario1SearchStreamDispatchesHttpQuery(): void
-    {
-        $mockResponse = new MockResponse($this->createSampleSseStreamBody(), [
-            'http_code' => 200,
-            'response_headers' => ['Content-Type' => 'text/event-stream'],
-        ]);
-        $symfonyClient = new MockHttpClient($mockResponse);
-        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
-
-        $generator = $client->search()->stream('streaming query');
-        $this->assertInstanceOf(\Generator::class, $generator);
-
-        /** @var RagStreamChunkDto[] $chunks */
-        $chunks = iterator_to_array($generator);
-        $this->assertCount(2, $chunks);
-        $this->assertSame('First chunk ', $chunks[0]->text);
-        $this->assertSame('second chunk', $chunks[1]->text);
-
-        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
-        $this->assertStringEndsWith('/api/v1/rag/query', $mockResponse->getRequestUrl());
-    }
-
-    public function testScenario1StreamWithExplicitLegacyEndpointDispatchesHttpQueryWithSymfony(): void
-    {
-        $mockResponse = new MockResponse($this->createSampleSseStreamBody(), [
-            'http_code' => 200,
-            'response_headers' => ['Content-Type' => 'text/event-stream'],
-        ]);
-        $symfonyClient = new MockHttpClient($mockResponse);
-        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
-
-        $generator = $client->search()->stream('streaming query', '/api/v1/search/rag');
-        $this->assertInstanceOf(\Generator::class, $generator);
-
-        /** @var RagStreamChunkDto[] $chunks */
-        $chunks = iterator_to_array($generator);
-        $this->assertCount(2, $chunks);
-
-        $this->assertSame('QUERY', $mockResponse->getRequestMethod());
-        $this->assertStringEndsWith('/api/v1/search/rag', $mockResponse->getRequestUrl());
     }
 
     // =========================================================================
@@ -612,25 +572,16 @@ class SearchClientQueryMethodTest extends TestCase
         $this->assertSame('https://api.test/api/v1/rag/query', (string) $history[0]['request']->getUri());
     }
 
-    public function testScenario3FallbackForcesPostForStreamingSearchAndRag(): void
+    public function testScenario3FallbackForcesPostForStreamingRag(): void
     {
-        $searchMock = new MockResponse($this->createSampleSseStreamBody(), [
-            'http_code' => 200,
-            'response_headers' => ['Content-Type' => 'text/event-stream'],
-        ]);
         $ragMock = new MockResponse($this->createSampleSseStreamBody(), [
             'http_code' => 200,
             'response_headers' => ['Content-Type' => 'text/event-stream'],
         ]);
-        $symfonyClient = new MockHttpClient([$searchMock, $ragMock]);
+        $symfonyClient = new MockHttpClient([$ragMock]);
         $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient, [
             'use_http_query_method' => false,
         ]);
-
-        // Search stream fallback
-        $searchChunks = iterator_to_array($client->searchStream('streaming query'));
-        $this->assertCount(2, $searchChunks);
-        $this->assertSame('POST', $searchMock->getRequestMethod());
 
         // RAG stream fallback
         $ragChunks = iterator_to_array($client->rag()->stream('streaming rag'));
@@ -693,5 +644,230 @@ class SearchClientQueryMethodTest extends TestCase
         $this->assertSame(45.0, $updatedOptions->getConfiguration()->getHttpOptions()['timeout'] ?? null);
         $this->assertSame(3, $updatedOptions->getConfiguration()->getHttpOptions()['max_retries'] ?? null);
         $this->assertTrue($updatedOptions->getConfiguration()->useHttpQueryMethod());
+    }
+
+    // =========================================================================
+    // BYOC & Include Results Tests
+    // =========================================================================
+
+    public function testRagQueryWithContextItemsAndIncludeResultsSendsPayload(): void
+    {
+        $mockResponse = new MockResponse($this->createSampleRagResponseBody(), [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $query = SearchQueryDto::create('Explain quantum computing')
+            ->withContextItems([
+                new ContextItemDto(
+                    externalId: 'node/qc1',
+                    title: 'Quantum 101',
+                    content: 'Qubits can exist in superposition.',
+                    chunkIndex: 0,
+                    score: 0.99,
+                    metadata: ['author' => 'Alice'],
+                ),
+            ])
+            ->withIncludeResults(true);
+
+        $client->rag()->query($query);
+
+        $requestBody = json_decode((string) $mockResponse->getRequestOptions()['body'], true);
+        $this->assertIsArray($requestBody);
+        $this->assertTrue($requestBody['include_results']);
+        $this->assertIsArray($requestBody['context_items']);
+        /** @var list<array<string, mixed>> $contextItemsList */
+        $contextItemsList = $requestBody['context_items'];
+        $this->assertCount(1, $contextItemsList);
+        $this->assertSame('node/qc1', $contextItemsList[0]['external_id']);
+        $this->assertSame('Quantum 101', $contextItemsList[0]['title']);
+        $this->assertSame('Qubits can exist in superposition.', $contextItemsList[0]['content']);
+        $this->assertSame(0, $contextItemsList[0]['chunk_index']);
+        $this->assertSame(0.99, $contextItemsList[0]['score']);
+        $this->assertSame(['author' => 'Alice'], $contextItemsList[0]['metadata']);
+    }
+
+    public function testRagStreamWithIncludeResultsYieldsResultsInFirstChunk(): void
+    {
+        $sseBody = "data: {\"results\":[{\"external_id\":\"doc:99\",\"title\":\"Title 99\",\"content\":\"Body 99\",\"chunk_index\":0,\"score\":0.95}],\"total\":1}\n\n"
+            . "data: {\"chunk\": \"Token 1 \"}\n\n"
+            . "data: {\"is_done\": true, \"citations\": [\"doc:99\"]}\n\n";
+
+        $mockResponse = new MockResponse($sseBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $query = SearchQueryDto::create('Stream with results')
+            ->withIncludeResults(true);
+
+        $generator = $client->rag()->stream($query);
+        $chunks = iterator_to_array($generator);
+
+        $this->assertCount(3, $chunks);
+        $this->assertTrue($chunks[0]->hasResults());
+        $this->assertCount(1, $chunks[0]->getResults());
+        $this->assertSame('doc:99', $chunks[0]->getResults()[0]->externalId);
+        $this->assertSame('Token 1 ', $chunks[1]->text);
+        $this->assertTrue($chunks[2]->isDone);
+    }
+
+    public function testRagQueryAggregatesSseWithResultsIntoRagSynthesisDto(): void
+    {
+        $sseBody = "data: {\"results\":[{\"external_id\":\"doc:55\",\"title\":\"Title 55\",\"content\":\"Body 55\"}],\"total\":1}\n\n"
+            . "data: {\"chunk\": \"Aggregated \"}\n\n"
+            . "data: {\"chunk\": \"answer.\"}\n\n"
+            . "data: {\"is_done\": true, \"citations\": [\"doc:55\"]}\n\n";
+
+        $mockResponse = new MockResponse($sseBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $query = SearchQueryDto::create('Aggregated query')
+            ->withIncludeResults(true);
+
+        $result = $client->rag()->query($query);
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertSame('Aggregated answer.', $result->answer);
+        $this->assertSame(['doc:55'], $result->citations);
+        $this->assertCount(1, $result->results);
+        $this->assertSame('doc:55', $result->results[0]->externalId);
+    }
+
+    public function testRagQueryWithSynchronousJsonSynthesisAndResultsReturnsRagSynthesisDto(): void
+    {
+        $jsonBody = (string) json_encode([
+            'answer' => 'Solar panels convert sunlight to power.',
+            'citations' => ['doc:100'],
+            'successful' => true,
+            'tokens_consumed' => 88,
+            'results' => [
+                [
+                    'external_id' => 'doc:100',
+                    'title' => 'Photovoltaic Basics',
+                    'content' => 'Solar cells produce DC power.',
+                    'chunk_index' => 0,
+                    'score' => 0.98,
+                ],
+            ],
+        ]);
+
+        $mockResponse = new MockResponse($jsonBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $query = SearchQueryDto::create('How do solar panels work?')
+            ->withIncludeResults(true);
+
+        $result = $client->rag()->query($query);
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertSame('Solar panels convert sunlight to power.', $result->answer);
+        $this->assertSame(['doc:100'], $result->citations);
+        $this->assertTrue($result->successful);
+        $this->assertSame(88, $result->tokensConsumed);
+        $this->assertTrue($result->hasResults());
+        $this->assertCount(1, $result->getResults());
+        $this->assertSame('doc:100', $result->getResults()[0]->externalId);
+        $this->assertSame('Photovoltaic Basics', $result->getResults()[0]->title);
+    }
+
+    public function testRagQueryWithNestedSynthesisAndRootResultsPropagatesResults(): void
+    {
+        $jsonBody = (string) json_encode([
+            'synthesis' => [
+                'answer' => 'Commercial battery storage pairs with solar.',
+                'citations' => ['doc:200'],
+                'successful' => true,
+            ],
+            'tokens_consumed' => 45,
+            'results' => [
+                [
+                    'external_id' => 'doc:200',
+                    'title' => 'Battery Systems',
+                    'content' => 'Lithium iron phosphate batteries store excess energy.',
+                    'chunk_index' => 0,
+                    'score' => 0.91,
+                ],
+            ],
+        ]);
+
+        $mockResponse = new MockResponse($jsonBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $query = SearchQueryDto::create('Tell me about battery storage')
+            ->withIncludeResults(true);
+
+        $result = $client->rag()->query($query);
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertSame('Commercial battery storage pairs with solar.', $result->answer);
+        $this->assertSame(['doc:200'], $result->citations);
+        $this->assertSame(45, $result->tokensConsumed);
+        $this->assertTrue($result->hasResults());
+        $this->assertCount(1, $result->getResults());
+        $this->assertSame('doc:200', $result->getResults()[0]->externalId);
+    }
+
+    public function testRagQueryWithPureSearchResponseReturnsSearchResponseDto(): void
+    {
+        $jsonBody = (string) json_encode([
+            'results' => [
+                [
+                    'external_id' => 'doc:300',
+                    'title' => 'Pure Search Result',
+                    'content' => 'Result without synthesis.',
+                    'chunk_index' => 0,
+                    'score' => 0.88,
+                ],
+            ],
+            'total' => 1,
+        ]);
+
+        $mockResponse = new MockResponse($jsonBody, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $symfonyClient = new MockHttpClient($mockResponse);
+        $client = new KinetiClient('https://api.test', 'test-api-key', $symfonyClient);
+
+        $query = SearchQueryDto::create('Search query');
+
+        $result = $client->rag()->query($query);
+
+        $this->assertInstanceOf(SearchResponseDto::class, $result);
+        $this->assertSame(1, $result->total);
+        $this->assertCount(1, $result);
+        $this->assertSame('doc:300', $result->results[0]->externalId);
+    }
+
+    public function testLegacyStreamingMethodsAreRemoved(): void
+    {
+        $kinetiRef = new \ReflectionClass(KinetiClient::class);
+        $this->assertFalse($kinetiRef->hasMethod('searchStream'));
+
+        $kinetiIfaceRef = new \ReflectionClass(KinetiClientInterface::class);
+        $this->assertFalse($kinetiIfaceRef->hasMethod('searchStream'));
+
+        $searchRef = new \ReflectionClass(SearchClient::class);
+        $this->assertFalse($searchRef->hasMethod('stream'));
+
+        $searchIfaceRef = new \ReflectionClass(SearchClientInterface::class);
+        $this->assertFalse($searchIfaceRef->hasMethod('stream'));
     }
 }

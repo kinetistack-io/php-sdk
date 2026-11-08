@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `ContextItemDto` (`KinetiStack\Sdk\Dto\ContextItemDto`) for Bring Your Own Context (BYOC) RAG synthesis and streaming (PHPSDK-73).
+- Added `withContextItems(?array $contextItems): self` and `withIncludeResults(bool $includeResults = true): self` to `SearchQueryDto` (PHPSDK-73).
+- Added `results` property (`list<SearchResultItemDto>`) and `getResults()`, `hasResults()` methods to `RagStreamChunkDto` and `RagSynthesisDto` (PHPSDK-73).
+- Updated `SseParser` and `RagClient` to parse and aggregate initial search results emitted during RAG streaming and synthesis (PHPSDK-73).
+
 ### Changed
-- Updated default endpoint parameter in `KinetiClientInterface::searchStream()`, `KinetiClient::searchStream()`, `SearchClientInterface::stream()`, and `SearchClient::stream()` from `/api/v1/search/rag` to `/api/v1/rag/query` (PHPSDK-72).
+- Updated default endpoint parameter in `RagClientInterface::stream()` and `RagClient::stream()` from `/api/v1/search/rag` to `/api/v1/rag/query` (PHPSDK-72).
+
+### Removed
+- **BREAKING**: Removed legacy streaming methods `KinetiClient::searchStream()`, `KinetiClientInterface::searchStream()`, `SearchClient::stream()`, and `SearchClientInterface::stream()` in favor of `$client->rag()->stream()` (PHPSDK-73).
 
 ## [2.0.0] - 2026-11-03
 

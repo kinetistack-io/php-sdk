@@ -180,21 +180,14 @@ if ($response->hasSynthesis()) {
 foreach ($search->all('solar energy') as $item) {
     echo "{$item->title} (score: {$item->score})\n";
 }
-
-// Streamed RAG synthesis via SSE generator (dispatches HTTP QUERY to /api/v1/rag/query)
-foreach ($search->stream('Explain commercial solar financing options') as $chunk) {
-    echo $chunk->text; // Streams partial tokens/words in real-time
-    if ($chunk->tokensConsumed !== null) {
-        echo "\nTokens consumed: {$chunk->tokensConsumed}\n";
-    }
-    flush();
-}
 ```
 
 #### 2. Retrieval Augmented Generation (`RagClient`)
 
 ```php
+use KinetiStack\Sdk\Dto\ContextItemDto;
 use KinetiStack\Sdk\Dto\RagSynthesisDto;
+use KinetiStack\Sdk\Dto\SearchQueryDto;
 
 $rag = $client->rag();
 
@@ -205,10 +198,34 @@ if ($result instanceof RagSynthesisDto) {
     echo "Citations: " . implode(', ', $result->citations) . "\n";
 }
 
-// Streaming RAG query
+// Streaming RAG query via SSE generator
 foreach ($rag->stream('Explain solar ROI calculations') as $chunk) {
     echo $chunk->text;
+    if ($chunk->tokensConsumed !== null) {
+        echo "\nTokens consumed: {$chunk->tokensConsumed}\n";
+    }
     flush();
+}
+
+// Bring Your Own Context (BYOC) RAG query with pre-retrieved context items
+$byocQuery = SearchQueryDto::create('Explain commercial solar financing options')
+    ->withContextItems([
+        new ContextItemDto(
+            externalId: 'solr_doc_101',
+            title: 'Solar Financing Overview',
+            content: 'Commercial solar installations typically yield a 15-22% IRR with PPA financing...',
+        ),
+    ])
+    ->withIncludeResults(true);
+
+$synthesis = $rag->query($byocQuery);
+if ($synthesis instanceof RagSynthesisDto) {
+    echo "Answer: {$synthesis->answer}\n";
+    if ($synthesis->hasResults()) {
+        foreach ($synthesis->getResults() as $resultItem) {
+            echo "- Result: {$resultItem->title} (score: {$resultItem->score})\n";
+        }
+    }
 }
 ```
 
@@ -237,16 +254,16 @@ $queryClient = $postClient->withConfiguration(['use_http_query_method' => true])
 #### API Key Scopes
 
 RAG synthesis and semantic search enforce granular API key scopes:
-- **RAG synthesis** (`$client->rag()->query()`, `$client->rag()->stream()`, `$client->search()->stream()`, and `$client->searchStream()` calling `/api/v1/rag/query` or `/api/v1/search/rag`) requires an API key scoped to `rag` or `all`.
+- **RAG synthesis** (`$client->rag()->query()` and `$client->rag()->stream()` calling `/api/v1/rag/query`) requires an API key scoped to `rag` or `all`.
 - **Standard vector search** (`$client->search()->query()`, `$client->search()->all()`, `$client->search($query)`, and `$client->searchAll()` calling `/api/v1/search/query`) requires `search` or `all`.
 
-Calling RAG endpoints with a `search`-only key returns an HTTP `403 Forbidden` response. Because `searchStream()`, `$client->search()->stream()`, and `$client->rag()->stream()` return a lazy PHP generator, the HTTP request executes on the first stream iteration and throws an `AuthorizationException` (code `403`) before any chunks are yielded:
+Calling RAG endpoints with a `search`-only key returns an HTTP `403 Forbidden` response. Because `$client->rag()->stream()` returns a lazy PHP generator, the HTTP request executes on the first stream iteration and throws an `AuthorizationException` (code `403`) before any chunks are yielded:
 
 ```php
 use KinetiStack\Sdk\Exception\AuthorizationException;
 
 try {
-    $stream = $client->searchStream('Explain commercial solar financing options');
+    $stream = $client->rag()->stream('Explain commercial solar financing options');
 
     foreach ($stream as $chunk) {
         echo $chunk->text;
@@ -266,7 +283,7 @@ When upgrading from `kinetistack-io/php-sdk` `^1.0` to `^2.0`:
 2. **RFC 10008 HTTP `QUERY` Default**: Vector search (`/api/v1/search/query`) and RAG (`/api/v1/rag/query`, `/api/v1/search/rag`) now dispatch HTTP `QUERY` requests by default instead of `POST`. If your network passes through legacy proxies or middleboxes that block `QUERY`, pass `['use_http_query_method' => false]` in `$options` or via `Configuration`.
 3. **Sub-Client Accessors (`$client->search()` & `$client->rag()`)**:
    - Calling `$client->search($query)` with a `SearchQueryDto` or `string` continues to execute the search directly and return `SearchResponseDto` (backward-compatible).
-   - Calling `$client->search()` without arguments returns `SearchClientInterface` (`query()`, `search()`, `all()`, `stream()`).
+   - Calling `$client->search()` without arguments returns `SearchClientInterface` (`query()`, `search()`, `all()`).
    - Calling `$client->rag()` returns `RagClientInterface` (`query()`, `stream()`).
    - Custom implementations of `KinetiClientInterface` must update their `search()` signature to `search(SearchQueryDto|string|null $query = null): SearchClientInterface|SearchResponseDto` and implement `rag()`, `getConfiguration()`, and `withConfiguration()`.
 4. **Removed Deprecated v1 Symbols**:

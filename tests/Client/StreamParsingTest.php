@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Tests\Client;
 
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
+use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Exception\ServerException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Transport\SseParser;
@@ -312,5 +313,62 @@ class StreamParsingTest extends TestCase
         $this->expectExceptionMessage('maxBufferBytes must be a positive integer, got -5.');
 
         new SseParser(-5);
+    }
+
+    public function testScenario2ParsingInitialSearchResultsInSseStream(): void
+    {
+        $chunks = [
+            "data: {\"results\":[{\"external_id\":\"doc:hit:99\",\"title\":\"Direct Hit\",\"content\":\"Payload content for hit 99.\",\"chunk_index\":3,\"score\":0.91,\"metadata\":{\"env\":\"prod\"}}],\"total\":1}\n\n",
+            "data: {\"chunk\": \"Synthesized \"}\n\n",
+            "data: {\"chunk\": \"answer text [1].\"}\n\n",
+            "data: {\"is_done\": true, \"citations\": [\"doc:hit:99\"]}\n\n",
+        ];
+
+        /** @var RagStreamChunkDto[] $results */
+        $results = iterator_to_array($this->parser->parse($chunks));
+
+        $this->assertCount(4, $results);
+
+        // First chunk contains search results
+        $firstChunk = $results[0];
+        $this->assertTrue($firstChunk->hasResults());
+        $this->assertCount(1, $firstChunk->results);
+        $this->assertInstanceOf(SearchResultItemDto::class, $firstChunk->results[0]);
+        $this->assertSame('doc:hit:99', $firstChunk->results[0]->externalId);
+        $this->assertSame('Direct Hit', $firstChunk->results[0]->title);
+        $this->assertSame('Payload content for hit 99.', $firstChunk->results[0]->content);
+        $this->assertSame(3, $firstChunk->results[0]->chunkIndex);
+        $this->assertSame(0.91, $firstChunk->results[0]->score);
+        $this->assertSame(['env' => 'prod'], $firstChunk->results[0]->metadata);
+        $this->assertSame('', $firstChunk->text);
+        $this->assertFalse($firstChunk->isDone);
+
+        // Subsequent chunks are normal text tokens
+        $this->assertSame('Synthesized ', $results[1]->text);
+        $this->assertFalse($results[1]->hasResults());
+
+        $this->assertSame('answer text [1].', $results[2]->text);
+        $this->assertFalse($results[2]->hasResults());
+
+        // Final chunk is done with citations
+        $this->assertTrue($results[3]->isDone);
+        $this->assertSame(['doc:hit:99'], $results[3]->citations);
+    }
+
+    public function testParsingSseStreamWithExplicitResultsEvent(): void
+    {
+        $chunks = [
+            "event: results\ndata: [{\"external_id\":\"item:1\",\"title\":\"Title 1\",\"content\":\"Content 1\"}]\n\n",
+            "data: {\"chunk\": \"Answer\"}\n\n",
+            "event: done\ndata: [DONE]\n\n",
+        ];
+
+        /** @var RagStreamChunkDto[] $results */
+        $results = iterator_to_array($this->parser->parse($chunks));
+
+        $this->assertCount(2, $results);
+        $this->assertTrue($results[0]->hasResults());
+        $this->assertSame('item:1', $results[0]->results[0]->externalId);
+        $this->assertSame('Answer', $results[1]->text);
     }
 }

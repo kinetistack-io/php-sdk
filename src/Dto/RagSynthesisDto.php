@@ -11,6 +11,7 @@ class RagSynthesisDto
 
     /**
      * @param list<string> $citations List of unique external_ids referenced in the synthesized answer
+     * @param list<SearchResultItemDto> $results List of hydrated search results if include_results was enabled
      */
     public function __construct(
         public readonly ?string $answer = null,
@@ -18,7 +19,21 @@ class RagSynthesisDto
         public readonly bool $successful = true,
         public readonly ?string $fallbackReason = null,
         public readonly ?int $tokensConsumed = null,
+        public readonly array $results = [],
     ) {
+    }
+
+    /**
+     * @return list<SearchResultItemDto>
+     */
+    public function getResults(): array
+    {
+        return $this->results;
+    }
+
+    public function hasResults(): bool
+    {
+        return !empty($this->results);
     }
 
     /**
@@ -40,6 +55,13 @@ class RagSynthesisDto
             $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
+        if (!empty($this->results)) {
+            $data['results'] = array_map(
+                static fn (SearchResultItemDto $item): array => $item->toArray(),
+                $this->results
+            );
+        }
+
         return $data;
     }
 
@@ -54,12 +76,26 @@ class RagSynthesisDto
         $fallbackReason = self::extractNullableString($data['fallback_reason'] ?? $data['fallbackReason'] ?? null);
         $tokensConsumed = self::extractTokensConsumed($data);
 
+        /** @var list<SearchResultItemDto> $results */
+        $results = [];
+        if (isset($data['results']) && is_array($data['results'])) {
+            foreach ($data['results'] as $item) {
+                if ($item instanceof SearchResultItemDto) {
+                    $results[] = $item;
+                } elseif (is_array($item)) {
+                    /** @var array<string, mixed> $item */
+                    $results[] = SearchResultItemDto::fromArray($item);
+                }
+            }
+        }
+
         return new self(
             $answer,
             $citations,
             $successful,
             $fallbackReason,
-            $tokensConsumed
+            $tokensConsumed,
+            $results
         );
     }
 }

@@ -148,6 +148,10 @@ class SseParser
         }
 
         if (is_array($decoded)) {
+            if ($event === 'results' && !isset($decoded['results']) && array_is_list($decoded)) {
+                $decoded = ['results' => $decoded];
+            }
+
             if (isset($decoded['error'])) {
                 $rawMsg = null;
                 if (is_string($decoded['error'])) {

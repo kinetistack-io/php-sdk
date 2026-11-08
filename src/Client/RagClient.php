@@ -71,10 +71,6 @@ class RagClient implements RagClientInterface
         /** @var array<string, mixed> $data */
         $data = $response->toArray();
 
-        if (isset($data['results']) || isset($data['member']) || isset($data['hydra:member']) || isset($data['items'])) {
-            return SearchResponseDto::fromArray($data);
-        }
-
         if (
             array_key_exists('answer', $data)
             || array_key_exists('citations', $data)
@@ -88,6 +84,9 @@ class RagClient implements RagClientInterface
         if (isset($data['synthesis']) && is_array($data['synthesis'])) {
             /** @var array<string, mixed> $synthesisData */
             $synthesisData = $data['synthesis'];
+            if (isset($data['results']) && !isset($synthesisData['results'])) {
+                $synthesisData['results'] = $data['results'];
+            }
             foreach (['tokens_consumed', 'tokensConsumed', 'usage'] as $tokenKey) {
                 if (isset($data[$tokenKey]) && !isset($synthesisData[$tokenKey])) {
                     $synthesisData[$tokenKey] = $data[$tokenKey];
@@ -95,6 +94,10 @@ class RagClient implements RagClientInterface
             }
 
             return RagSynthesisDto::fromArray($synthesisData);
+        }
+
+        if (isset($data['results']) || isset($data['member']) || isset($data['hydra:member']) || isset($data['items'])) {
+            return SearchResponseDto::fromArray($data);
         }
 
         return SearchResponseDto::fromArray($data);
@@ -171,8 +174,12 @@ class RagClient implements RagClientInterface
         $seenCitations = [];
         $citations = [];
         $tokensConsumed = null;
+        $results = [];
 
         foreach ($parser->parse([$response->getContent()]) as $chunk) {
+            if (!empty($chunk->results)) {
+                $results = array_merge($results, $chunk->results);
+            }
             $answer .= $chunk->text;
             foreach ($chunk->citations as $citation) {
                 if (!isset($seenCitations[$citation])) {
@@ -190,6 +197,7 @@ class RagClient implements RagClientInterface
             citations: $citations,
             successful: true,
             tokensConsumed: $tokensConsumed,
+            results: $results,
         );
     }
 }

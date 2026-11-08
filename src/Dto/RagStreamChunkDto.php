@@ -14,6 +14,7 @@ class RagStreamChunkDto implements \Stringable
     /**
      * @param list<string> $citations
      * @param array<string, mixed> $metadata
+     * @param list<SearchResultItemDto> $results
      */
     public function __construct(
         public readonly string $text,
@@ -22,6 +23,7 @@ class RagStreamChunkDto implements \Stringable
         public readonly array $metadata = [],
         ?string $chunk = null,
         public readonly ?int $tokensConsumed = null,
+        public readonly array $results = [],
     ) {
         $this->chunk = $chunk ?? $this->text;
     }
@@ -46,6 +48,19 @@ class RagStreamChunkDto implements \Stringable
         return $this->isDone;
     }
 
+    /**
+     * @return list<SearchResultItemDto>
+     */
+    public function getResults(): array
+    {
+        return $this->results;
+    }
+
+    public function hasResults(): bool
+    {
+        return !empty($this->results);
+    }
+
     public function __toString(): string
     {
         return $this->text;
@@ -68,6 +83,13 @@ class RagStreamChunkDto implements \Stringable
             $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
+        if (!empty($this->results)) {
+            $data['results'] = array_map(
+                static fn (SearchResultItemDto $item): array => $item->toArray(),
+                $this->results
+            );
+        }
+
         return $data;
     }
 
@@ -87,6 +109,19 @@ class RagStreamChunkDto implements \Stringable
             $tokensConsumed = self::extractTokensConsumed($metadata);
         }
 
+        /** @var list<SearchResultItemDto> $results */
+        $results = [];
+        if (isset($data['results']) && is_array($data['results'])) {
+            foreach ($data['results'] as $item) {
+                if ($item instanceof SearchResultItemDto) {
+                    $results[] = $item;
+                } elseif (is_array($item)) {
+                    /** @var array<string, mixed> $item */
+                    $results[] = SearchResultItemDto::fromArray($item);
+                }
+            }
+        }
+
         return new self(
             text: $text,
             isDone: $isDone,
@@ -94,6 +129,7 @@ class RagStreamChunkDto implements \Stringable
             metadata: $metadata,
             chunk: self::extractNullableString($data['chunk'] ?? null),
             tokensConsumed: $tokensConsumed,
+            results: $results,
         );
     }
 }

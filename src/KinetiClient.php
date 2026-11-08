@@ -16,19 +16,16 @@ use KinetiStack\Sdk\Dto\DocumentListOptionsDto;
 use KinetiStack\Sdk\Dto\HealthStatusDto;
 use KinetiStack\Sdk\Dto\ImageInputDto;
 use KinetiStack\Sdk\Dto\JobDto;
-use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
 use KinetiStack\Sdk\Dto\VisionOptionsDto;
-use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\Transport\HttpTransport;
-use KinetiStack\Sdk\Transport\TransportHelperTrait;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -36,7 +33,6 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class KinetiClient implements KinetiClientInterface
 {
     use ClientHelperTrait;
-    use TransportHelperTrait;
 
     public const MAX_BATCH_PAYLOAD_BYTES = 10 * 1024 * 1024; // 10MB (10485760 bytes)
     public const DEFAULT_POLL_INTERVAL_SECONDS = 2;
@@ -547,29 +543,6 @@ class KinetiClient implements KinetiClientInterface
     public function searchAll(SearchQueryDto|string $query): \Generator
     {
         return $this->search()->all($query);
-    }
-
-    /**
-     * Execute a semantic vector search with streaming RAG synthesis.
-     *
-     * Note on API key scopes:
-     * RAG synthesis (`/api/v1/rag/query` or legacy `/api/v1/search/rag`) requires an API key scoped to `rag` or `all`.
-     * Standard vector search (`/api/v1/search/query`) requires `search` or `all`.
-     * Calling RAG endpoints with a `search`-only API key results in an HTTP 403 Forbidden error,
-     * which throws an AuthorizationException on the first stream iteration.
-     *
-     * @param SearchQueryDto|string $query Search query or query string
-     * @param string $path Endpoint path (defaults to '/api/v1/rag/query')
-     * @return \Generator<int, RagStreamChunkDto>
-     *
-     * @throws AuthorizationException When the API key lacks the required scope (`rag` or `all`) or access is denied (HTTP 403)
-     * @throws KinetiException
-     */
-    public function searchStream(SearchQueryDto|string $query, string $path = '/api/v1/rag/query'): \Generator
-    {
-        $this->validatePath($path);
-
-        return $this->search()->stream($query, $path);
     }
 
     /**

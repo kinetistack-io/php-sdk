@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+env:
+  CI: "true"
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
 jobs:
   matrix-tests:
     name: PHPUnit (PHP ${{ matrix.php-version }})
@@ -31,6 +35,12 @@ jobs:
           php-version: ${{ matrix.php-version }}
           extensions: curl, intl, pcntl, zip
           coverage: none
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Configure Composer GitHub token
+        if: env.GH_TOKEN != ''
+        run: composer config --global --auth github-oauth.github.com "$GH_TOKEN"
 
       - name: Cache Composer packages
         uses: actions/cache@v4
@@ -62,6 +72,12 @@ jobs:
           php-version: '8.4'
           extensions: curl, intl, pcntl, zip
           coverage: none
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Configure Composer GitHub token
+        if: env.GH_TOKEN != ''
+        run: composer config --global --auth github-oauth.github.com "$GH_TOKEN"
 
       - name: Cache Composer packages
         uses: actions/cache@v4

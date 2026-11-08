@@ -5,20 +5,14 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Client;
 
 use KinetiStack\Sdk\Configuration;
-use KinetiStack\Sdk\Dto\RagStreamChunkDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Dto\SearchResponseDto;
 use KinetiStack\Sdk\Dto\SearchResultItemDto;
-use KinetiStack\Sdk\Exception\AuthorizationException;
 use KinetiStack\Sdk\Exception\KinetiException;
-use KinetiStack\Sdk\Transport\SseParser;
-use KinetiStack\Sdk\Transport\TransportHelperTrait;
 use KinetiStack\Sdk\Transport\TransportInterface;
 
 class SearchClient implements SearchClientInterface
 {
-    use TransportHelperTrait;
-
     public const MAX_SEARCH_OFFSET = 1000;
 
     private readonly Configuration $configuration;
@@ -113,39 +107,5 @@ class SearchClient implements SearchClientInterface
 
             $offset = $nextOffset;
         }
-    }
-
-    /**
-     * @param SearchQueryDto|string $query Search query DTO or raw query string
-     * @param string $path Endpoint path (defaults to '/api/v1/rag/query')
-     * @return \Generator<int, RagStreamChunkDto>
-     *
-     * @throws AuthorizationException
-     * @throws KinetiException
-     */
-    public function stream(SearchQueryDto|string $query, string $path = '/api/v1/rag/query'): \Generator
-    {
-        $this->validatePath($path);
-
-        return $this->doStream($query, $path);
-    }
-
-    private function doStream(SearchQueryDto|string $query, string $path): \Generator
-    {
-        if (is_string($query)) {
-            $query = SearchQueryDto::create($query)->withStream(true);
-        } elseif (!$query->isStreaming()) {
-            $query = $query->withStream(true);
-        }
-
-        $httpMethod = $this->configuration->useHttpQueryMethod() ? 'QUERY' : 'POST';
-
-        $response = $this->transport->requestStream($httpMethod, $path, [
-            'json' => $query->toArray(),
-        ]);
-
-        $parser = new SseParser();
-
-        yield from $parser->parse($response->getStreamIterator());
     }
 }
