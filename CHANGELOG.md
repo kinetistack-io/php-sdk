@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-08
+
 ### Added
 - Added `ContextItemDto` (`KinetiStack\Sdk\Dto\ContextItemDto`) for Bring Your Own Context (BYOC) RAG synthesis and streaming (PHPSDK-73).
 - Added `withContextItems(?array $contextItems): self` and `withIncludeResults(bool $includeResults = true): self` to `SearchQueryDto` (PHPSDK-73).
