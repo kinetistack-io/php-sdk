@@ -1052,4 +1052,503 @@ class Psr18TransportTest extends TestCase
         $this->assertSame('Proxy-Authorization: [REDACTED]', $debugInfo['defaultOptions']['headers'][2]);
         $this->assertSame('X-Custom-Header: public-value', $debugInfo['defaultOptions']['headers'][3]);
     }
+
+    public function testForwardingTlsVerificationAndTimeoutOptionsToGuzzleClientInterface(): void
+    {
+        /** @var array<string, mixed>|null $receivedOptions */
+        $receivedOptions = null;
+
+        $mock = new MockHandler([
+            function ($request, $options) use (&$receivedOptions) {
+                $receivedOptions = $options;
+                return new Response(200, ['Content-Type' => 'application/json'], '{"ok": true}');
+            },
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $client,
+            [
+                'verify_peer' => false,
+                'verify_host' => false,
+                'timeout' => 15.0,
+            ]
+        );
+
+        $response = $transport->request('GET', '/v1/test');
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertNotNull($receivedOptions);
+        $this->assertFalse($receivedOptions['verify']);
+        $this->assertSame(15.0, $receivedOptions['timeout']);
+        $this->assertFalse($receivedOptions['http_errors']);
+    }
+
+    public function testGuzzleOptionForwardingOverridesFromPerRequestOptions(): void
+    {
+        /** @var array<string, mixed>|null $receivedOptions */
+        $receivedOptions = null;
+
+        $mock = new MockHandler([
+            function ($request, $options) use (&$receivedOptions) {
+                $receivedOptions = $options;
+                return new Response(200, ['Content-Type' => 'application/json'], '{"ok": true}');
+            },
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $client,
+            ['timeout' => 10.0]
+        );
+
+        $transport->request('POST', '/v1/test', [
+            'timeout' => 45.0,
+            'verify' => '/path/to/cacert.pem',
+        ]);
+
+        $this->assertNotNull($receivedOptions);
+        $this->assertSame(45.0, $receivedOptions['timeout']);
+        $this->assertSame('/path/to/cacert.pem', $receivedOptions['verify']);
+        $this->assertFalse($receivedOptions['http_errors']);
+    }
+
+    public function testPreservingPhpunitMockObjectCompatibilityInRequestStream(): void
+    {
+        $mockClient = $this->createMock(\GuzzleHttp\ClientInterface::class);
+        $responseStream = Utils::streamFor("data: {\"chunk\": \"hello\"}\n\n");
+        $mockResponse = new Response(200, ['Content-Type' => 'text/event-stream'], $responseStream);
+
+        $mockClient->expects($this->once())
+            ->method('send')
+            ->willReturn($mockResponse);
+
+        $transport = new Psr18Transport('https://api.kinetistack.com', 'X-Kineti-Key', 'test-key', $mockClient);
+        $response = $transport->requestStream('GET', '/v1/stream');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $chunks = iterator_to_array($response->getStreamIterator());
+        $this->assertCount(1, $chunks);
+        $this->assertSame("data: {\"chunk\": \"hello\"}\n\n", $chunks[0]);
+    }
+
+    public function testRequestStreamWithCurlExplicitlyDisabled(): void
+    {
+        /** @var array<string, mixed>|null $receivedOptions */
+        $receivedOptions = null;
+
+        $mock = new MockHandler([
+            function ($request, $options) use (&$receivedOptions) {
+                $receivedOptions = $options;
+                return new Response(200, ['Content-Type' => 'text/event-stream'], "data: test\n\n");
+            },
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport(
+            'https://api.kinetistack.com',
+            'X-Kineti-Key',
+            'test-key',
+            $client,
+            ['curl_stream' => false]
+        );
+
+        $response = $transport->requestStream('GET', '/v1/stream');
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertNotNull($receivedOptions);
+        $this->assertTrue($receivedOptions['stream'] ?? false);
+    }
+
+    public function testHttp403ForbiddenInRequestStreamThrowsAuthorizationException(): void
+    {
+        $errorBody = json_encode(['detail' => 'Forbidden stream access'], JSON_THROW_ON_ERROR);
+        $mock = new MockHandler([
+            new Response(403, ['Content-Type' => 'application/problem+json'], $errorBody),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client);
+
+        $this->expectException(\KinetiStack\Sdk\Exception\AuthorizationException::class);
+        $this->expectExceptionMessage('Forbidden stream access');
+
+        $transport->requestStream('GET', '/v1/stream');
+    }
+
+    public function testHttp429TooManyRequestsInRequestStreamThrowsRateLimitException(): void
+    {
+        $errorBody = json_encode(['detail' => 'Rate limit exceeded'], JSON_THROW_ON_ERROR);
+        $mock = new MockHandler([
+            new Response(429, [
+                'Content-Type' => 'application/problem+json',
+                'Retry-After' => '10',
+                'X-RateLimit-Remaining' => '0',
+            ], $errorBody),
+        ]);
+        $client = new Client(['handler' => HandlerStack::create($mock)]);
+
+        $transport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-key', $client, ['max_retries' => 0]);
+
+        $this->expectException(\KinetiStack\Sdk\Exception\RateLimitExceededException::class);
+        $this->expectExceptionMessage('Rate limit exceeded');
+
+        $transport->requestStream('GET', '/v1/stream');
+    }
+
+    public function testRequestStreamWithCurlRetryLoopOn429(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        [$address, $pid] = $this->startSocketServer([
+            function ($conn): void {
+                $req = '';
+                while (!str_contains($req, "\r\n\r\n")) {
+                    $buf = fread($conn, 1024);
+                    if ($buf === false || $buf === '') {
+                        break;
+                    }
+                    $req .= $buf;
+                }
+                $errorBody = json_encode(['detail' => 'Rate limited'], JSON_THROW_ON_ERROR);
+                fwrite($conn, "HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/problem+json\r\nRetry-After: 0\r\nContent-Length: " . strlen($errorBody) . "\r\nConnection: close\r\n\r\n" . $errorBody);
+                fclose($conn);
+            },
+            function ($conn): void {
+                $req = '';
+                while (!str_contains($req, "\r\n\r\n")) {
+                    $buf = fread($conn, 1024);
+                    if ($buf === false || $buf === '') {
+                        break;
+                    }
+                    $req .= $buf;
+                }
+                $body = "data: stream-chunk\n\n";
+                fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: " . strlen($body) . "\r\n\r\n" . $body);
+                fclose($conn);
+            },
+        ]);
+
+        try {
+            $pausedDurations = [];
+            $transport = new Psr18Transport(
+                'http://' . $address,
+                'X-Kineti-Key',
+                'test-key',
+                null,
+                [
+                    'curl_stream' => true,
+                    'max_retries' => 2,
+                    'pause_handler' => function (float $duration) use (&$pausedDurations): void {
+                        $pausedDurations[] = $duration;
+                    },
+                ]
+            );
+
+            $response = $transport->requestStream('GET', '/v1/stream');
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame("data: stream-chunk\n\n", $response->getContent());
+            $this->assertCount(1, $pausedDurations);
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testRequestStreamWithCurlNumericIndexedHeaders(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        [$address, $pid] = $this->startSocketServer([
+            function ($conn): void {
+                $req = '';
+                while (!str_contains($req, "\r\n\r\n")) {
+                    $buf = fread($conn, 1024);
+                    if ($buf === false || $buf === '') {
+                        break;
+                    }
+                    $req .= $buf;
+                }
+                fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: " . strlen($req) . "\r\n\r\n" . $req);
+                fclose($conn);
+            },
+        ]);
+
+        try {
+            $transport = new Psr18Transport('http://' . $address, 'X-Kineti-Key', 'test-key', null, ['curl_stream' => true]);
+            $response = $transport->requestStream('GET', '/v1/stream', [
+                'headers' => [
+                    'X-Standard-Header' => 'standard-value',
+                    0 => 'X-Numeric-Header: numeric-value',
+                ],
+            ]);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $echoedHeaders = $response->getContent();
+            $this->assertStringContainsString('X-Standard-Header: standard-value', $echoedHeaders);
+            $this->assertStringContainsString('X-Numeric-Header: numeric-value', $echoedHeaders);
+            $this->assertStringNotContainsString('0: X-Numeric-Header', $echoedHeaders);
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testRequestStreamWithCurlAcceptHeaderPrecedence(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        $echoAcceptHeader = static function ($conn): void {
+            $req = '';
+            while (!str_contains($req, "\r\n\r\n")) {
+                $buf = fread($conn, 1024);
+                if ($buf === false || $buf === '') {
+                    break;
+                }
+                $req .= $buf;
+            }
+            $accept = '';
+            if (preg_match('/^Accept:\s*(.*)$/mi', $req, $matches)) {
+                $accept = trim($matches[1]);
+            }
+            fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: " . strlen($accept) . "\r\n\r\n" . $accept);
+            fclose($conn);
+        };
+
+        [$address, $pid] = $this->startSocketServer([$echoAcceptHeader, $echoAcceptHeader]);
+
+        try {
+            // Default options has Accept: application/json
+            $transport = new Psr18Transport(
+                'http://' . $address,
+                'X-Kineti-Key',
+                'test-key',
+                null,
+                [
+                    'curl_stream' => true,
+                    'headers' => ['Accept' => 'application/json'],
+                ]
+            );
+
+            // 1. Calling requestStream() without explicit Accept should default to text/event-stream
+            $res1 = $transport->requestStream('GET', '/v1/stream');
+            $this->assertSame('text/event-stream', $res1->getContent());
+
+            // 2. Calling requestStream() with explicit Accept should preserve the caller's override
+            $res2 = $transport->requestStream('GET', '/v1/stream', [
+                'headers' => ['Accept' => 'text/custom-event-stream'],
+            ]);
+            $this->assertSame('text/custom-event-stream', $res2->getContent());
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testRequestStreamWithCurlBodyTypes(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        $echoBody = static function ($conn): void {
+            $req = '';
+            while (!str_contains($req, "\r\n\r\n")) {
+                $buf = fread($conn, 1024);
+                if ($buf === false || $buf === '') {
+                    break;
+                }
+                $req .= $buf;
+            }
+            $body = '';
+            if (preg_match('/Content-Length:\s*(\d+)/i', $req, $matches)) {
+                $length = (int) $matches[1];
+                $parts = explode("\r\n\r\n", $req, 2);
+                $body = $parts[1] ?? '';
+                while (strlen($body) < $length) {
+                    $buf = fread($conn, 1024);
+                    if ($buf === false || $buf === '') {
+                        break;
+                    }
+                    $body .= $buf;
+                }
+            }
+            fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: " . strlen($body) . "\r\n\r\n" . $body);
+            fclose($conn);
+        };
+
+        [$address, $pid] = $this->startSocketServer([$echoBody, $echoBody, $echoBody]);
+
+        try {
+            $transport = new Psr18Transport('http://' . $address, 'X-Kineti-Key', 'test-key', null, ['curl_stream' => true]);
+
+            // 1. StreamInterface
+            $stream = Utils::streamFor('stream-interface-content');
+            $res1 = $transport->requestStream('POST', '/v1/stream', ['body' => $stream]);
+            $this->assertSame('stream-interface-content', $res1->getContent());
+
+            // 2. Resource
+            $res = fopen('php://temp', 'w+b');
+            $this->assertIsResource($res);
+            fwrite($res, 'resource-content');
+            rewind($res);
+            $res2 = $transport->requestStream('POST', '/v1/stream', ['body' => $res]);
+            $this->assertSame('resource-content', $res2->getContent());
+            fclose($res);
+
+            // 3. Traversable
+            $generator = (function () {
+                yield 'traversable-';
+                yield 'chunk';
+            })();
+            $res3 = $transport->requestStream('POST', '/v1/stream', ['body' => $generator]);
+            $this->assertSame('traversable-chunk', $res3->getContent());
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testRequestStreamWithCurlCustomCaBundlePath(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        [$address, $pid] = $this->startSocketServer([
+            function ($conn): void {
+                $req = '';
+                while (!str_contains($req, "\r\n\r\n")) {
+                    $buf = fread($conn, 1024);
+                    if ($buf === false || $buf === '') {
+                        break;
+                    }
+                    $req .= $buf;
+                }
+                fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 2\r\n\r\nok");
+                fclose($conn);
+            },
+        ]);
+
+        try {
+            $transport = new Psr18Transport('http://' . $address, 'X-Kineti-Key', 'test-key', null, ['curl_stream' => true]);
+            $response = $transport->requestStream('GET', '/v1/stream', [
+                'verify' => '/path/to/custom-ca.pem',
+                'timeout' => 2.5,
+            ]);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('ok', $response->getContent());
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testRequestStreamWithCurlCustomCaBundlePathAndDisabledVerifyHost(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        [$address, $pid] = $this->startSocketServer([
+            function ($conn): void {
+                $req = '';
+                while (!str_contains($req, "\r\n\r\n")) {
+                    $buf = fread($conn, 1024);
+                    if ($buf === false || $buf === '') {
+                        break;
+                    }
+                    $req .= $buf;
+                }
+                fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 4\r\n\r\ndone");
+                fclose($conn);
+            },
+        ]);
+
+        try {
+            $transport = new Psr18Transport('http://' . $address, 'X-Kineti-Key', 'test-key', null, ['curl_stream' => true]);
+            $response = $transport->requestStream('GET', '/v1/stream', [
+                'verify' => '/path/to/custom-ca.pem',
+                'verify_host' => false,
+                'timeout' => 2.5,
+            ]);
+
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertSame('done', $response->getContent());
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testRequestStreamWithCurlUnsupportedBodyTypeThrows(): void
+    {
+        $transport = new Psr18Transport('http://127.0.0.1:54321', 'X-Kineti-Key', 'test-key', null, ['curl_stream' => true]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported request body type for streaming request: stdClass');
+
+        $transport->requestStream('POST', '/v1/stream', ['body' => new \stdClass()]);
+    }
+
+    /**
+     * Start a temporary local TCP socket server in a child process handling sequential requests.
+     *
+     * @param list<callable(resource): void> $handlers
+     * @return array{0: string, 1: int}
+     */
+    private function startSocketServer(array $handlers): array
+    {
+        if (!function_exists('pcntl_fork')) {
+            self::markTestSkipped('pcntl_fork is required for local socket server tests.');
+        }
+
+        $server = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($server === false) {
+            self::fail('Failed to start TCP socket server: ' . $errstr);
+        }
+
+        $address = stream_socket_get_name($server, false);
+        if ($address === false) {
+            fclose($server);
+            self::fail('Failed to retrieve socket address.');
+        }
+
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            fclose($server);
+            self::fail('Failed to fork child process.');
+        }
+
+        if ($pid === 0) {
+            try {
+                foreach ($handlers as $handler) {
+                    $conn = stream_socket_accept($server, 5);
+                    if ($conn !== false) {
+                        $handler($conn);
+                    }
+                }
+            } finally {
+                fclose($server);
+                exit(0);
+            }
+        }
+
+        fclose($server);
+
+        return [$address, $pid];
+    }
+
+    private function waitForChildProcess(int $pid): void
+    {
+        if (function_exists('pcntl_waitpid')) {
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+        }
+    }
 }

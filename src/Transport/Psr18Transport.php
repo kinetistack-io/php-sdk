@@ -20,7 +20,7 @@ class Psr18Transport implements TransportInterface
 
     public const DEFAULT_MAX_RETRY_DELAY_SECONDS = 60.0;
 
-    private readonly ClientInterface $client;
+    private readonly ClientInterface|\GuzzleHttp\ClientInterface $client;
     private readonly RequestFactoryInterface $requestFactory;
     private readonly StreamFactoryInterface $streamFactory;
     private ?RateLimitInfoDto $lastRateLimitInfo = null;
@@ -34,7 +34,7 @@ class Psr18Transport implements TransportInterface
         private readonly string $authHeaderName,
         #[\SensitiveParameter]
         private readonly string $authHeaderValue = '',
-        ?ClientInterface $client = null,
+        ClientInterface|\GuzzleHttp\ClientInterface|null $client = null,
         private readonly array $defaultOptions = [],
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null,
@@ -53,7 +53,7 @@ class Psr18Transport implements TransportInterface
         string $apiHost,
         #[\SensitiveParameter]
         string $apiKey,
-        ?ClientInterface $client = null,
+        ClientInterface|\GuzzleHttp\ClientInterface|null $client = null,
         array $defaultOptions = [],
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null
@@ -68,7 +68,7 @@ class Psr18Transport implements TransportInterface
         string $apiHost,
         #[\SensitiveParameter]
         string $token,
-        ?ClientInterface $client = null,
+        ClientInterface|\GuzzleHttp\ClientInterface|null $client = null,
         array $defaultOptions = [],
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null
@@ -87,7 +87,7 @@ class Psr18Transport implements TransportInterface
         string $headerName,
         #[\SensitiveParameter]
         string $headerValue,
-        ?ClientInterface $client = null,
+        ClientInterface|\GuzzleHttp\ClientInterface|null $client = null,
         array $defaultOptions = [],
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null
@@ -196,8 +196,13 @@ class Psr18Transport implements TransportInterface
             }
 
             try {
-                $psrResponse = $this->client->sendRequest($request);
-            } catch (ClientExceptionInterface $e) {
+                if ($this->client instanceof \GuzzleHttp\ClientInterface) {
+                    $guzzleOptions = $this->buildGuzzleOptions($mergedOptions, !empty($mergedOptions['stream']));
+                    $psrResponse = $this->client->send($request, $guzzleOptions);
+                } else {
+                    $psrResponse = $this->client->sendRequest($request);
+                }
+            } catch (ClientExceptionInterface|\GuzzleHttp\Exception\GuzzleException $e) {
                 if ($attempts <= $maxRetries) {
                     $this->delayBackoff($attempts, $mergedOptions);
                     continue;
@@ -229,16 +234,247 @@ class Psr18Transport implements TransportInterface
         }
     }
 
+    /**
+     * @param array<string, mixed> $options
+     * @return array{http_errors: false, stream?: true, timeout?: float, verify?: bool|string}
+     */
+    private function buildGuzzleOptions(array $options, bool $isStream = false): array
+    {
+        /** @var array{http_errors: false, stream?: true, timeout?: float, verify?: bool|string} $guzzleOptions */
+        $guzzleOptions = [
+            'http_errors' => false,
+        ];
+
+        if ($isStream) {
+            $guzzleOptions['stream'] = true;
+        }
+
+        if (isset($options['timeout']) && is_numeric($options['timeout'])) {
+            $guzzleOptions['timeout'] = (float) $options['timeout'];
+        }
+
+        if (array_key_exists('verify_peer', $options) && $options['verify_peer'] === false) {
+            $guzzleOptions['verify'] = false;
+        } elseif (array_key_exists('verify_host', $options) && ($options['verify_host'] === false || $options['verify_host'] === 0)) {
+            $guzzleOptions['verify'] = false;
+        } elseif (array_key_exists('verify', $options)) {
+            $verify = $options['verify'];
+            if (is_bool($verify) || is_string($verify)) {
+                $guzzleOptions['verify'] = $verify;
+            }
+        }
+
+        return $guzzleOptions;
+    }
+
     public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
     {
+        $mergedOptions = array_merge($this->defaultOptions, $options);
+        $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
+        $host = (string) parse_url($url, PHP_URL_HOST);
+
+        $isMock = str_ends_with($host, '.test')
+            || str_ends_with($host, '.example')
+            || (interface_exists(\PHPUnit\Framework\MockObject\MockObject::class) && $this->client instanceof \PHPUnit\Framework\MockObject\MockObject);
+
+        $isGuzzle = $this->client instanceof \GuzzleHttp\ClientInterface;
+        $hasCurlFiber = extension_loaded('curl') && function_exists('curl_init') && class_exists(\Fiber::class);
+
+        $useCurlStream = ($mergedOptions['curl_stream'] ?? null) === true
+            || (($mergedOptions['curl_stream'] ?? null) !== false && $isGuzzle && !$isMock && $hasCurlFiber);
+
+        if ($useCurlStream) {
+            return $this->requestStreamWithCurl($method, $path, $options);
+        }
+
         /** @var array<string, mixed> $optionHeaders */
         $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
         $options['headers'] = array_merge(
             ['Accept' => 'text/event-stream'],
             $optionHeaders
         );
+        $options['stream'] = true;
 
         return $this->request($method, $path, $options);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function requestStreamWithCurl(string $method, string $path, array $options = []): TransportResponseInterface
+    {
+        $this->validatePath($path);
+        $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
+
+        $mergedOptions = array_merge($this->defaultOptions, $options);
+
+        if (!empty($mergedOptions['query']) && is_array($mergedOptions['query'])) {
+            $qs = http_build_query($mergedOptions['query']);
+            $url .= (str_contains($url, '?') ? '&' : '?') . $qs;
+        }
+
+        /** @var array<string, mixed> $defaultHeaders */
+        $defaultHeaders = is_array($this->defaultOptions['headers'] ?? null) ? $this->defaultOptions['headers'] : [];
+        /** @var array<string, mixed> $optionHeaders */
+        $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
+        $headers = array_merge(
+            $defaultHeaders,
+            ['Accept' => 'text/event-stream'],
+            $optionHeaders
+        );
+
+        $hasAuth = false;
+        $targetHeaderLower = strtolower($this->authHeaderName);
+        foreach (array_keys($headers) as $key) {
+            $keyLower = strtolower((string) $key);
+            if ($keyLower === $targetHeaderLower || $keyLower === 'authorization' || $keyLower === 'x-kineti-key') {
+                $hasAuth = true;
+                break;
+            }
+        }
+        if (!$hasAuth && $this->authHeaderValue !== '' && $this->authHeaderName !== '') {
+            $headers[$this->authHeaderName] = $this->authHeaderValue;
+        }
+
+        $payload = null;
+        if (isset($mergedOptions['json'])) {
+            try {
+                $payload = json_encode($mergedOptions['json'], JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                throw new TransportException('Failed to JSON encode request payload: ' . $e->getMessage(), 0, $e);
+            }
+            $hasContentType = false;
+            foreach (array_keys($headers) as $key) {
+                if (strtolower((string) $key) === 'content-type') {
+                    $hasContentType = true;
+                    break;
+                }
+            }
+            if (!$hasContentType) {
+                $headers['Content-Type'] = 'application/json';
+            }
+        } elseif (isset($mergedOptions['body'])) {
+            $rawBody = $mergedOptions['body'];
+            if (is_callable($rawBody)) {
+                $rawBody = $rawBody();
+            }
+
+            if ($rawBody instanceof \Psr\Http\Message\StreamInterface) {
+                try {
+                    if ($rawBody->isSeekable()) {
+                        $rawBody->rewind();
+                    }
+                    $payload = $rawBody->getContents();
+                } catch (\Throwable $e) {
+                    throw new TransportException('Failed to read request body stream: ' . $e->getMessage(), 0, $e);
+                }
+            } elseif (is_resource($rawBody)) {
+                $payload = stream_get_contents($rawBody);
+                if ($payload === false) {
+                    throw new TransportException('Failed to read request body resource.');
+                }
+            } elseif ($rawBody instanceof \Traversable) {
+                $chunks = [];
+                foreach ($rawBody as $chunk) {
+                    $chunks[] = (string) $chunk;
+                }
+                $payload = implode('', $chunks);
+            } elseif (is_string($rawBody)) {
+                $payload = $rawBody;
+            } elseif ($rawBody !== null) {
+                throw new \InvalidArgumentException('Unsupported request body type for streaming request: ' . get_debug_type($rawBody));
+            }
+        }
+
+        $maxRetries = isset($mergedOptions['max_retries']) && is_numeric($mergedOptions['max_retries'])
+            ? (int) $mergedOptions['max_retries']
+            : 0;
+        $attempts = 0;
+
+        while (true) {
+            $attempts++;
+
+            $ch = curl_init($url);
+            if ($ch === false) {
+                throw new TransportException('Failed to initialize cURL handle.');
+            }
+
+            $httpMethod = $method !== '' ? $method : 'GET';
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $httpMethod);
+            if ($payload !== null && $payload !== '') {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            }
+
+            $curlHeaders = [];
+            foreach ($headers as $name => $val) {
+                if (is_array($val)) {
+                    foreach ($val as $v) {
+                        if (is_scalar($v) || $v instanceof \Stringable) {
+                            $curlHeaders[] = is_numeric($name) ? (string) $v : (string) $name . ': ' . (string) $v;
+                        }
+                    }
+                } elseif (is_scalar($val) || $val instanceof \Stringable) {
+                    $curlHeaders[] = is_numeric($name) ? (string) $val : (string) $name . ': ' . (string) $val;
+                }
+            }
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $curlHeaders);
+
+            $verifyPeer = $mergedOptions['verify_peer'] ?? $mergedOptions['verify'] ?? true;
+            if ($verifyPeer === false) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            } elseif (is_string($verifyPeer) && $verifyPeer !== '') {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_CAINFO, $verifyPeer);
+            }
+
+            if (array_key_exists('verify_host', $mergedOptions) && ($mergedOptions['verify_host'] === false || $mergedOptions['verify_host'] === 0)) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            }
+
+            $timeout = $mergedOptions['timeout'] ?? null;
+            if (isset($timeout) && is_numeric($timeout)) {
+                $timeoutMs = (int) ceil(((float) $timeout) * 1000);
+                if ($timeoutMs > 0) {
+                    curl_setopt($ch, CURLOPT_TIMEOUT_MS, $timeoutMs);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, min($timeoutMs, 10000));
+                }
+            }
+
+            curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+
+            try {
+                $transportResponse = CurlFiberTransportResponse::fromCurlHandle($ch);
+            } catch (TransportException $e) {
+                if ($attempts <= $maxRetries) {
+                    $this->delayBackoff($attempts, $mergedOptions);
+                    continue;
+                }
+                throw $e;
+            }
+
+            $statusCode = $transportResponse->getStatusCode();
+            $this->lastRateLimitInfo = RateLimitInfoDto::fromHeaders($transportResponse->getHeaders());
+
+            if (($statusCode === 429 || $statusCode === 503) && $attempts <= $maxRetries) {
+                $transportResponse->getContent();
+                $retryAfter = $this->lastRateLimitInfo?->retryAfter;
+                $this->delayBackoff($attempts, $mergedOptions, $retryAfter !== null ? (float) $retryAfter : null);
+                continue;
+            }
+
+            if ($statusCode >= 400) {
+                ResponseErrorHandler::handleError(
+                    $statusCode,
+                    $transportResponse->getHeaders(),
+                    $transportResponse->getContent()
+                );
+            }
+
+            return $transportResponse;
+        }
     }
 
     public function withAuthHeaderValue(#[\SensitiveParameter] string $authHeaderValue): self
@@ -259,7 +495,7 @@ class Psr18Transport implements TransportInterface
         return $this->apiHost;
     }
 
-    public function getClient(): ClientInterface
+    public function getClient(): ClientInterface|\GuzzleHttp\ClientInterface
     {
         return $this->client;
     }

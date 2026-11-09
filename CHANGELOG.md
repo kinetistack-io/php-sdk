@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `CurlFiberTransportResponse` (`KinetiStack\Sdk\Transport\CurlFiberTransportResponse`) implementing `TransportResponseInterface` using `ext-curl` and PHP 8.1+ `\Fiber` for unbuffered real-time SSE chunk streaming with zero 4 KB PHP stream wrapper latency (PHPSDK-74).
+- Added automatic detection of live Guzzle clients in `Psr18Transport::requestStream()` to route SSE streaming through `CurlFiberTransportResponse` while preserving mock client compatibility for unit tests (PHPSDK-74).
+- Forwarded transport options (`verify_peer`, `verify_host`, `verify`, `timeout`) and `http_errors => false` to Guzzle's `send()` method in `Psr18Transport` (PHPSDK-74).
+- Added immediate response status and header parsing on 4xx/5xx responses in `Psr18Transport::requestStream()` to drain error bodies and throw typed SDK domain exceptions before stream iteration starts (PHPSDK-74).
+
 ## [2.0.1] - 2026-11-08
 
 ### Added
