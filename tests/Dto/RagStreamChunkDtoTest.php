@@ -176,4 +176,51 @@ class RagStreamChunkDtoTest extends TestCase
         $this->assertSame('res:2', $fromData->results[0]->externalId);
         $this->assertSame('Title 2', $fromData->results[0]->title);
     }
+
+    public function testRagStreamChunkDtoWithFallbackReason(): void
+    {
+        $dto = new RagStreamChunkDto(
+            text: 'Interrupted',
+            isDone: true,
+            fallbackReason: 'Backend timeout',
+        );
+
+        $this->assertSame('Backend timeout', $dto->fallbackReason);
+        $this->assertSame('Backend timeout', $dto->getFallbackReason());
+        $array = $dto->toArray();
+        $this->assertSame('Backend timeout', $array['fallback_reason']);
+
+        // From data top-level fallback_reason
+        $fromSnake = RagStreamChunkDto::fromArray([
+            'chunk' => 'Interrupted',
+            'fallback_reason' => 'Rate limit exceeded',
+        ]);
+        $this->assertSame('Rate limit exceeded', $fromSnake->fallbackReason);
+        $this->assertSame('Rate limit exceeded', $fromSnake->getFallbackReason());
+
+        // From data top-level fallbackReason
+        $fromCamel = RagStreamChunkDto::fromArray([
+            'chunk' => 'Interrupted',
+            'fallbackReason' => 'Quota exhausted',
+        ]);
+        $this->assertSame('Quota exhausted', $fromCamel->fallbackReason);
+
+        // From metadata fallback_reason
+        $fromMetaSnake = RagStreamChunkDto::fromArray([
+            'chunk' => 'Interrupted',
+            'metadata' => ['fallback_reason' => 'Token limit'],
+        ]);
+        $this->assertSame('Token limit', $fromMetaSnake->fallbackReason);
+
+        // From metadata fallbackReason
+        $fromMetaCamel = RagStreamChunkDto::fromArray([
+            'chunk' => 'Interrupted',
+            'metadata' => ['fallbackReason' => 'Context overflow'],
+        ]);
+        $this->assertSame('Context overflow', $fromMetaCamel->fallbackReason);
+
+        // Helper create()
+        $created = RagStreamChunkDto::create('Text', true, null, 'Error reason');
+        $this->assertSame('Error reason', $created->getFallbackReason());
+    }
 }

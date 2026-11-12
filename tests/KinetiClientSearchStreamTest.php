@@ -9,6 +9,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use KinetiStack\Sdk\Dto\RagStreamChunkDto;
+use KinetiStack\Sdk\Dto\RagSynthesisDto;
 use KinetiStack\Sdk\Dto\SearchQueryDto;
 use KinetiStack\Sdk\Exception\AuthenticationException;
 use KinetiStack\Sdk\Exception\AuthorizationException;
@@ -482,5 +483,66 @@ class KinetiClientSearchStreamTest extends TestCase
         foreach ($generator as $chunk) {
             $this->assertSame('Intro chunk.', $chunk->text);
         }
+    }
+
+    public function testRagClientQueryAggregatingSseStreamWithFallbackReasonAndMetadata(): void
+    {
+        $sseChunks = [
+            "data: {\"chunk\": \"Solar panels generate \", \"metadata\": {\"model\": \"phi-3\", \"temperature\": 0.7}}\n\n",
+            "data: {\"chunk\": \"clean electricity.\", \"fallback_reason\": \"Context window exceeded\", \"metadata\": {\"successful\": false, \"provider\": \"local\"}}\n\n",
+            "data: {\"is_done\": true, \"citations\": [\"doc:1\", \"doc:2\"], \"tokens_consumed\": 48}\n\n",
+            "event: done\ndata: [DONE]\n\n",
+        ];
+
+        $mockResponse = new MockResponse($sseChunks, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client);
+
+        $result = $kineti->rag()->query('What is solar energy?');
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertSame('Solar panels generate clean electricity.', $result->answer);
+        $this->assertSame(['doc:1', 'doc:2'], $result->citations);
+        $this->assertFalse($result->successful);
+        $this->assertSame('Context window exceeded', $result->fallbackReason);
+        $this->assertSame(48, $result->tokensConsumed);
+
+        $metadata = $result->getMetadata();
+        $this->assertSame('phi-3', $metadata['model'] ?? null);
+        $this->assertSame(0.7, $metadata['temperature'] ?? null);
+        $this->assertFalse($metadata['successful'] ?? null);
+        $this->assertSame('local', $metadata['provider'] ?? null);
+
+        $array = $result->toArray();
+        $this->assertSame('Context window exceeded', $array['fallback_reason']);
+        $this->assertArrayHasKey('metadata', $array);
+        $this->assertIsArray($array['metadata']);
+        $this->assertSame('phi-3', $array['metadata']['model']);
+    }
+
+    public function testRagClientQueryAggregatingSseStreamEmptyAnswerWithFallbackReason(): void
+    {
+        $sseChunks = [
+            "data: {\"fallback_reason\": \"Model crashed\", \"metadata\": {\"successful\": false}}\n\n",
+            "event: done\ndata: [DONE]\n\n",
+        ];
+
+        $mockResponse = new MockResponse($sseChunks, [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $client = new MockHttpClient($mockResponse);
+        $kineti = new KinetiClient('https://api.test', 'test-key', $client);
+
+        $result = $kineti->rag()->query('Failed query');
+
+        $this->assertInstanceOf(RagSynthesisDto::class, $result);
+        $this->assertNull($result->answer);
+        $this->assertFalse($result->successful);
+        $this->assertSame('Model crashed', $result->fallbackReason);
+        $this->assertFalse($result->getMetadata()['successful']);
     }
 }

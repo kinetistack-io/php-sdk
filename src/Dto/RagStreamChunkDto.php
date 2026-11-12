@@ -24,13 +24,18 @@ class RagStreamChunkDto implements \Stringable
         ?string $chunk = null,
         public readonly ?int $tokensConsumed = null,
         public readonly array $results = [],
+        public readonly ?string $fallbackReason = null,
     ) {
         $this->chunk = $chunk ?? $this->text;
     }
 
-    public static function create(string $text, bool $isDone = false, ?int $tokensConsumed = null): self
-    {
-        return new self($text, $isDone, tokensConsumed: $tokensConsumed);
+    public static function create(
+        string $text,
+        bool $isDone = false,
+        ?int $tokensConsumed = null,
+        ?string $fallbackReason = null
+    ): self {
+        return new self($text, $isDone, tokensConsumed: $tokensConsumed, fallbackReason: $fallbackReason);
     }
 
     public function getText(): string
@@ -46,6 +51,11 @@ class RagStreamChunkDto implements \Stringable
     public function isDone(): bool
     {
         return $this->isDone;
+    }
+
+    public function getFallbackReason(): ?string
+    {
+        return $this->fallbackReason;
     }
 
     /**
@@ -83,6 +93,10 @@ class RagStreamChunkDto implements \Stringable
             $data['tokens_consumed'] = $this->tokensConsumed;
         }
 
+        if ($this->fallbackReason !== null) {
+            $data['fallback_reason'] = $this->fallbackReason;
+        }
+
         if (!empty($this->results)) {
             $data['results'] = array_map(
                 static fn (SearchResultItemDto $item): array => $item->toArray(),
@@ -109,6 +123,10 @@ class RagStreamChunkDto implements \Stringable
             $tokensConsumed = self::extractTokensConsumed($metadata);
         }
 
+        $fallbackReason = self::extractNullableString(
+            $data['fallback_reason'] ?? $data['fallbackReason'] ?? $metadata['fallback_reason'] ?? $metadata['fallbackReason'] ?? null
+        );
+
         /** @var list<SearchResultItemDto> $results */
         $results = [];
         if (isset($data['results']) && is_array($data['results'])) {
@@ -130,6 +148,7 @@ class RagStreamChunkDto implements \Stringable
             chunk: self::extractNullableString($data['chunk'] ?? null),
             tokensConsumed: $tokensConsumed,
             results: $results,
+            fallbackReason: $fallbackReason,
         );
     }
 }

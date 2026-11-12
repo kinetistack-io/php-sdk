@@ -170,17 +170,21 @@ class RagClient implements RagClientInterface
     private function aggregateSseResponse(TransportResponseInterface $response): RagSynthesisDto
     {
         $parser = new SseParser();
-        $answer = '';
+        $textChunks = [];
         $seenCitations = [];
         $citations = [];
         $tokensConsumed = null;
         $results = [];
+        $fallbackReason = null;
+        $metadata = [];
 
         foreach ($parser->parse([$response->getContent()]) as $chunk) {
             if (!empty($chunk->results)) {
                 $results = array_merge($results, $chunk->results);
             }
-            $answer .= $chunk->text;
+            if ($chunk->text !== '') {
+                $textChunks[] = $chunk->text;
+            }
             foreach ($chunk->citations as $citation) {
                 if (!isset($seenCitations[$citation])) {
                     $seenCitations[$citation] = true;
@@ -190,14 +194,31 @@ class RagClient implements RagClientInterface
             if ($chunk->tokensConsumed !== null) {
                 $tokensConsumed = $chunk->tokensConsumed;
             }
+            if ($chunk->fallbackReason !== null) {
+                $fallbackReason = $chunk->fallbackReason;
+            }
+            if (!empty($chunk->metadata)) {
+                $metadata = array_merge($metadata, $chunk->metadata);
+            }
         }
+
+        $answer = implode('', $textChunks);
+        if ($answer === '' && $fallbackReason !== null) {
+            $answer = null;
+        }
+
+        $successful = isset($metadata['successful'])
+            ? filter_var($metadata['successful'], FILTER_VALIDATE_BOOLEAN)
+            : ($fallbackReason === null);
 
         return new RagSynthesisDto(
             answer: $answer,
             citations: $citations,
-            successful: true,
+            successful: $successful,
+            fallbackReason: $fallbackReason,
             tokensConsumed: $tokensConsumed,
             results: $results,
+            metadata: $metadata,
         );
     }
 }

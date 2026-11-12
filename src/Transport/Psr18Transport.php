@@ -609,6 +609,30 @@ class Psr18Transport implements TransportInterface
         );
     }
 
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public function withDefaultOptions(array $defaultOptions): self
+    {
+        return new self(
+            $this->apiHost,
+            $this->authHeaderName,
+            $this->authHeaderValue,
+            $this->client,
+            $defaultOptions,
+            $this->requestFactory,
+            $this->streamFactory
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getDefaultOptions(): array
+    {
+        return $this->defaultOptions;
+    }
+
     public function getApiHost(): string
     {
         return $this->apiHost;

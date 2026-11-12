@@ -885,6 +885,8 @@ class SymfonyTransportTest extends TestCase
 
         $debugInfo = $transport->__debugInfo();
 
+        $this->assertSame(MockHttpClient::class, $debugInfo['client']);
+        $this->assertSame(MockHttpClient::class, $debugInfo['baseClient']);
         $this->assertIsArray($debugInfo['defaultOptions']);
         $this->assertIsArray($debugInfo['defaultOptions']['headers']);
         $this->assertSame('Authorization: [REDACTED]', $debugInfo['defaultOptions']['headers'][0]);
@@ -896,5 +898,29 @@ class SymfonyTransportTest extends TestCase
         $this->assertSame('api-key: [REDACTED]', $debugInfo['defaultOptions']['headers'][6]);
         $this->assertSame('Token: [REDACTED]', $debugInfo['defaultOptions']['headers'][7]);
         $this->assertSame('X-Custom-Header: public-value', $debugInfo['defaultOptions']['headers'][8]);
+    }
+
+    public function testWithDefaultOptionsReconfiguresRetrySettingsWhenInitiallyConfiguredWithRetries(): void
+    {
+        $mockClient = new MockHttpClient();
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $mockClient,
+            ['max_retries' => 2]
+        );
+
+        $clientProp = new \ReflectionProperty(SymfonyTransport::class, 'client');
+        $this->assertInstanceOf(RetryableHttpClient::class, $clientProp->getValue($transport));
+
+        $transportNoRetries = $transport->withDefaultOptions(['max_retries' => 0]);
+        $this->assertSame($mockClient, $clientProp->getValue($transportNoRetries));
+
+        $transportMoreRetries = $transport->withDefaultOptions(['max_retries' => 5]);
+        $newClient = $clientProp->getValue($transportMoreRetries);
+        $this->assertInstanceOf(RetryableHttpClient::class, $newClient);
+        $maxRetriesProp = new \ReflectionProperty(RetryableHttpClient::class, 'maxRetries');
+        $this->assertSame(5, $maxRetriesProp->getValue($newClient));
     }
 }

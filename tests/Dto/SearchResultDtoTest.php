@@ -251,6 +251,35 @@ class SearchResultDtoTest extends TestCase
         $this->assertSame('Rate limited', $fallbackDto->toArray()['fallback_reason']);
     }
 
+    public function testRagSynthesisDtoWithMetadata(): void
+    {
+        $dto = new RagSynthesisDto(
+            answer: 'Answer with metadata',
+            citations: ['node:1'],
+            metadata: ['model' => 'gpt-4o', 'latency_ms' => 450],
+        );
+
+        $this->assertSame(['model' => 'gpt-4o', 'latency_ms' => 450], $dto->metadata);
+        $this->assertSame(['model' => 'gpt-4o', 'latency_ms' => 450], $dto->getMetadata());
+
+        $array = $dto->toArray();
+        $this->assertArrayHasKey('metadata', $array);
+        $this->assertIsArray($array['metadata']);
+        $this->assertSame('gpt-4o', $array['metadata']['model']);
+
+        $fromArray = RagSynthesisDto::fromArray([
+            'answer' => 'Parsed from array',
+            'metadata' => ['provider' => 'bedrock', 'confidence' => 0.98],
+        ]);
+        $this->assertSame('bedrock', $fromArray->getMetadata()['provider']);
+        $this->assertSame(0.98, $fromArray->getMetadata()['confidence']);
+
+        // Empty metadata should not be included in toArray()
+        $emptyMetaDto = new RagSynthesisDto(answer: 'No meta');
+        $this->assertSame([], $emptyMetaDto->getMetadata());
+        $this->assertArrayNotHasKey('metadata', $emptyMetaDto->toArray());
+    }
+
     public function testRagSynthesisDtoWithTokensConsumed(): void
     {
         $dto = new RagSynthesisDto(

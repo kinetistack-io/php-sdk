@@ -13,6 +13,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class HttpTransport implements TransportInterface
 {
+    use TransportHelperTrait;
+
     private readonly TransportInterface $delegate;
     private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
@@ -27,7 +29,7 @@ class HttpTransport implements TransportInterface
         #[\SensitiveParameter]
         private readonly string $authHeaderValue = '',
         HttpClientInterface|ClientInterface|TransportInterface|null $client = null,
-        array $defaultOptions = [],
+        private readonly array $defaultOptions = [],
     ) {
         if ($client instanceof TransportInterface) {
             $this->delegate = $client;
@@ -120,8 +122,33 @@ class HttpTransport implements TransportInterface
             $this->apiHost,
             $this->authHeaderName,
             $authHeaderValue,
-            $this->delegate->withAuthHeaderValue($authHeaderValue)
+            $this->delegate->withAuthHeaderValue($authHeaderValue),
+            $this->defaultOptions
         );
+    }
+
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public function withDefaultOptions(array $defaultOptions): self
+    {
+        return new self(
+            $this->apiHost,
+            $this->authHeaderName,
+            $this->authHeaderValue,
+            $this->delegate instanceof self || method_exists($this->delegate, 'withDefaultOptions')
+                ? $this->delegate->withDefaultOptions($defaultOptions)
+                : $this->delegate,
+            $defaultOptions
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getDefaultOptions(): array
+    {
+        return $this->defaultOptions;
     }
 
     public function getApiHost(): string
@@ -163,6 +190,8 @@ class HttpTransport implements TransportInterface
         if ($this->authHeaderValue !== '') {
             $info['authHeaderValue'] = '[REDACTED]';
         }
+
+        $info['defaultOptions'] = $this->redactDebugOptions($this->defaultOptions);
 
         return $info;
     }

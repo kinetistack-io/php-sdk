@@ -12,6 +12,7 @@ class RagSynthesisDto
     /**
      * @param list<string> $citations List of unique external_ids referenced in the synthesized answer
      * @param list<SearchResultItemDto> $results List of hydrated search results if include_results was enabled
+     * @param array<string, mixed> $metadata Arbitrary metadata associated with the synthesis
      */
     public function __construct(
         public readonly ?string $answer = null,
@@ -20,7 +21,16 @@ class RagSynthesisDto
         public readonly ?string $fallbackReason = null,
         public readonly ?int $tokensConsumed = null,
         public readonly array $results = [],
+        public readonly array $metadata = [],
     ) {
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getMetadata(): array
+    {
+        return $this->metadata;
     }
 
     /**
@@ -62,6 +72,10 @@ class RagSynthesisDto
             );
         }
 
+        if (!empty($this->metadata)) {
+            $data['metadata'] = $this->metadata;
+        }
+
         return $data;
     }
 
@@ -73,7 +87,11 @@ class RagSynthesisDto
         $answer = self::extractNullableString($data['answer'] ?? null);
         $citations = self::extractStringList($data['citations'] ?? []);
         $successful = self::extractBool($data['successful'] ?? true, true);
-        $fallbackReason = self::extractNullableString($data['fallback_reason'] ?? $data['fallbackReason'] ?? null);
+        /** @var array<string, mixed> $metadata */
+        $metadata = self::extractArray($data['metadata'] ?? []);
+        $fallbackReason = self::extractNullableString(
+            $data['fallback_reason'] ?? $data['fallbackReason'] ?? $metadata['fallback_reason'] ?? $metadata['fallbackReason'] ?? null
+        );
         $tokensConsumed = self::extractTokensConsumed($data);
 
         /** @var list<SearchResultItemDto> $results */
@@ -95,7 +113,8 @@ class RagSynthesisDto
             $successful,
             $fallbackReason,
             $tokensConsumed,
-            $results
+            $results,
+            $metadata
         );
     }
 }

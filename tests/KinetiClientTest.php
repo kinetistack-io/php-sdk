@@ -14,11 +14,15 @@ use KinetiStack\Sdk\Enum\JobStatus;
 use KinetiStack\Sdk\Exception\JobTimeoutException;
 use KinetiStack\Sdk\Exception\PayloadTooLargeException;
 use KinetiStack\Sdk\KinetiClient;
+use KinetiStack\Sdk\Transport\HttpTransport;
+use KinetiStack\Sdk\Transport\Psr18Transport;
 use KinetiStack\Sdk\Transport\SymfonyTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Client\ClientInterface;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 
 class KinetiClientTest extends TestCase
 {
@@ -429,12 +433,12 @@ class KinetiClientTest extends TestCase
         $kineti->analyzeImageStream($stream);
     }
 
-    public function testAnalyzeImageStreamRewindsSeekableStream(): void
+    public function testAnalyzeImageStreamPreservesInitialStreamOffset(): void
     {
         $responseBody = json_encode([
-            'job_id' => 'rewound-job-123',
+            'job_id' => 'offset-job-123',
             'status' => 'pending',
-            'poll_url' => '/api/v1/jobs/rewound-job-123',
+            'poll_url' => '/api/v1/jobs/offset-job-123',
         ], JSON_THROW_ON_ERROR);
 
         $capturedBody = '';
@@ -452,15 +456,89 @@ class KinetiClientTest extends TestCase
         if (!is_resource($stream)) {
             throw new \RuntimeException('Failed to open temp stream');
         }
-        fwrite($stream, 'seekable-content');
-        // Intentionally do not rewind before calling analyzeImageStream; pointer is at end.
-        $this->assertSame(strlen('seekable-content'), ftell($stream));
+        $prefix = str_repeat('X', 128);
+        $payload = 'preserved-stream-content';
+        fwrite($stream, $prefix . $payload);
 
-        $result = $kineti->analyzeImageStream($stream, 'rewind.png');
+        // Seek to offset 128 (skip prefix)
+        fseek($stream, 128);
+        $this->assertSame(128, ftell($stream));
+
+        $result = $kineti->analyzeImageStream($stream, 'offset.png');
 
         $this->assertInstanceOf(JobDto::class, $result);
-        $this->assertSame('rewound-job-123', $result->jobId);
-        $this->assertStringContainsString('seekable-content', $capturedBody);
+        $this->assertSame('offset-job-123', $result->jobId);
+        $this->assertStringNotContainsString($prefix, $capturedBody);
+        $this->assertStringContainsString($payload, $capturedBody);
+
+        fclose($stream);
+    }
+
+    public function testAnalyzeImageStreamPreservesInitialOffsetOnRetry(): void
+    {
+        $jobPayload = json_encode([
+            'job_id' => 'retry-offset-job-456',
+            'status' => 'pending',
+            'poll_url' => '/api/v1/jobs/retry-offset-job-456',
+        ], JSON_THROW_ON_ERROR);
+
+        $requestBodies = [];
+        $response1 = new MockResponse('{"title": "Service Unavailable"}', [
+            'http_code' => 503,
+            'response_headers' => ['Content-Type' => 'application/problem+json'],
+        ]);
+        $response2 = new MockResponse($jobPayload, [
+            'http_code' => 202,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+
+        $mockClient = new MockHttpClient(function ($method, $url, $options) use (&$requestBodies, $response1, $response2) {
+            $body = '';
+            if (isset($options['body']) && is_callable($options['body'])) {
+                $closure = $options['body'];
+                while ('' !== ($chunk = $closure(8192))) {
+                    $body .= $chunk;
+                }
+            }
+            $requestBodies[] = $body;
+
+            return count($requestBodies) === 1 ? $response1 : $response2;
+        });
+
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $mockClient,
+            [
+                'max_retries' => 1,
+                'retry_strategy' => new GenericRetryStrategy([429, 503], 0),
+            ]
+        );
+
+        $client = new KinetiClient('https://api.test', 'test-key', $transport);
+
+        $stream = fopen('php://temp', 'w+b');
+        $this->assertIsResource($stream);
+        $prefix = str_repeat('A', 128);
+        $content = str_repeat('B', 128);
+        fwrite($stream, $prefix . $content);
+
+        // Position pointer at offset 128
+        fseek($stream, 128);
+        $this->assertSame(128, ftell($stream));
+
+        $job = $client->analyzeImageStream($stream, 'upload.jpg');
+
+        $this->assertInstanceOf(JobDto::class, $job);
+        $this->assertSame('retry-offset-job-456', $job->jobId);
+
+        $this->assertCount(2, $requestBodies);
+        // Verify both attempts contained only content from offset 128 onwards
+        $this->assertStringNotContainsString($prefix, $requestBodies[0]);
+        $this->assertStringContainsString($content, $requestBodies[0]);
+        $this->assertStringNotContainsString($prefix, $requestBodies[1]);
+        $this->assertStringContainsString($content, $requestBodies[1]);
 
         fclose($stream);
     }
@@ -916,5 +994,75 @@ class KinetiClientTest extends TestCase
         $this->assertInstanceOf(\Generator::class, $generator);
         $results = iterator_to_array($generator);
         $this->assertNotEmpty($results);
+    }
+
+    public function testKinetiClientCloneIsolation(): void
+    {
+        $kineti = new KinetiClient('https://api.test', 'test-api-key');
+
+        $modules1 = $kineti->modules();
+        $search1 = $kineti->search();
+        $rag1 = $kineti->rag();
+
+        $cloned = clone $kineti;
+
+        $this->assertNotSame($kineti, $cloned);
+        $this->assertNotSame($modules1, $cloned->modules(), 'Cloned client must re-instantiate ModuleClient');
+        $this->assertNotSame($search1, $cloned->search(), 'Cloned client must re-instantiate SearchClient');
+        $this->assertNotSame($rag1, $cloned->rag(), 'Cloned client must re-instantiate RagClient');
+    }
+
+    public function testWithConfigurationPropagatesHttpOptionsViaWithDefaultOptions(): void
+    {
+        $mockClient = new MockHttpClient();
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-api-key', $mockClient, [
+            'timeout' => 30.0,
+            'max_retries' => 2,
+        ]);
+
+        $kineti = new KinetiClient('https://api.test', 'test-api-key', $transport);
+
+        $reconfigured = $kineti->withConfiguration([
+            'timeout' => 45.0,
+        ]);
+
+        $this->assertNotSame($kineti, $reconfigured);
+        $this->assertNotSame($kineti->getTransport(), $reconfigured->getTransport());
+
+        /** @var SymfonyTransport $newTransport */
+        $newTransport = $reconfigured->getTransport();
+        $this->assertInstanceOf(SymfonyTransport::class, $newTransport);
+        $this->assertSame(45.0, $newTransport->getDefaultOptions()['timeout'] ?? null);
+
+        // Also test with HttpTransport wrapping SymfonyTransport
+        $httpTransport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-api-key', $mockClient, [
+            'timeout' => 20.0,
+        ]);
+        $kinetiWithHttp = new KinetiClient('https://api.test', 'test-api-key', $httpTransport);
+        $reconfiguredHttp = $kinetiWithHttp->withConfiguration([
+            'timeout' => 60.0,
+        ]);
+
+        $this->assertNotSame($kinetiWithHttp->getTransport(), $reconfiguredHttp->getTransport());
+        /** @var HttpTransport $newHttpTransport */
+        $newHttpTransport = $reconfiguredHttp->getTransport();
+        $this->assertInstanceOf(HttpTransport::class, $newHttpTransport);
+        $this->assertSame(60.0, $newHttpTransport->getDefaultOptions()['timeout'] ?? null);
+
+        // Also test with Psr18Transport
+        $psrClient = $this->createMock(ClientInterface::class);
+        $psrTransport = new Psr18Transport('https://api.test', 'X-Kineti-Key', 'test-api-key', $psrClient, [
+            'timeout' => 15.0,
+        ]);
+        $kinetiWithPsr = new KinetiClient('https://api.test', 'test-api-key', $psrTransport);
+        $reconfiguredPsr = $kinetiWithPsr->withConfiguration([
+            'timeout' => 50.0,
+        ]);
+
+        $this->assertNotSame($kinetiWithPsr->getTransport(), $reconfiguredPsr->getTransport());
+        /** @var Psr18Transport $newPsrTransport */
+        $newPsrTransport = $reconfiguredPsr->getTransport();
+        $this->assertInstanceOf(Psr18Transport::class, $newPsrTransport);
+        $this->assertSame(50.0, $newPsrTransport->getDefaultOptions()['timeout'] ?? null);
     }
 }

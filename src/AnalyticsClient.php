@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk;
 
 use KinetiStack\Sdk\Client\ClientHelperTrait;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Transport\TransportInterface;
@@ -53,6 +54,11 @@ class AnalyticsClient implements AnalyticsClientInterface
     public function getTransport(): TransportInterface
     {
         return $this->transport;
+    }
+
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto
+    {
+        return $this->transport->getLastRateLimitInfo();
     }
 
     /**

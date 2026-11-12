@@ -60,6 +60,14 @@ class AdminClient implements AdminClientInterface
         );
     }
 
+    public function __clone(): void
+    {
+        $this->analyticsClient = null;
+        $this->lastRateLimitInfo = null;
+        $authHeaderValue = $this->jwtToken !== '' ? 'Bearer ' . $this->jwtToken : '';
+        $this->transport = $this->transport->withAuthHeaderValue($authHeaderValue);
+    }
+
     /**
      * Return a new immutable instance configured with the specified JWT token.
      */
@@ -67,7 +75,6 @@ class AdminClient implements AdminClientInterface
     {
         $clone = clone $this;
         $clone->jwtToken = $jwtToken;
-        $clone->analyticsClient = null;
         $clone->lastRateLimitInfo = $this->lastRateLimitInfo;
         $authHeaderValue = $jwtToken !== '' ? 'Bearer ' . $jwtToken : '';
 
@@ -750,7 +757,17 @@ class AdminClient implements AdminClientInterface
         ?string $to = null,
         ?string $projectId = null
     ): AnalyticsDto {
-        return $this->analytics()->getAnalytics($grouping, $from, $to, $projectId);
+        try {
+            $result = $this->analytics()->getAnalytics($grouping, $from, $to, $projectId);
+            $this->lastRateLimitInfo = $this->analytics()->getLastRateLimitInfo();
+
+            return $result;
+        } catch (\Throwable $e) {
+            if ($this->analytics()->getLastRateLimitInfo() !== null) {
+                $this->lastRateLimitInfo = $this->analytics()->getLastRateLimitInfo();
+            }
+            throw $e;
+        }
     }
 
     /**

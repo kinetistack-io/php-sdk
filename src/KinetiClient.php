@@ -73,6 +73,14 @@ class KinetiClient implements KinetiClientInterface
         }
     }
 
+    public function __clone(): void
+    {
+        $this->moduleClient = null;
+        $this->searchClient = null;
+        $this->ragClient = null;
+        $this->transport = $this->transport->withAuthHeaderValue($this->apiKey);
+    }
+
     /**
      * Return a new immutable instance configured with the specified API key.
      */
@@ -80,9 +88,6 @@ class KinetiClient implements KinetiClientInterface
     {
         $clone = clone $this;
         $clone->apiKey = $apiKey;
-        $clone->moduleClient = null;
-        $clone->searchClient = null;
-        $clone->ragClient = null;
         $clone->transport = $this->transport->withAuthHeaderValue($apiKey);
 
         return $clone;
@@ -103,19 +108,19 @@ class KinetiClient implements KinetiClientInterface
             $clone->configuration = $configuration;
         }
 
-        $clone->moduleClient = null;
-        $clone->searchClient = null;
-        $clone->ragClient = null;
-
         $newHttpOptions = $clone->configuration->getHttpOptions();
-        if ($newHttpOptions !== $this->configuration->getHttpOptions() && !$this->httpClient instanceof TransportInterface) {
-            $clone->transport = new HttpTransport(
-                $this->apiHost,
-                'X-Kineti-Key',
-                $this->apiKey,
-                $this->httpClient,
-                $newHttpOptions
-            );
+        if ($newHttpOptions !== $this->configuration->getHttpOptions()) {
+            if (method_exists($this->transport, 'withDefaultOptions')) {
+                $clone->transport = $this->transport->withDefaultOptions($newHttpOptions);
+            } elseif (!$this->httpClient instanceof TransportInterface) {
+                $clone->transport = new HttpTransport(
+                    $this->apiHost,
+                    'X-Kineti-Key',
+                    $this->apiKey,
+                    $this->httpClient,
+                    $newHttpOptions
+                );
+            }
         }
 
         return $clone;
@@ -256,9 +261,11 @@ class KinetiClient implements KinetiClientInterface
             throw new \InvalidArgumentException('Provided $stream is not a valid resource.');
         }
 
+        $initialOffset = null;
         $meta = stream_get_meta_data($stream);
-        if ($meta['seekable']) {
-            rewind($stream);
+        if (!empty($meta['seekable'])) {
+            $offset = ftell($stream);
+            $initialOffset = is_int($offset) ? $offset : 0;
         }
 
         $fields = [];
@@ -271,7 +278,7 @@ class KinetiClient implements KinetiClientInterface
             $fields['options'] = json_encode($options->toArray(), JSON_THROW_ON_ERROR);
         }
 
-        [$contentType, $body] = $this->createMultipartStreamPayload($stream, $filename, $fields);
+        [$contentType, $body] = $this->createMultipartStreamPayload($stream, $filename, $fields, $initialOffset);
 
         $response = $this->transport->request('POST', '/api/v1/images/analyze', [
             'headers' => [
@@ -550,12 +557,12 @@ class KinetiClient implements KinetiClientInterface
      * @param array<string, string> $fields
      * @return array{0: string, 1: \Closure(): \Generator<int, string>}
      */
-    private function createMultipartStreamPayload($stream, string $filename, array $fields): array
+    private function createMultipartStreamPayload($stream, string $filename, array $fields, ?int $initialOffset = null): array
     {
         $boundary = bin2hex(random_bytes(16));
         $invocations = 0;
 
-        $generator = function () use ($stream, $filename, $fields, $boundary, &$invocations) {
+        $generator = function () use ($stream, $filename, $fields, $boundary, &$invocations, $initialOffset) {
             $invocations++;
             $meta = is_resource($stream) ? stream_get_meta_data($stream) : [];
             $isSeekable = !empty($meta['seekable']);
@@ -564,8 +571,8 @@ class KinetiClient implements KinetiClientInterface
                 throw new TransportException('Cannot retry request with non-seekable body stream.');
             }
 
-            if ($isSeekable) {
-                rewind($stream);
+            if ($isSeekable && $initialOffset !== null) {
+                fseek($stream, $initialOffset);
             }
 
             foreach ($fields as $name => $content) {

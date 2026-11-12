@@ -6,6 +6,7 @@ namespace KinetiStack\Sdk\Tests;
 
 use KinetiStack\Sdk\AdminClient;
 use KinetiStack\Sdk\AdminClientInterface;
+use KinetiStack\Sdk\AnalyticsClientInterface;
 use KinetiStack\Sdk\Dto\AnalyticsDto;
 use KinetiStack\Sdk\Dto\ApiKeyCreatedDto;
 use KinetiStack\Sdk\Dto\ApiKeyDto;
@@ -2079,6 +2080,120 @@ class AdminClientTest extends TestCase
         $this->assertInstanceOf(AnalyticsDto::class, $analytics);
         $this->assertSame('GET', $mockResponse->getRequestMethod());
         $this->assertStringContainsString('group_by=week', $mockResponse->getRequestUrl());
+    }
+
+    public function testGetAnalyticsSyncsRateLimitInfo(): void
+    {
+        $pingResponse = new MockResponse(json_encode(['status' => 'ok'], JSON_THROW_ON_ERROR), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '100',
+                'X-RateLimit-Remaining' => '50',
+                'X-RateLimit-Reset' => '1726950000',
+            ],
+        ]);
+
+        $analyticsResponseBody = json_encode([
+            'data' => [
+                ['date' => '2026-09-01', 'vision' => 10, 'search' => 5, 'ingest' => 0, 'rag' => 0],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        $analyticsResponse = new MockResponse($analyticsResponseBody, [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '1000',
+                'X-RateLimit-Remaining' => '49',
+                'X-RateLimit-Reset' => '1726955000',
+            ],
+        ]);
+        $httpClient = new MockHttpClient([$pingResponse, $analyticsResponse]);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        $this->assertNull($admin->getLastRateLimitInfo());
+
+        // Initial authenticated call establishes an earlier rate-limit state
+        $admin->ping();
+        $initialInfo = $admin->getLastRateLimitInfo();
+        $this->assertInstanceOf(RateLimitInfoDto::class, $initialInfo);
+        $this->assertSame(50, $initialInfo->remaining);
+
+        // getAnalytics must replace stale rate-limit info with the latest info from analytics
+        $analytics = $admin->getAnalytics(AnalyticsGrouping::DAY);
+
+        $this->assertInstanceOf(AnalyticsDto::class, $analytics);
+        $info = $admin->getLastRateLimitInfo();
+        $this->assertInstanceOf(RateLimitInfoDto::class, $info);
+        $this->assertSame(1000, $info->limit);
+        $this->assertSame(49, $info->remaining);
+        $this->assertSame(1726955000, $info->reset);
+    }
+
+    public function testGetAnalyticsSyncsRateLimitInfoOnException(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'title' => 'Too Many Requests',
+            'detail' => 'Quota exceeded',
+        ], JSON_THROW_ON_ERROR), [
+            'http_code' => 429,
+            'response_headers' => [
+                'Content-Type' => 'application/problem+json',
+                'X-RateLimit-Limit' => '100',
+                'X-RateLimit-Remaining' => '0',
+                'X-RateLimit-Reset' => '1726959999',
+            ],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'jwt', $httpClient);
+
+        try {
+            $admin->getAnalytics(AnalyticsGrouping::DAY);
+            $this->fail('Expected exception on 429');
+        } catch (\Throwable $e) {
+            $info = $admin->getLastRateLimitInfo();
+            $this->assertInstanceOf(RateLimitInfoDto::class, $info);
+            $this->assertSame(100, $info->limit);
+            $this->assertSame(0, $info->remaining);
+            $this->assertSame(1726959999, $info->reset);
+        }
+    }
+
+    public function testAdminClientCloneIsolation(): void
+    {
+        $mockResponse = new MockResponse(json_encode([
+            'status' => 'ok',
+        ], JSON_THROW_ON_ERROR), [
+            'response_headers' => [
+                'Content-Type' => 'application/json',
+                'X-RateLimit-Limit' => '500',
+                'X-RateLimit-Remaining' => '499',
+                'X-RateLimit-Reset' => '1726950000',
+            ],
+        ]);
+        $httpClient = new MockHttpClient($mockResponse);
+        $admin = new AdminClient('https://api.test', 'token', $httpClient);
+
+        // Populate analyticsClient and authenticated transport lastRateLimitInfo
+        $analyticsClient1 = $admin->analytics();
+        $this->assertInstanceOf(AnalyticsClientInterface::class, $analyticsClient1);
+        $admin->ping();
+        $this->assertNotNull($admin->getLastRateLimitInfo());
+        $this->assertSame(499, $admin->getLastRateLimitInfo()->remaining);
+
+        // Clone using PHP clone keyword
+        $cloned = clone $admin;
+        $this->assertNotSame($admin, $cloned);
+        $this->assertNull($cloned->getLastRateLimitInfo(), 'Cloned client must have isolated transport and lastRateLimitInfo');
+
+        $analyticsClient2 = $cloned->analytics();
+        $this->assertNotSame($analyticsClient1, $analyticsClient2, 'Cloned client must re-instantiate analyticsClient');
+
+        // withToken() should preserve lastRateLimitInfo but isolate analyticsClient
+        $withToken = $admin->withToken('new-token');
+        $this->assertNotNull($withToken->getLastRateLimitInfo(), 'withToken must preserve lastRateLimitInfo');
+        $this->assertSame(500, $withToken->getLastRateLimitInfo()->limit);
+        $this->assertSame(499, $withToken->getLastRateLimitInfo()->remaining);
+        $this->assertNotSame($analyticsClient1, $withToken->analytics(), 'withToken must re-instantiate analyticsClient');
     }
 
     /**

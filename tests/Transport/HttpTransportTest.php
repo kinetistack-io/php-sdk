@@ -456,6 +456,36 @@ class HttpTransportTest extends TestCase
         $this->assertSame(2, $client->getRequestsCount());
     }
 
+    public function testDebugInfoRedactsDefaultOptions(): void
+    {
+        $transport = new HttpTransport(
+            'https://api.test',
+            'Authorization',
+            'Bearer token123',
+            new MockHttpClient(),
+            [
+                'headers' => [
+                    'Authorization' => 'Bearer secret-bearer',
+                    'x-kineti-key' => 'secret-key',
+                    'Proxy-Authorization' => 'Basic proxy-secret',
+                    'X-Custom' => 'public-header',
+                ],
+                'timeout' => 30,
+            ]
+        );
+
+        $debugInfo = $transport->__debugInfo();
+        $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
+        $this->assertIsArray($debugInfo['defaultOptions']);
+
+        $this->assertIsArray($debugInfo['defaultOptions']['headers']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Authorization']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['x-kineti-key']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Proxy-Authorization']);
+        $this->assertSame('public-header', $debugInfo['defaultOptions']['headers']['X-Custom']);
+        $this->assertSame(30, $debugInfo['defaultOptions']['timeout']);
+    }
+
     /**
      * @return array<string, array{0: string}>
      */

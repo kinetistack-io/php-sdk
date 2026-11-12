@@ -230,6 +230,28 @@ class SymfonyTransport implements TransportInterface
         );
     }
 
+    /**
+     * @param array<string, mixed> $defaultOptions
+     */
+    public function withDefaultOptions(array $defaultOptions): self
+    {
+        return new self(
+            $this->apiHost,
+            $this->authHeaderName,
+            $this->authHeaderValue,
+            $this->baseClient,
+            $defaultOptions
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getDefaultOptions(): array
+    {
+        return $this->defaultOptions;
+    }
+
     public function getApiHost(): string
     {
         return $this->apiHost;

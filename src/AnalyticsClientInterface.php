@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk;
 
 use KinetiStack\Sdk\Dto\AnalyticsDto;
+use KinetiStack\Sdk\Dto\RateLimitInfoDto;
 use KinetiStack\Sdk\Enum\AnalyticsGrouping;
 use KinetiStack\Sdk\Exception\KinetiException;
 use KinetiStack\Sdk\Transport\TransportInterface;
@@ -19,6 +20,11 @@ interface AnalyticsClientInterface
     public function withToken(#[\SensitiveParameter] string $jwtToken): static;
 
     public function getTransport(): TransportInterface;
+
+    /**
+     * Get the rate limit information from the most recent analytics request, or null if unavailable.
+     */
+    public function getLastRateLimitInfo(): ?RateLimitInfoDto;
 
     /**
      * Query aggregated usage analytics buckets.
