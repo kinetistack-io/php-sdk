@@ -952,6 +952,29 @@ class Psr18TransportTest extends TestCase
     /**
      * @return array<string, array{0: string}>
      */
+    public static function invalidApiHostComponentsProvider(): array
+    {
+        return [
+            'query' => ['https://api.test?foo=bar'],
+            'fragment' => ['https://api.test#fragment'],
+            'user and pass' => ['https://user:pass@api.test'],
+            'user only' => ['https://user@api.test'],
+            'subpath' => ['https://api.test/subpath'],
+        ];
+    }
+
+    #[DataProvider('invalidApiHostComponentsProvider')]
+    public function testApiHostWithDisallowedComponentsThrowsException(string $invalidHost): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid API host URL: ');
+
+        new Psr18Transport($invalidHost, 'X-Kineti-Key', 'test-key');
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
     public static function invalidPathProvider(): array
     {
         return [
@@ -965,6 +988,16 @@ class Psr18TransportTest extends TestCase
             'encoded traversal end lowercase' => ['/api/v1/%2e%2e'],
             'encoded traversal end uppercase' => ['/api/v1/%2E%2E'],
             'encoded slash leading' => ['/%2fsecret'],
+            'relative dot-dot' => ['..'],
+            'relative dot-dot slash' => ['../'],
+            'relative dot-dot backslash' => ['..\\'],
+            'double encoded traversal' => ['/%252e%252e/'],
+            'triple encoded traversal' => ['/%25252e%25252e/'],
+            'quadruple encoded traversal' => ['/%2525252e%2525252e/'],
+            'quadruple encoded backslash' => ['/api/%2525255c/resource'],
+            'null byte' => ["\0"],
+            'carriage return' => ["\r"],
+            'newline' => ["\n"],
         ];
     }
 
@@ -1003,10 +1036,19 @@ class Psr18TransportTest extends TestCase
             'Bearer token123',
             $client,
             [
+                'auth' => 'secret-auth',
+                'auth_bearer' => 'secret-bearer',
+                'auth_basic' => ['admin', 'pass'],
+                'proxy' => 'http://user:pass@proxy.test:8080',
                 'headers' => [
                     'Authorization' => 'Bearer secret-bearer',
                     'x-kineti-key' => 'secret-kineti-key',
                     'Proxy-Authorization' => 'Basic proxy-secret',
+                    'Cookie' => 'session=123',
+                    'Set-Cookie' => 'remember=abc',
+                    'X-Api-Key' => 'key1',
+                    'api-key' => 'key2',
+                    'Token' => 'tok',
                     'X-Custom-Header' => 'public-value',
                 ],
             ]
@@ -1018,10 +1060,19 @@ class Psr18TransportTest extends TestCase
         $this->assertNotEmpty($debugInfo['requestFactory']);
         $this->assertNotEmpty($debugInfo['streamFactory']);
         $this->assertIsArray($debugInfo['defaultOptions']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['auth']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['auth_bearer']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['auth_basic']);
+        $this->assertSame('http://[REDACTED]:[REDACTED]@proxy.test:8080', $debugInfo['defaultOptions']['proxy']);
         $this->assertIsArray($debugInfo['defaultOptions']['headers']);
         $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Authorization']);
         $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['x-kineti-key']);
         $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Proxy-Authorization']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Cookie']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Set-Cookie']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['X-Api-Key']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['api-key']);
+        $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Token']);
         $this->assertSame('public-value', $debugInfo['defaultOptions']['headers']['X-Custom-Header']);
         $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
     }
@@ -1040,6 +1091,11 @@ class Psr18TransportTest extends TestCase
                     'Authorization: Bearer secret-bearer',
                     'x-kineti-key: secret-kineti-key',
                     'Proxy-Authorization: Basic proxy-secret',
+                    'Cookie: session=123',
+                    'Set-Cookie: remember=abc',
+                    'X-Api-Key: key1',
+                    'api-key: key2',
+                    'Token: tok',
                     'X-Custom-Header: public-value',
                 ],
             ]
@@ -1052,7 +1108,12 @@ class Psr18TransportTest extends TestCase
         $this->assertSame('Authorization: [REDACTED]', $debugInfo['defaultOptions']['headers'][0]);
         $this->assertSame('x-kineti-key: [REDACTED]', $debugInfo['defaultOptions']['headers'][1]);
         $this->assertSame('Proxy-Authorization: [REDACTED]', $debugInfo['defaultOptions']['headers'][2]);
-        $this->assertSame('X-Custom-Header: public-value', $debugInfo['defaultOptions']['headers'][3]);
+        $this->assertSame('Cookie: [REDACTED]', $debugInfo['defaultOptions']['headers'][3]);
+        $this->assertSame('Set-Cookie: [REDACTED]', $debugInfo['defaultOptions']['headers'][4]);
+        $this->assertSame('X-Api-Key: [REDACTED]', $debugInfo['defaultOptions']['headers'][5]);
+        $this->assertSame('api-key: [REDACTED]', $debugInfo['defaultOptions']['headers'][6]);
+        $this->assertSame('Token: [REDACTED]', $debugInfo['defaultOptions']['headers'][7]);
+        $this->assertSame('X-Custom-Header: public-value', $debugInfo['defaultOptions']['headers'][8]);
     }
 
     public function testForwardingTlsVerificationAndTimeoutOptionsToGuzzleClientInterface(): void

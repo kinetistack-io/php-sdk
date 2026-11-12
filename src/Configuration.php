@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace KinetiStack\Sdk;
 
+use KinetiStack\Sdk\Transport\TransportHelperTrait;
+
 /**
  * Configuration options for the KinetiStack SDK client.
  */
 final class Configuration
 {
+    use TransportHelperTrait;
+
     private bool $useHttpQueryMethod;
 
     /**
@@ -105,5 +109,16 @@ final class Configuration
         return array_merge($this->httpOptions, [
             'use_http_query_method' => $this->useHttpQueryMethod,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'useHttpQueryMethod' => $this->useHttpQueryMethod,
+            'httpOptions' => $this->redactDebugOptions($this->httpOptions),
+        ];
     }
 }

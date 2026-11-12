@@ -339,4 +339,74 @@ class AnalyticsClientTest extends TestCase
         $headers = $mockResponse->getRequestOptions()['headers'];
         $this->assertContains('Authorization: Bearer existing-auth-token', $headers);
     }
+
+    public function testDebugInfoRedactsSensitiveOptionsAndCredentials(): void
+    {
+        $options = [
+            'timeout' => 20,
+            'auth' => 'secret-auth-value',
+            'auth_bearer' => 'secret-bearer-token',
+            'auth_basic' => ['admin', 'secret-pass'],
+            'proxy' => 'http://proxyuser:proxypass@proxy.test:8080',
+            'headers' => [
+                'Authorization' => 'Bearer secret-jwt',
+                'X-Kineti-Key' => 'secret-kineti-key',
+                'Proxy-Authorization' => 'Basic proxy-secret',
+                'Cookie' => 'session_id=abcdef12345',
+                'Set-Cookie' => 'remember=abc',
+                'X-Api-Key' => 'secret-x-api-key',
+                'api-key' => 'secret-api-key',
+                'Token' => 'secret-token-header',
+                'X-Public-Header' => 'public-value',
+            ],
+        ];
+
+        $client = new AnalyticsClient('https://api.test', 'analytics-jwt-token', null, $options);
+        $debugInfo = $client->__debugInfo();
+
+        $this->assertSame('[REDACTED]', $debugInfo['jwtToken']);
+        $clientOptions = $debugInfo['options'];
+        $this->assertIsArray($clientOptions);
+        $this->assertSame(20, $clientOptions['timeout']);
+        $this->assertSame('[REDACTED]', $clientOptions['auth']);
+        $this->assertSame('[REDACTED]', $clientOptions['auth_bearer']);
+        $this->assertSame('[REDACTED]', $clientOptions['auth_basic']);
+        $this->assertSame('http://[REDACTED]:[REDACTED]@proxy.test:8080', $clientOptions['proxy']);
+
+        $headers = $clientOptions['headers'];
+        $this->assertIsArray($headers);
+        $this->assertSame('[REDACTED]', $headers['Authorization']);
+        $this->assertSame('[REDACTED]', $headers['X-Kineti-Key']);
+        $this->assertSame('[REDACTED]', $headers['Proxy-Authorization']);
+        $this->assertSame('[REDACTED]', $headers['Cookie']);
+        $this->assertSame('[REDACTED]', $headers['Set-Cookie']);
+        $this->assertSame('[REDACTED]', $headers['X-Api-Key']);
+        $this->assertSame('[REDACTED]', $headers['api-key']);
+        $this->assertSame('[REDACTED]', $headers['Token']);
+        $this->assertSame('public-value', $headers['X-Public-Header']);
+    }
+
+    public function testDebugInfoRedactsArrayProxyCredentials(): void
+    {
+        $options = [
+            'proxy' => [
+                'http' => 'http://proxyuser:proxypass@proxy.test:8080',
+                'username' => 'testuser',
+                'password' => 'testpass',
+                'host' => 'proxy.test',
+            ],
+        ];
+
+        $client = new AnalyticsClient('https://api.test', 'analytics-jwt-token', null, $options);
+        $debugInfo = $client->__debugInfo();
+
+        $clientOptions = $debugInfo['options'];
+        $this->assertIsArray($clientOptions);
+        $proxy = $clientOptions['proxy'];
+        $this->assertIsArray($proxy);
+        $this->assertSame('http://[REDACTED]:[REDACTED]@proxy.test:8080', $proxy['http']);
+        $this->assertSame('[REDACTED]', $proxy['username']);
+        $this->assertSame('[REDACTED]', $proxy['password']);
+        $this->assertSame('proxy.test', $proxy['host']);
+    }
 }

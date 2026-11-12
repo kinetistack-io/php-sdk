@@ -887,6 +887,9 @@ class KinetiClientTest extends TestCase
             'encoded traversal end lowercase' => ['/api/v1/search/%2e%2e'],
             'encoded traversal end uppercase' => ['/api/v1/search/%2E%2E'],
             'encoded slash leading' => ['/%2fsearch/rag'],
+            'triple encoded traversal' => ['/%25252e%25252e/search/rag'],
+            'quadruple encoded traversal' => ['/%2525252e%2525252e/search/rag'],
+            'quadruple encoded backslash' => ['/api/%2525255c/search/rag'],
         ];
     }
 

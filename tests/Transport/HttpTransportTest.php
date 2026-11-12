@@ -454,4 +454,143 @@ class HttpTransportTest extends TestCase
         $this->assertSame('ok', $health->status);
         $this->assertSame(2, $client->getRequestsCount());
     }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function invalidApiHostProvider(): array
+    {
+        return [
+            'query parameter' => ['https://api.test?foo=bar'],
+            'fragment' => ['https://api.test#fragment'],
+            'user and pass' => ['https://user:pass@api.test'],
+            'user only' => ['https://user@api.test'],
+            'subpath' => ['https://api.test/subpath'],
+        ];
+    }
+
+    #[DataProvider('invalidApiHostProvider')]
+    public function testInvalidApiHostThrowsException(string $invalidHost): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid API host URL');
+
+        new HttpTransport($invalidHost, 'X-Kineti-Key', 'test-key', new MockHttpClient());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function invalidPathProvider(): array
+    {
+        return [
+            'relative dot-dot' => ['..'],
+            'relative dot-dot slash' => ['../'],
+            'relative dot-dot backslash' => ['..\\'],
+            'double encoded traversal' => ['/%252e%252e/'],
+            'triple encoded traversal' => ['/%25252e%25252e/'],
+            'quadruple encoded traversal' => ['/%2525252e%2525252e/'],
+            'quadruple encoded backslash' => ['/api/%2525255c/resource'],
+            'null byte' => ["\0"],
+            'carriage return' => ["\r"],
+            'newline' => ["\n"],
+            'path with leading slash and null byte' => ["/\0"],
+            'path with leading slash and carriage return' => ["/\r"],
+            'path with leading slash and newline' => ["/\n"],
+            'path with backslash' => ['/api/\\/resource'],
+            'encoded backslash' => ['/api/%5c/resource'],
+            'dot segment' => ['/api/./resource'],
+            'trailing dot segment' => ['/api/.'],
+            'dot-dot segment' => ['/api/../resource'],
+            'trailing dot-dot segment' => ['/api/..'],
+        ];
+    }
+
+    #[DataProvider('invalidPathProvider')]
+    public function testInvalidPathThrowsException(string $invalidPath): void
+    {
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'test-key', new MockHttpClient());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid request path. Must be a relative path starting with a single forward slash and cannot contain traversal segments.');
+
+        $transport->request('GET', $invalidPath);
+    }
+
+    public function testDebugInfoRedactsSensitiveHeadersAndOptions(): void
+    {
+        $options = [
+            'timeout' => 15,
+            'auth' => 'secret-auth',
+            'auth_bearer' => 'secret-bearer-token',
+            'auth_basic' => ['admin', 'secret-password'],
+            'proxy' => 'http://proxyuser:proxypass@proxy.test:8080',
+            'headers' => [
+                'Authorization' => 'Bearer secret-bearer',
+                'x-kineti-key' => 'secret-kineti-key',
+                'Proxy-Authorization' => 'Basic proxy-secret',
+                'Cookie' => 'session_id=abcdef12345',
+                'Set-Cookie' => 'auth=xyz',
+                'X-Api-Key' => 'secret-x-api-key',
+                'api-key' => 'secret-api-key',
+                'Token' => 'secret-token-header',
+                'X-Public-Header' => 'public-value',
+            ],
+        ];
+
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'header-key', new MockHttpClient(), $options);
+        $debugInfo = $transport->__debugInfo();
+
+        $this->assertSame('[REDACTED]', $debugInfo['authHeaderValue']);
+        $delegate = $debugInfo['delegate'];
+        $this->assertInstanceOf(\KinetiStack\Sdk\Transport\SymfonyTransport::class, $delegate);
+        $delegateDebug = $delegate->__debugInfo();
+
+        $defaultOptions = $delegateDebug['defaultOptions'];
+        $this->assertIsArray($defaultOptions);
+        $this->assertSame(15, $defaultOptions['timeout']);
+        $this->assertSame('[REDACTED]', $defaultOptions['auth']);
+        $this->assertSame('[REDACTED]', $defaultOptions['auth_bearer']);
+        $this->assertSame('[REDACTED]', $defaultOptions['auth_basic']);
+        $this->assertSame('http://[REDACTED]:[REDACTED]@proxy.test:8080', $defaultOptions['proxy']);
+
+        $headers = $defaultOptions['headers'];
+        $this->assertIsArray($headers);
+        $this->assertSame('[REDACTED]', $headers['Authorization']);
+        $this->assertSame('[REDACTED]', $headers['x-kineti-key']);
+        $this->assertSame('[REDACTED]', $headers['Proxy-Authorization']);
+        $this->assertSame('[REDACTED]', $headers['Cookie']);
+        $this->assertSame('[REDACTED]', $headers['Set-Cookie']);
+        $this->assertSame('[REDACTED]', $headers['X-Api-Key']);
+        $this->assertSame('[REDACTED]', $headers['api-key']);
+        $this->assertSame('[REDACTED]', $headers['Token']);
+        $this->assertSame('public-value', $headers['X-Public-Header']);
+    }
+
+    public function testDebugInfoRedactsArrayProxyCredentials(): void
+    {
+        $options = [
+            'proxy' => [
+                'http' => 'http://usr:pwd@proxy.test:8080',
+                'username' => 'testuser',
+                'password' => 'testpass',
+                'host' => 'proxy.test',
+            ],
+        ];
+
+        $transport = new HttpTransport('https://api.test', 'X-Kineti-Key', 'header-key', new MockHttpClient(), $options);
+        $debugInfo = $transport->__debugInfo();
+        $delegate = $debugInfo['delegate'];
+        $this->assertInstanceOf(\KinetiStack\Sdk\Transport\SymfonyTransport::class, $delegate);
+        $delegateDebug = $delegate->__debugInfo();
+
+        $defaultOptions = $delegateDebug['defaultOptions'];
+        $this->assertIsArray($defaultOptions);
+        $proxy = $defaultOptions['proxy'];
+        $this->assertIsArray($proxy);
+        $this->assertSame('http://[REDACTED]:[REDACTED]@proxy.test:8080', $proxy['http']);
+        $this->assertSame('[REDACTED]', $proxy['username']);
+        $this->assertSame('[REDACTED]', $proxy['password']);
+        $this->assertSame('proxy.test', $proxy['host']);
+    }
 }

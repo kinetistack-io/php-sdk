@@ -64,6 +64,7 @@ class AnalyticsClient implements AnalyticsClientInterface
         if ($this->jwtToken !== '') {
             $info['jwtToken'] = '[REDACTED]';
         }
+        $info['options'] = $this->redactDebugOptions($this->options);
 
         return $info;
     }

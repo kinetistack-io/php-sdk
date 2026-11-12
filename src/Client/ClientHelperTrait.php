@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KinetiStack\Sdk\Client;
 
 use KinetiStack\Sdk\Transport\HttpTransport;
+use KinetiStack\Sdk\Transport\TransportHelperTrait;
 use KinetiStack\Sdk\Transport\TransportInterface;
 use Psr\Http\Client\ClientInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -14,6 +15,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 trait ClientHelperTrait
 {
+    use TransportHelperTrait;
+
     /**
      * URL-encode a dynamic URI path segment, ensuring it is non-empty.
      *

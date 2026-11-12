@@ -114,6 +114,41 @@ class SearchClientQueryMethodTest extends TestCase
         $this->assertSame(['timeout' => 30, 'headers' => ['Custom' => 'value']], $configWithOptions->getHttpOptions());
     }
 
+    public function testConfigurationDebugInfoRedactsSensitiveOptions(): void
+    {
+        $config = new Configuration([
+            'auth' => 'secret_token',
+            'auth_bearer' => 'secret_bearer',
+            'auth_basic' => ['user', 'pass'],
+            'proxy' => 'http://user:secret@proxy.test:8080',
+            'headers' => [
+                'Authorization' => 'Bearer secret-bearer',
+                'x-kineti-key' => 'secret-key',
+                'Cookie' => 'session=secret-cookie',
+                'X-Custom' => 'public-header',
+            ],
+            'timeout' => 30,
+        ]);
+
+        $debug = $config->__debugInfo();
+
+        $this->assertTrue($debug['useHttpQueryMethod']);
+        $httpOptions = $debug['httpOptions'];
+        $this->assertIsArray($httpOptions);
+        $this->assertSame('[REDACTED]', $httpOptions['auth']);
+        $this->assertSame('[REDACTED]', $httpOptions['auth_bearer']);
+        $this->assertSame('[REDACTED]', $httpOptions['auth_basic']);
+        $this->assertSame('http://[REDACTED]:[REDACTED]@proxy.test:8080', $httpOptions['proxy']);
+
+        $headers = $httpOptions['headers'] ?? null;
+        $this->assertIsArray($headers);
+        $this->assertSame('[REDACTED]', $headers['Authorization']);
+        $this->assertSame('[REDACTED]', $headers['x-kineti-key']);
+        $this->assertSame('[REDACTED]', $headers['Cookie']);
+        $this->assertSame('public-header', $headers['X-Custom']);
+        $this->assertSame(30, $httpOptions['timeout']);
+    }
+
     // =========================================================================
     // Scenario 1: Search request dispatches HTTP QUERY by default
     // =========================================================================
