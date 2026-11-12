@@ -145,7 +145,7 @@ class HybridDtoValidationTest extends TestCase
 
         $this->assertSame('12345', $dto->altText);
         $this->assertSame('67890', $dto->caption);
-        $this->assertSame(['tag1', '99', '1'], $dto->tags);
+        $this->assertSame(['tag1', '99'], $dto->tags);
         $this->assertSame(0.85, $dto->confidenceScore);
         $this->assertSame('test-model', $dto->modelUsed);
         $this->assertSame(42, $dto->tokensConsumed);

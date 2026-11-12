@@ -21,7 +21,7 @@ trait ExtractsResponseDataTrait
             return $value;
         }
 
-        if (is_int($value) || is_float($value) || is_bool($value)) {
+        if (is_int($value) || is_float($value)) {
             return (string) $value;
         }
 
@@ -45,7 +45,7 @@ trait ExtractsResponseDataTrait
             return $value;
         }
 
-        if (is_int($value) || is_float($value) || is_bool($value)) {
+        if (is_int($value) || is_float($value)) {
             return (string) $value;
         }
 
@@ -210,7 +210,7 @@ trait ExtractsResponseDataTrait
         foreach ($value as $item) {
             if (is_string($item)) {
                 $list[] = $item;
-            } elseif (is_int($item) || is_float($item) || is_bool($item) || $item instanceof \Stringable) {
+            } elseif (is_int($item) || is_float($item) || $item instanceof \Stringable) {
                 $list[] = (string) $item;
             }
         }

@@ -188,4 +188,80 @@ class RateLimitInfoDtoTest extends TestCase
         $this->assertNull($dto->limit);
         $this->assertNull($dto->remaining);
     }
+
+    public function testFromHeadersSubSecondRetryAfterRoundsUp(): void
+    {
+        $dto1 = RateLimitInfoDto::fromHeaders(['Retry-After' => ['0.5']]);
+        $this->assertNotNull($dto1);
+        $this->assertSame(1, $dto1->retryAfter);
+
+        $dto2 = RateLimitInfoDto::fromHeaders(['Retry-After' => ['0.0']]);
+        $this->assertNotNull($dto2);
+        $this->assertSame(0, $dto2->retryAfter);
+
+        $dto3 = RateLimitInfoDto::fromHeaders(['Retry-After' => ['0']]);
+        $this->assertNotNull($dto3);
+        $this->assertSame(0, $dto3->retryAfter);
+
+        $dto4 = RateLimitInfoDto::fromHeaders(['Retry-After' => ['1.2']]);
+        $this->assertNotNull($dto4);
+        $this->assertSame(2, $dto4->retryAfter);
+
+        $dto5 = RateLimitInfoDto::fromHeaders(['Retry-After' => ['5.1']]);
+        $this->assertNotNull($dto5);
+        $this->assertSame(6, $dto5->retryAfter);
+    }
+
+    public function testFromHeadersRejectsNegativeNumbers(): void
+    {
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Limit' => ['-1']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Remaining' => ['-10']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Reset' => ['-100']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['Retry-After' => ['-1']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['Retry-After' => ['-0.5']]));
+
+        $dto = RateLimitInfoDto::fromHeaders([
+            'X-RateLimit-Limit' => ['-1'],
+            'X-RateLimit-Remaining' => ['-5'],
+            'X-RateLimit-Reset' => ['-10'],
+            'Retry-After' => ['10'],
+        ]);
+        $this->assertNotNull($dto);
+        $this->assertNull($dto->limit);
+        $this->assertNull($dto->remaining);
+        $this->assertNull($dto->reset);
+        $this->assertSame(10, $dto->retryAfter);
+    }
+
+    public function testFromHeadersRejectsNonIntegerStringsForLimitAndRemaining(): void
+    {
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Limit' => ['12.5']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Remaining' => ['12.5']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Limit' => ['abc']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Remaining' => ['xyz']]));
+
+        $dto = RateLimitInfoDto::fromHeaders([
+            'X-RateLimit-Limit' => ['100'],
+            'X-RateLimit-Remaining' => ['12.5'],
+        ]);
+        $this->assertNotNull($dto);
+        $this->assertSame(100, $dto->limit);
+        $this->assertNull($dto->remaining);
+    }
+
+    public function testFromHeadersRejectsFloatStringsForReset(): void
+    {
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Reset' => ['12.5']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['X-RateLimit-Reset' => ['-0.5']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['ratelimit-reset' => ['12.5']]));
+        $this->assertNull(RateLimitInfoDto::fromHeaders(['ratelimit-reset' => ['-0.5']]));
+
+        $dto = RateLimitInfoDto::fromHeaders([
+            'X-RateLimit-Limit' => ['100'],
+            'X-RateLimit-Reset' => ['12.5'],
+        ]);
+        $this->assertNotNull($dto);
+        $this->assertSame(100, $dto->limit);
+        $this->assertNull($dto->reset);
+    }
 }

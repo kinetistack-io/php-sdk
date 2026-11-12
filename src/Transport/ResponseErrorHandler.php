@@ -65,6 +65,30 @@ final class ResponseErrorHandler
             }
         }
 
+        if ($statusCode === 422 && $violations !== []) {
+            $formattedViolations = [];
+            foreach ($violations as $violation) {
+                $propertyPath = trim($violation['propertyPath']);
+                $violationMsg = trim($violation['message']);
+                if ($propertyPath !== '') {
+                    $formattedViolations[] = $violationMsg !== ''
+                        ? sprintf('%s: %s', $propertyPath, $violationMsg)
+                        : $propertyPath;
+                } elseif ($violationMsg !== '') {
+                    $formattedViolations[] = $violationMsg;
+                }
+            }
+
+            if ($formattedViolations !== []) {
+                $violationSummary = implode(', ', $formattedViolations);
+                if ($message === 'Unknown error occurred') {
+                    $message = $violationSummary;
+                } elseif (!str_contains($message, $violationSummary)) {
+                    $message = sprintf('%s: %s', rtrim($message, '.'), $violationSummary);
+                }
+            }
+        }
+
         $rateLimitInfo = RateLimitInfoDto::fromHeaders($headers);
         $retryAfter = $rateLimitInfo?->retryAfter;
 

@@ -276,7 +276,8 @@ class AdminClientProfileTest extends TestCase
             $client->updateMyPassword('correctCurrentPass', 'short');
             $this->fail('Expected ValidationException was not thrown.');
         } catch (ValidationException $e) {
-            $this->assertSame('New password must be at least 8 characters long.', $e->getMessage());
+            $this->assertStringContainsString('New password must be at least 8 characters long', $e->getMessage());
+            $this->assertStringContainsString('newPassword: New password must be at least 8 characters long.', $e->getMessage());
             $this->assertCount(1, $e->getViolations());
             $this->assertSame('newPassword', $e->getViolations()[0]['propertyPath']);
             $this->assertSame('New password must be at least 8 characters long.', $e->getViolations()[0]['message']);

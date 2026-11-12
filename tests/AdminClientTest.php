@@ -2173,7 +2173,8 @@ class AdminClientTest extends TestCase
             $admin->createProject('Site', 'existing.com');
             $this->fail('Expected ValidationException was not thrown.');
         } catch (ValidationException $e) {
-            $this->assertSame('Domain already taken.', $e->getMessage());
+            $this->assertStringContainsString('Domain already taken', $e->getMessage());
+            $this->assertStringContainsString('domain: Domain already exists in this organization.', $e->getMessage());
             $this->assertCount(1, $e->getViolations());
             $this->assertSame('domain', $e->getViolations()[0]['propertyPath']);
         }

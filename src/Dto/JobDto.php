@@ -58,10 +58,19 @@ class JobDto
      */
     public static function fromArray(array $data): self
     {
-        $rawStatus = $data['status'] ?? 'pending';
-        $status = $rawStatus instanceof JobStatus
-            ? $rawStatus
-            : (is_string($rawStatus) ? (JobStatus::tryFrom($rawStatus) ?? JobStatus::Pending) : JobStatus::Pending);
+        $rawStatus = $data['status'] ?? null;
+        if ($rawStatus === null || $rawStatus === '') {
+            $status = JobStatus::Pending;
+        } elseif ($rawStatus instanceof JobStatus) {
+            $status = $rawStatus;
+        } elseif (is_string($rawStatus)) {
+            $status = JobStatus::tryFrom($rawStatus);
+            if ($status === null) {
+                throw new \InvalidArgumentException(sprintf('Unknown job status: "%s".', $rawStatus));
+            }
+        } else {
+            throw new \InvalidArgumentException(sprintf('Job status must be a string or JobStatus instance, got %s.', get_debug_type($rawStatus)));
+        }
 
         $rawWebhookStatus = $data['webhook_status'] ?? $data['webhookStatus'] ?? null;
         $webhookStatus = null;

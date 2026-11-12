@@ -165,11 +165,10 @@ class JobDtoTest extends TestCase
         $this->assertTrue($dto->isProcessing());
     }
 
-    public function testFromArrayDefaultsAndUnknownStatusFallback(): void
+    public function testFromArrayDefaultsWhenStatusOmitted(): void
     {
         $data = [
-            'job_id' => 'job-unknown',
-            'status' => 'unknown_future_status',
+            'job_id' => 'job-default',
             'webhook_status' => 'unknown_webhook_status',
         ];
 
@@ -179,6 +178,70 @@ class JobDtoTest extends TestCase
         $this->assertNull($dto->webhookStatus);
         $this->assertNull($dto->totalImages);
         $this->assertNull($dto->processedImages);
+    }
+
+    public function testFromArrayDefaultsWhenStatusNullOrEmpty(): void
+    {
+        $dtoNull = JobDto::fromArray(['job_id' => 'job-null', 'status' => null]);
+        $this->assertSame(JobStatus::Pending, $dtoNull->status);
+
+        $dtoEmpty = JobDto::fromArray(['job_id' => 'job-empty', 'status' => '']);
+        $this->assertSame(JobStatus::Pending, $dtoEmpty->status);
+    }
+
+    public function testFromArrayThrowsOnUnrecognizedStatusCancelled(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown job status: "cancelled".');
+
+        JobDto::fromArray([
+            'job_id' => 'job-invalid',
+            'status' => 'cancelled',
+        ]);
+    }
+
+    public function testFromArrayThrowsOnUnrecognizedStatusUnknown(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown job status: "unknown".');
+
+        JobDto::fromArray([
+            'job_id' => 'job-unknown',
+            'status' => 'unknown',
+        ]);
+    }
+
+    public function testFromArrayThrowsOnInvalidStatusType(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Job status must be a string or JobStatus instance, got int.');
+
+        JobDto::fromArray([
+            'job_id' => 'job-int-status',
+            'status' => 123,
+        ]);
+    }
+
+    public function testFromArrayThrowsOnCaseMismatchedStatus(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown job status: "PENDING".');
+
+        JobDto::fromArray([
+            'job_id' => 'job-uppercase',
+            'status' => 'PENDING',
+        ]);
+    }
+
+    public function testFromArrayHydratesAllValidStatuses(): void
+    {
+        foreach (JobStatus::cases() as $status) {
+            $dtoFromString = JobDto::fromArray(['job_id' => 'j', 'status' => $status->value]);
+            $this->assertSame($status, $dtoFromString->status);
+
+            $dtoFromEnum = JobDto::fromArray(['job_id' => 'j', 'status' => $status]);
+            $this->assertSame($status, $dtoFromEnum->status);
+        }
     }
 
     public function testToArraySerializesEnumsToStrings(): void

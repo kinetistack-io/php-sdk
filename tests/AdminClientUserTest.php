@@ -251,7 +251,8 @@ class AdminClientUserTest extends TestCase
             $client->updateUser('user-123', ['role' => 'member']);
             $this->fail('Expected ValidationException was not thrown.');
         } catch (ValidationException $e) {
-            $this->assertSame('Cannot demote the last organization administrator.', $e->getMessage());
+            $this->assertStringContainsString('Cannot demote the last organization administrator', $e->getMessage());
+            $this->assertStringContainsString('role: Cannot demote the last administrator.', $e->getMessage());
             $this->assertCount(1, $e->getViolations());
             $this->assertSame('role', $e->getViolations()[0]['propertyPath']);
         }

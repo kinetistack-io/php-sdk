@@ -89,33 +89,41 @@ class RateLimitInfoDto
             }
 
             if (in_array($nameLower, ['x-ratelimit-limit', 'ratelimit-limit'], true)) {
-                if (is_numeric($raw)) {
-                    $limit = (int) $raw;
+                $val = filter_var($raw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+                if ($val !== false) {
+                    $limit = $val;
                     $hasAnyHeader = true;
                 }
             } elseif (in_array($nameLower, ['x-ratelimit-remaining', 'ratelimit-remaining'], true)) {
-                if (is_numeric($raw)) {
-                    $remaining = (int) $raw;
+                $val = filter_var($raw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+                if ($val !== false) {
+                    $remaining = $val;
                     $hasAnyHeader = true;
                 }
             } elseif (in_array($nameLower, ['x-ratelimit-reset', 'ratelimit-reset'], true)) {
-                if (is_numeric($raw)) {
-                    $reset = (int) $raw;
-                    $hasAnyHeader = true;
-                } else {
+                $intVal = filter_var($raw, FILTER_VALIDATE_INT);
+                if ($intVal !== false) {
+                    if ($intVal >= 0) {
+                        $reset = $intVal;
+                        $hasAnyHeader = true;
+                    }
+                } elseif (!is_numeric($raw)) {
                     $timestamp = strtotime($raw);
-                    if ($timestamp !== false) {
+                    if ($timestamp !== false && $timestamp >= 0) {
                         $reset = $timestamp;
                         $hasAnyHeader = true;
                     }
                 }
             } elseif ($nameLower === 'retry-after') {
                 if (is_numeric($raw)) {
-                    $retryAfter = max(0, (int) $raw);
-                    $hasAnyHeader = true;
+                    $floatVal = (float) $raw;
+                    if ($floatVal >= 0.0) {
+                        $retryAfter = (int) ceil($floatVal);
+                        $hasAnyHeader = true;
+                    }
                 } else {
                     $timestamp = strtotime($raw);
-                    if ($timestamp !== false) {
+                    if ($timestamp !== false && $timestamp >= 0) {
                         $retryAfter = max(0, $timestamp - time());
                         $hasAnyHeader = true;
                     }

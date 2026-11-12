@@ -192,6 +192,122 @@ final class ResponseErrorHandlerTest extends TestCase
         $this->assertNull($info->reset);
     }
 
+    public function testHandleError422WithDetailAndViolationsFormatsMessageWithViolationSummary(): void
+    {
+        $payload = json_encode([
+            'type' => 'https://tools.ietf.org/html/rfc9457',
+            'title' => 'Unprocessable Entity',
+            'status' => 422,
+            'detail' => 'Validation failed.',
+            'violations' => [
+                ['propertyPath' => 'email', 'message' => 'Invalid email'],
+                ['propertyPath' => 'age', 'message' => 'Must be at least 18'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(422, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame(422, $e->getCode());
+            $this->assertSame('Validation failed: email: Invalid email, age: Must be at least 18', $e->getMessage());
+            $this->assertCount(2, $e->getViolations());
+            $this->assertSame('email', $e->getViolations()[0]['propertyPath']);
+            $this->assertSame('Invalid email', $e->getViolations()[0]['message']);
+            $this->assertSame('age', $e->getViolations()[1]['propertyPath']);
+            $this->assertSame('Must be at least 18', $e->getViolations()[1]['message']);
+        }
+    }
+
+    public function testHandleError422WithGenericMessageUsesViolationSummaryDirectly(): void
+    {
+        $payload = json_encode([
+            'status' => 422,
+            'violations' => [
+                ['propertyPath' => 'email', 'message' => 'Invalid email'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(422, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('email: Invalid email', $e->getMessage());
+        }
+    }
+
+    public function testHandleError422WithEmptyPropertyPathInViolation(): void
+    {
+        $payload = json_encode([
+            'status' => 422,
+            'detail' => 'General failure',
+            'violations' => [
+                ['propertyPath' => '', 'message' => 'Something is invalid'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(422, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('General failure: Something is invalid', $e->getMessage());
+        }
+    }
+
+    public function testHandleError422DetailAlreadyContainsViolationsDoesNotDuplicate(): void
+    {
+        $payload = json_encode([
+            'status' => 422,
+            'detail' => 'Validation failed: email: Invalid email',
+            'violations' => [
+                ['propertyPath' => 'email', 'message' => 'Invalid email'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(422, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('Validation failed: email: Invalid email', $e->getMessage());
+        }
+    }
+
+    public function testHandleError422PropertyOnlyViolation(): void
+    {
+        $payload = json_encode([
+            'status' => 422,
+            'detail' => 'Validation failed',
+            'violations' => [
+                ['propertyPath' => 'email', 'message' => ''],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(422, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('Validation failed: email', $e->getMessage());
+        }
+    }
+
+    public function testHandleError422EmptyViolationsLeavesMessageUnmodified(): void
+    {
+        $payload = json_encode([
+            'status' => 422,
+            'detail' => 'Validation failed',
+            'violations' => [
+                ['propertyPath' => '', 'message' => ''],
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        try {
+            $this->invokeErrorHandler(422, ['Content-Type' => ['application/problem+json']], $payload);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertSame('Validation failed', $e->getMessage());
+        }
+    }
+
     /**
      * Scenario 2: Non-String detail in Error Payload & Exception Status Codes
      *

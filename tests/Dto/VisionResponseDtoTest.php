@@ -167,7 +167,7 @@ class VisionResponseDtoTest extends TestCase
 
         $this->assertSame('12345', $dto->altText);
         $this->assertSame('67890', $dto->caption);
-        $this->assertSame(['outdoor', '42', '1'], $dto->tags);
+        $this->assertSame(['outdoor', '42'], $dto->tags);
         $this->assertSame(0.85, $dto->confidenceScore);
         $this->assertSame('999', $dto->modelUsed);
     }

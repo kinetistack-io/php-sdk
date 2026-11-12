@@ -153,7 +153,8 @@ class AdminClientPasswordResetTest extends TestCase
             $client->resetPassword('VALID_TOKEN', 'short');
             $this->fail('Expected ValidationException was not thrown');
         } catch (ValidationException $e) {
-            $this->assertSame('This value is too short. It should have 12 characters or more.', $e->getMessage());
+            $this->assertStringContainsString('This value is too short. It should have 12 characters or more', $e->getMessage());
+            $this->assertStringContainsString('password: This value is too short. It should have 12 characters or more.', $e->getMessage());
             $this->assertCount(1, $e->getViolations());
             $this->assertSame('password', $e->getViolations()[0]['propertyPath']);
         }

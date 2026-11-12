@@ -101,7 +101,8 @@ class HttpTransportTest extends TestCase
             $transport->request('POST', '/v1/test');
             $this->fail('Expected ValidationException');
         } catch (ValidationException $e) {
-            $this->assertSame('Validation Failed', $e->getMessage());
+            $this->assertStringContainsString('Validation Failed', $e->getMessage());
+            $this->assertStringContainsString('image_url: Invalid URL', $e->getMessage());
             $this->assertCount(1, $e->violations);
             $this->assertSame('image_url', $e->violations[0]['propertyPath']);
         }
