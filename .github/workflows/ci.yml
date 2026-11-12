@@ -133,6 +133,8 @@ jobs:
         run: composer audit
 
       - name: PHP CS Fixer check
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: '1'
         run: vendor/bin/php-cs-fixer fix --dry-run --diff
 
       - name: PHPStan analysis

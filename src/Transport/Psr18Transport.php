@@ -270,18 +270,13 @@ class Psr18Transport implements TransportInterface
     public function requestStream(string $method, string $path, array $options = []): TransportResponseInterface
     {
         $mergedOptions = array_merge($this->defaultOptions, $options);
-        $url = rtrim($this->apiHost, '/') . '/' . ltrim($path, '/');
-        $host = (string) parse_url($url, PHP_URL_HOST);
-
-        $isMock = str_ends_with($host, '.test')
-            || str_ends_with($host, '.example')
-            || (interface_exists(\PHPUnit\Framework\MockObject\MockObject::class) && $this->client instanceof \PHPUnit\Framework\MockObject\MockObject);
 
         $isGuzzle = $this->client instanceof \GuzzleHttp\ClientInterface;
         $hasCurlFiber = extension_loaded('curl') && function_exists('curl_init') && class_exists(\Fiber::class);
+        $curlStreamOption = $mergedOptions['curl_stream'] ?? null;
 
-        $useCurlStream = ($mergedOptions['curl_stream'] ?? null) === true
-            || (($mergedOptions['curl_stream'] ?? null) !== false && $isGuzzle && !$isMock && $hasCurlFiber);
+        $useCurlStream = $curlStreamOption === true
+            || (!$isGuzzle && $curlStreamOption !== false && $hasCurlFiber);
 
         if ($useCurlStream) {
             return $this->requestStreamWithCurl($method, $path, $options);
@@ -289,10 +284,12 @@ class Psr18Transport implements TransportInterface
 
         /** @var array<string, mixed> $optionHeaders */
         $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
-        $options['headers'] = array_merge(
-            ['Accept' => 'text/event-stream'],
-            $optionHeaders
-        );
+        if (!$this->hasAcceptHeader($optionHeaders)) {
+            $options['headers'] = array_merge(
+                ['Accept' => 'text/event-stream'],
+                $optionHeaders
+            );
+        }
         $options['stream'] = true;
 
         return $this->request($method, $path, $options);
@@ -317,9 +314,12 @@ class Psr18Transport implements TransportInterface
         $defaultHeaders = is_array($this->defaultOptions['headers'] ?? null) ? $this->defaultOptions['headers'] : [];
         /** @var array<string, mixed> $optionHeaders */
         $optionHeaders = is_array($options['headers'] ?? null) ? $options['headers'] : [];
+
+        $hasAccept = $this->hasAcceptHeader($optionHeaders);
+
         $headers = array_merge(
             $defaultHeaders,
-            ['Accept' => 'text/event-stream'],
+            !$hasAccept ? ['Accept' => 'text/event-stream'] : [],
             $optionHeaders
         );
 
@@ -337,6 +337,9 @@ class Psr18Transport implements TransportInterface
         }
 
         $payload = null;
+        $bodyFactory = null;
+        $streamBody = null;
+
         if (isset($mergedOptions['json'])) {
             try {
                 $payload = json_encode($mergedOptions['json'], JSON_THROW_ON_ERROR);
@@ -355,32 +358,12 @@ class Psr18Transport implements TransportInterface
             }
         } elseif (isset($mergedOptions['body'])) {
             $rawBody = $mergedOptions['body'];
-            if (is_callable($rawBody)) {
-                $rawBody = $rawBody();
-            }
-
-            if ($rawBody instanceof \Psr\Http\Message\StreamInterface) {
-                try {
-                    if ($rawBody->isSeekable()) {
-                        $rawBody->rewind();
-                    }
-                    $payload = $rawBody->getContents();
-                } catch (\Throwable $e) {
-                    throw new TransportException('Failed to read request body stream: ' . $e->getMessage(), 0, $e);
-                }
-            } elseif (is_resource($rawBody)) {
-                $payload = stream_get_contents($rawBody);
-                if ($payload === false) {
-                    throw new TransportException('Failed to read request body resource.');
-                }
-            } elseif ($rawBody instanceof \Traversable) {
-                $chunks = [];
-                foreach ($rawBody as $chunk) {
-                    $chunks[] = (string) $chunk;
-                }
-                $payload = implode('', $chunks);
+            if (!is_string($rawBody) && is_callable($rawBody)) {
+                $bodyFactory = $rawBody;
             } elseif (is_string($rawBody)) {
                 $payload = $rawBody;
+            } elseif ($rawBody instanceof StreamInterface || is_resource($rawBody) || ($rawBody instanceof \Traversable)) {
+                $streamBody = $rawBody;
             } elseif ($rawBody !== null) {
                 throw new \InvalidArgumentException('Unsupported request body type for streaming request: ' . get_debug_type($rawBody));
             }
@@ -401,22 +384,153 @@ class Psr18Transport implements TransportInterface
 
             $httpMethod = $method !== '' ? $method : 'GET';
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $httpMethod);
+
+            $currentBody = null;
+            if ($bodyFactory !== null) {
+                $payload = null;
+                $currentBody = $bodyFactory();
+                if ($currentBody !== null && !is_string($currentBody) && !($currentBody instanceof StreamInterface) && !is_resource($currentBody) && !($currentBody instanceof \Traversable)) {
+                    throw new \InvalidArgumentException('Unsupported request body type for streaming request: ' . get_debug_type($currentBody));
+                }
+                if (is_string($currentBody)) {
+                    $payload = $currentBody;
+                    $currentBody = null;
+                }
+            } else {
+                $currentBody = $streamBody;
+            }
+
             if ($payload !== null && $payload !== '') {
                 curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            } elseif ($currentBody instanceof StreamInterface) {
+                if ($currentBody->isSeekable()) {
+                    $currentBody->rewind();
+                } elseif ($attempts > 1) {
+                    throw new TransportException('Cannot retry request with non-seekable body stream.');
+                }
+
+                curl_setopt($ch, CURLOPT_UPLOAD, true);
+                $size = $currentBody->getSize();
+                if ($size !== null && $size >= 0) {
+                    curl_setopt($ch, CURLOPT_INFILESIZE, $size);
+                }
+
+                curl_setopt($ch, CURLOPT_READFUNCTION, static function (\CurlHandle $_ch, mixed $_fd, int $length) use ($currentBody): string {
+                    if ($currentBody->eof()) {
+                        return '';
+                    }
+                    return $currentBody->read($length);
+                });
+            } elseif (is_resource($currentBody)) {
+                $meta = stream_get_meta_data($currentBody);
+                if ($meta['seekable']) {
+                    rewind($currentBody);
+                } elseif ($attempts > 1) {
+                    throw new TransportException('Cannot retry request with non-seekable body resource.');
+                }
+
+                curl_setopt($ch, CURLOPT_UPLOAD, true);
+                $stat = fstat($currentBody);
+                $size = $stat['size'] ?? null;
+                if ($size !== null && ($size > 0 || ($size === 0 && $meta['seekable']))) {
+                    curl_setopt($ch, CURLOPT_INFILESIZE, $size);
+                }
+
+                curl_setopt($ch, CURLOPT_READFUNCTION, static function (\CurlHandle $_ch, mixed $_fd, int $length) use ($currentBody): string {
+                    if ($length <= 0 || feof($currentBody)) {
+                        return '';
+                    }
+                    $chunk = fread($currentBody, $length);
+                    return $chunk !== false ? $chunk : '';
+                });
+            } elseif ($currentBody instanceof \Traversable) {
+                /** @var \Iterator<mixed, mixed> $iterator */
+                $iterator = $currentBody instanceof \IteratorAggregate
+                    ? $currentBody->getIterator()
+                    : ($currentBody instanceof \Iterator ? $currentBody : new \IteratorIterator($currentBody));
+
+                if ($attempts > 1) {
+                    if ($currentBody instanceof \Generator) {
+                        throw new TransportException('Cannot retry request with non-rewindable Traversable body.');
+                    }
+                    try {
+                        $iterator->rewind();
+                    } catch (\Throwable $e) {
+                        throw new TransportException('Cannot retry request with non-rewindable Traversable body.', 0, $e);
+                    }
+                } else {
+                    try {
+                        $iterator->rewind();
+                    } catch (\Throwable) {
+                    }
+                }
+
+                curl_setopt($ch, CURLOPT_UPLOAD, true);
+                $buffer = '';
+                curl_setopt($ch, CURLOPT_READFUNCTION, static function (\CurlHandle $_ch, mixed $_fd, int $length) use ($iterator, &$buffer): string {
+                    while (strlen($buffer) < $length && $iterator->valid()) {
+                        $currentVal = $iterator->current();
+                        if (is_scalar($currentVal) || $currentVal instanceof \Stringable) {
+                            $buffer .= (string) $currentVal;
+                        }
+                        $iterator->next();
+                    }
+                    if ($buffer === '') {
+                        return '';
+                    }
+                    $out = substr($buffer, 0, $length);
+                    $buffer = substr($buffer, $length);
+                    return $out;
+                });
             }
 
             $curlHeaders = [];
+            $hasExpect = false;
             foreach ($headers as $name => $val) {
-                if (is_array($val)) {
-                    foreach ($val as $v) {
-                        if (is_scalar($v) || $v instanceof \Stringable) {
-                            $curlHeaders[] = is_numeric($name) ? (string) $v : (string) $name . ': ' . (string) $v;
-                        }
+                $values = is_array($val) ? $val : [$val];
+                foreach ($values as $v) {
+                    if (!is_scalar($v) && !($v instanceof \Stringable)) {
+                        continue;
                     }
-                } elseif (is_scalar($val) || $val instanceof \Stringable) {
-                    $curlHeaders[] = is_numeric($name) ? (string) $val : (string) $name . ': ' . (string) $val;
+                    if (is_numeric($name)) {
+                        $rawHeader = (string) $v;
+                        if (preg_match('/[\r\n\0]/', $rawHeader) === 1) {
+                            throw new \InvalidArgumentException(sprintf('Invalid header line "%s": contains control characters.', $rawHeader));
+                        }
+                        $parts = explode(':', $rawHeader, 2);
+                        if (count($parts) !== 2) {
+                            throw new \InvalidArgumentException(sprintf('Invalid header line "%s": missing colon separator.', $rawHeader));
+                        }
+                        $hName = trim($parts[0]);
+                        $hVal = trim($parts[1]);
+                        $line = $hName . ': ' . $hVal;
+                    } else {
+                        $hName = (string) $name;
+                        $hVal = (string) $v;
+                        $line = $hName . ': ' . $hVal;
+                    }
+
+                    if (preg_match('/^[!#$%&\'*+\\-.^_`|~0-9A-Za-z]+$/', $hName) !== 1) {
+                        throw new \InvalidArgumentException(sprintf('Invalid header name "%s": does not match RFC 7230 token format.', $hName));
+                    }
+
+                    if (preg_match('/[\r\n\0]/', $hVal) === 1) {
+                        throw new \InvalidArgumentException(sprintf('Invalid header value for "%s": contains control characters.', $hName));
+                    }
+
+                    if (strtolower($hName) === 'expect') {
+                        $hasExpect = true;
+                    }
+
+                    $curlHeaders[] = $line;
                 }
             }
+
+            $isUpload = ($currentBody instanceof StreamInterface) || is_resource($currentBody) || ($currentBody instanceof \Traversable);
+            if ($isUpload && !$hasExpect) {
+                $curlHeaders[] = 'Expect:';
+            }
+
             curl_setopt($ch, CURLOPT_HTTPHEADER, $curlHeaders);
 
             $verifyPeer = $mergedOptions['verify_peer'] ?? $mergedOptions['verify'] ?? true;
@@ -425,7 +539,11 @@ class Psr18Transport implements TransportInterface
                 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             } elseif (is_string($verifyPeer) && $verifyPeer !== '') {
                 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-                curl_setopt($ch, CURLOPT_CAINFO, $verifyPeer);
+                if (is_dir($verifyPeer)) {
+                    curl_setopt($ch, CURLOPT_CAPATH, $verifyPeer);
+                } else {
+                    curl_setopt($ch, CURLOPT_CAINFO, $verifyPeer);
+                }
             }
 
             if (array_key_exists('verify_host', $mergedOptions) && ($mergedOptions['verify_host'] === false || $mergedOptions['verify_host'] === 0)) {
@@ -442,8 +560,9 @@ class Psr18Transport implements TransportInterface
             }
 
             curl_setopt($ch, CURLOPT_TCP_NODELAY, true);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+            curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+            curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
             try {
                 $transportResponse = CurlFiberTransportResponse::fromCurlHandle($ch);
@@ -632,7 +751,7 @@ class Psr18Transport implements TransportInterface
 
         try {
             while (!$stream->eof()) {
-                $chunk = $stream->read(8192);
+                $chunk = (string) $stream->read(8192);
                 if ($chunk === '') {
                     break;
                 }
@@ -648,5 +767,19 @@ class Psr18Transport implements TransportInterface
 
             throw $e;
         }
+    }
+
+    /**
+     * @param array<mixed, mixed> $headers
+     */
+    private function hasAcceptHeader(array $headers): bool
+    {
+        foreach (array_keys($headers) as $key) {
+            if (strtolower((string) $key) === 'accept') {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -43,7 +43,10 @@ final class CurlFiberTransportResponseTest extends TestCase
         }
 
         $this->assertSame(['chunk1', 'chunk2', 'chunk3'], $chunks);
-        $this->assertSame('chunk1chunk2chunk3', $response->getContent());
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('Response stream has already been consumed.');
+        $response->getContent();
     }
 
     public function testToArrayDecodesJson(): void
@@ -121,7 +124,12 @@ final class CurlFiberTransportResponseTest extends TestCase
             }
 
             $this->assertSame(['chunk1', 'chunk2'], $chunks);
-            $this->assertSame('chunk1chunk2', $response->getContent());
+            try {
+                $response->getContent();
+                $this->fail('Expected TransportException was not thrown.');
+            } catch (TransportException $e) {
+                $this->assertSame('Response stream has already been consumed.', $e->getMessage());
+            }
         } finally {
             $this->waitForChildProcess($pid);
         }
@@ -458,12 +466,10 @@ final class CurlFiberTransportResponseTest extends TestCase
 
             $this->assertSame(['chunk1'], $received);
 
-            // Accessing getContent() after partial iteration must preserve chunk1 and drain the rest
-            $this->assertSame('chunk1chunk2chunk3', $response->getContent());
-
-            // Subsequent getStreamIterator() access yields cached full content
-            $cached = iterator_to_array($response->getStreamIterator());
-            $this->assertSame(['chunk1chunk2chunk3'], $cached);
+            // Accessing getContent() after unbuffered stream iteration throws TransportException
+            $this->expectException(TransportException::class);
+            $this->expectExceptionMessage('Response stream has already been consumed.');
+            $response->getContent();
         } finally {
             $this->waitForChildProcess($pid);
         }
@@ -499,6 +505,128 @@ final class CurlFiberTransportResponseTest extends TestCase
         } finally {
             $this->waitForChildProcess($pid);
         }
+    }
+
+    public function testConstructReturnsImmediatelyBeforeFirstChunkArrives(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        [$address, $pid] = $this->startSocketServer(function ($conn): void {
+            $req = '';
+            while (!str_contains($req, "\r\n\r\n")) {
+                $buf = fread($conn, 1024);
+                if ($buf === false || $buf === '') {
+                    break;
+                }
+                $req .= $buf;
+            }
+
+            fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n");
+            // Delay sending first chunk by 100ms
+            usleep(100000);
+            fwrite($conn, "6\r\nchunk1\r\n");
+            fwrite($conn, "0\r\n\r\n");
+        });
+
+        try {
+            $ch = curl_init('http://' . $address);
+            $this->assertNotFalse($ch);
+
+            $start = microtime(true);
+            $response = new CurlFiberTransportResponse($ch);
+            $constructDuration = microtime(true) - $start;
+
+            // __construct() must return as soon as headers finish, well before 100ms
+            $this->assertLessThan(0.08, $constructDuration, 'Constructor blocked waiting for body chunk');
+            $this->assertSame(200, $response->getStatusCode());
+            $this->assertArrayHasKey('content-type', $response->getHeaders());
+
+            $chunks = iterator_to_array($response->getStreamIterator());
+            $this->assertSame(['chunk1'], $chunks);
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testHttp204NoContentHandledCleanlyWithoutBlocking(): void
+    {
+        if (!extension_loaded('curl')) {
+            self::markTestSkipped('ext-curl is required.');
+        }
+
+        [$address, $pid] = $this->startSocketServer(function ($conn): void {
+            $req = '';
+            while (!str_contains($req, "\r\n\r\n")) {
+                $buf = fread($conn, 1024);
+                if ($buf === false || $buf === '') {
+                    break;
+                }
+                $req .= $buf;
+            }
+
+            fwrite($conn, "HTTP/1.1 204 No Content\r\nServer: KinetiTest\r\n\r\n");
+        });
+
+        try {
+            $ch = curl_init('http://' . $address);
+            $this->assertNotFalse($ch);
+
+            $response = new CurlFiberTransportResponse($ch);
+            $this->assertSame(204, $response->getStatusCode());
+            $this->assertArrayHasKey('server', $response->getHeaders());
+
+            $chunks = iterator_to_array($response->getStreamIterator());
+            $this->assertSame([], $chunks);
+            $this->assertSame([], $response->toArray());
+            $this->assertSame('', $response->getContent());
+        } finally {
+            $this->waitForChildProcess($pid);
+        }
+    }
+
+    public function testStreamIteratorOperatesInO1MemoryWithoutBuffering(): void
+    {
+        $fiber = new \Fiber(static function (): void {
+            for ($i = 0; $i < 50; $i++) {
+                \Fiber::suspend("chunk-{$i}");
+            }
+        });
+        /** @var string|null $firstChunk */
+        $firstChunk = $fiber->start();
+        $response = new CurlFiberTransportResponse(200, [], $fiber, $firstChunk);
+
+        $received = [];
+        foreach ($response->getStreamIterator() as $chunk) {
+            $received[] = $chunk;
+        }
+
+        $this->assertCount(50, $received);
+        $this->assertSame('chunk-0', $received[0]);
+        $this->assertSame('chunk-49', $received[49]);
+
+        // Attempting to read content after unbuffered streaming throws TransportException
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('Response stream has already been consumed.');
+        $response->getContent();
+    }
+
+    public function testCallingGetStreamIteratorAfterConsumptionThrowsTransportException(): void
+    {
+        $fiber = new \Fiber(static function (): void {
+            \Fiber::suspend('single-chunk');
+        });
+        /** @var string|null $firstChunk */
+        $firstChunk = $fiber->start();
+        $response = new CurlFiberTransportResponse(200, [], $fiber, $firstChunk);
+
+        $chunks = iterator_to_array($response->getStreamIterator());
+        $this->assertSame(['single-chunk'], $chunks);
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('Response stream has already been consumed.');
+        iterator_to_array($response->getStreamIterator());
     }
 
     /**

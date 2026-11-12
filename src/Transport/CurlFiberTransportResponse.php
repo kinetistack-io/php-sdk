@@ -13,14 +13,15 @@ class CurlFiberTransportResponse implements TransportResponseInterface
     private int $statusCode = 0;
     /** @var \Fiber<mixed, mixed, mixed, mixed> */
     private \Fiber $fiber;
-    /** @var list<string> */
-    private array $accumulatedChunks = [];
+    private ?string $firstChunk = null;
     private ?string $cachedContent = null;
+    private bool $streamConsumed = false;
 
     /**
      * @param \CurlHandle|int $handleOrStatusCode
      * @param array<string, array<array-key, string>> $headers
      * @param (\Fiber<mixed, mixed, mixed, mixed>)|null $fiber
+     * @param string|null $firstChunk
      */
     public function __construct(
         \CurlHandle|int $handleOrStatusCode,
@@ -30,9 +31,11 @@ class CurlFiberTransportResponse implements TransportResponseInterface
     ) {
         if ($handleOrStatusCode instanceof \CurlHandle) {
             $ch = $handleOrStatusCode;
-            $this->fiber = new \Fiber(function () use ($ch): void {
+            $headersComplete = false;
+
+            $this->fiber = new \Fiber(function () use ($ch, &$headersComplete): void {
                 try {
-                    curl_setopt($ch, CURLOPT_HEADERFUNCTION, function (\CurlHandle $_ch, string $header): int {
+                    curl_setopt($ch, CURLOPT_HEADERFUNCTION, function (\CurlHandle $_ch, string $header) use (&$headersComplete): int {
                         $trimmed = trim($header);
                         if (str_starts_with($trimmed, 'HTTP/')) {
                             $parts = explode(' ', $trimmed, 3);
@@ -47,6 +50,11 @@ class CurlFiberTransportResponse implements TransportResponseInterface
                         if (count($parts) === 2) {
                             $name = strtolower(trim($parts[0]));
                             $this->headers[$name][] = trim($parts[1]);
+                        }
+
+                        if (!$headersComplete && $trimmed === '' && $this->statusCode >= 200) {
+                            $headersComplete = true;
+                            \Fiber::suspend();
                         }
 
                         return strlen($header);
@@ -70,18 +78,14 @@ class CurlFiberTransportResponse implements TransportResponseInterface
                 }
             });
 
-            /** @var string|null $rawFirstChunk */
-            $rawFirstChunk = $this->fiber->start();
-            if (is_string($rawFirstChunk) && $rawFirstChunk !== '') {
-                $this->accumulatedChunks[] = $rawFirstChunk;
-            }
+            $this->fiber->start();
         } else {
             $this->statusCode = $handleOrStatusCode;
             $this->headers = $headers;
             $this->fiber = $fiber ?? new \Fiber(static function (): void {
             });
             if (is_string($firstChunk) && $firstChunk !== '') {
-                $this->accumulatedChunks[] = $firstChunk;
+                $this->firstChunk = $firstChunk;
             }
         }
     }
@@ -130,10 +134,26 @@ class CurlFiberTransportResponse implements TransportResponseInterface
             return $this->cachedContent;
         }
 
-        $all = '';
-        foreach ($this->getStreamIterator() as $chunk) {
-            $all .= $chunk;
+        if ($this->streamConsumed) {
+            throw new TransportException('Response stream has already been consumed.');
         }
+
+        $all = '';
+        try {
+            while (true) {
+                $chunk = $this->nextChunk();
+                if ($chunk === null) {
+                    if ($this->fiber->isTerminated()) {
+                        break;
+                    }
+                    continue;
+                }
+                $all .= $chunk;
+            }
+        } finally {
+            $this->streamConsumed = true;
+        }
+
         $this->cachedContent = $all;
 
         return $this->cachedContent;
@@ -151,24 +171,57 @@ class CurlFiberTransportResponse implements TransportResponseInterface
             return;
         }
 
-        foreach ($this->accumulatedChunks as $chunk) {
-            yield $chunk;
+        if ($this->streamConsumed) {
+            throw new TransportException('Response stream has already been consumed.');
         }
 
-        while (!$this->fiber->isTerminated()) {
-            try {
-                $chunk = $this->fiber->resume();
-            } catch (TransportException $e) {
-                throw $e;
-            } catch (\Throwable $e) {
-                throw new TransportException('Error reading response stream: ' . $e->getMessage(), 0, $e);
-            }
-            if (is_string($chunk) && $chunk !== '') {
-                $this->accumulatedChunks[] = $chunk;
+        try {
+            $hasYielded = false;
+            while (true) {
+                $chunk = $this->nextChunk();
+                if ($chunk === null) {
+                    if ($this->fiber->isTerminated()) {
+                        break;
+                    }
+                    continue;
+                }
+                $hasYielded = true;
                 yield $chunk;
             }
+            if (!$hasYielded) {
+                $this->cachedContent = '';
+            }
+        } finally {
+            $this->streamConsumed = true;
+        }
+    }
+
+    private function nextChunk(): ?string
+    {
+        if ($this->firstChunk !== null) {
+            $chunk = $this->firstChunk;
+            $this->firstChunk = null;
+            return $chunk;
         }
 
-        $this->cachedContent = implode('', $this->accumulatedChunks);
+        if ($this->fiber->isTerminated()) {
+            return null;
+        }
+
+        try {
+            if (!$this->fiber->isStarted()) {
+                $chunk = $this->fiber->start();
+            } elseif ($this->fiber->isSuspended()) {
+                $chunk = $this->fiber->resume();
+            } else {
+                return null;
+            }
+        } catch (TransportException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new TransportException('Error reading response stream: ' . $e->getMessage(), 0, $e);
+        }
+
+        return is_string($chunk) && $chunk !== '' ? $chunk : null;
     }
 }
