@@ -17,7 +17,10 @@ class SymfonyTransport implements TransportInterface
 {
     use TransportHelperTrait;
 
+    public const DEFAULT_MAX_RETRY_DELAY_SECONDS = 60.0;
+
     private readonly HttpClientInterface $client;
+    private readonly HttpClientInterface $baseClient;
     private ?RateLimitInfoDto $lastRateLimitInfo = null;
 
     /**
@@ -34,28 +37,22 @@ class SymfonyTransport implements TransportInterface
     ) {
         $this->validateApiHost($apiHost);
 
-        $baseClient = $client ?? HttpClient::create();
+        $this->baseClient = $client ?? HttpClient::create();
 
         $defaultMaxRetries = isset($this->defaultOptions['max_retries']) && is_numeric($this->defaultOptions['max_retries'])
             ? (int) $this->defaultOptions['max_retries']
             : 0;
         if (
             $defaultMaxRetries > 0
-            && !$baseClient instanceof RetryableHttpClient
+            && !$this->baseClient instanceof RetryableHttpClient
             && class_exists(RetryableHttpClient::class)
         ) {
             /** @var RetryStrategyInterface $strategy */
-            $strategy = $this->defaultOptions['retry_strategy'] ?? new GenericRetryStrategy(
-                [429, 503],
-                1000,
-                2.0,
-                0,
-                0.1
-            );
-            $baseClient = new RetryableHttpClient($baseClient, $strategy, $defaultMaxRetries);
+            $strategy = $this->defaultOptions['retry_strategy'] ?? $this->createDefaultRetryStrategy($this->defaultOptions);
+            $this->client = new RetryableHttpClient($this->baseClient, $strategy, $defaultMaxRetries);
+        } else {
+            $this->client = $this->baseClient;
         }
-
-        $this->client = $baseClient;
     }
 
     /**
@@ -109,21 +106,34 @@ class SymfonyTransport implements TransportInterface
 
         $mergedOptions = array_merge($this->defaultOptions, $options);
 
+        $hasPerRequestRetries = array_key_exists('max_retries', $options);
+        $hasPerRequestStrategy = array_key_exists('retry_strategy', $options);
+        $hasPerRequestDelay = array_key_exists('max_retry_delay', $options);
+
         $client = $this->client;
-        if (isset($options['max_retries']) && class_exists(RetryableHttpClient::class)) {
-            $perRequestRetries = is_numeric($options['max_retries']) ? (int) $options['max_retries'] : 0;
-            if ($client instanceof RetryableHttpClient) {
-                $client = $client->withOptions(['max_retries' => $perRequestRetries]);
-            } elseif ($perRequestRetries > 0) {
+        if (($hasPerRequestRetries || $hasPerRequestStrategy || $hasPerRequestDelay) && class_exists(RetryableHttpClient::class)) {
+            $effectiveRetries = $hasPerRequestRetries
+                ? (is_numeric($options['max_retries']) ? (int) $options['max_retries'] : 0)
+                : (isset($this->defaultOptions['max_retries']) && is_numeric($this->defaultOptions['max_retries']) ? (int) $this->defaultOptions['max_retries'] : 0);
+
+            if ($effectiveRetries <= 0) {
+                $client = $this->baseClient instanceof RetryableHttpClient
+                    ? $this->baseClient->withOptions(['max_retries' => 0])
+                    : $this->baseClient;
+            } elseif ($hasPerRequestStrategy || $hasPerRequestDelay) {
                 /** @var RetryStrategyInterface $strategy */
-                $strategy = $mergedOptions['retry_strategy'] ?? $this->defaultOptions['retry_strategy'] ?? new GenericRetryStrategy(
-                    [429, 503],
-                    1000,
-                    2.0,
-                    0,
-                    0.1
-                );
-                $client = new RetryableHttpClient($client, $strategy, $perRequestRetries);
+                $strategy = $options['retry_strategy']
+                    ?? $this->createDefaultRetryStrategy($mergedOptions);
+                $client = new RetryableHttpClient($this->baseClient, $strategy, $effectiveRetries);
+            } else {
+                if ($this->client instanceof RetryableHttpClient) {
+                    $client = $this->client->withOptions(['max_retries' => $effectiveRetries]);
+                } else {
+                    /** @var RetryStrategyInterface $strategy */
+                    $strategy = $mergedOptions['retry_strategy']
+                        ?? $this->createDefaultRetryStrategy($mergedOptions);
+                    $client = new RetryableHttpClient($this->baseClient, $strategy, $effectiveRetries);
+                }
             }
         }
 
@@ -149,7 +159,7 @@ class SymfonyTransport implements TransportInterface
             }
         }
 
-        unset($mergedOptions['pause_handler'], $mergedOptions['retry_strategy'], $mergedOptions['max_retries']);
+        $mergedOptions = $this->prepareRequestOptions($mergedOptions);
 
         /** @var array<string, mixed> $defaultHeaders */
         $defaultHeaders = is_array($this->defaultOptions['headers'] ?? null) ? $this->defaultOptions['headers'] : [];
@@ -215,7 +225,7 @@ class SymfonyTransport implements TransportInterface
             $this->apiHost,
             $this->authHeaderName,
             $authHeaderValue,
-            $this->client,
+            $this->baseClient,
             $this->defaultOptions
         );
     }
@@ -261,8 +271,67 @@ class SymfonyTransport implements TransportInterface
         }
 
         $info['client'] = $this->client::class;
+        $info['baseClient'] = $this->baseClient::class;
         $info['defaultOptions'] = $this->redactDebugOptions($this->defaultOptions);
 
         return $info;
+    }
+
+    /**
+     * Prepares options for Symfony HttpClient by translating SDK-specific and Guzzle-compatible options
+     * into Symfony-compatible options and stripping internal SDK options.
+     *
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
+     */
+    private function prepareRequestOptions(array $options): array
+    {
+        if (array_key_exists('verify', $options)) {
+            $verify = $options['verify'];
+            if ($verify === false) {
+                $options['verify_peer'] = false;
+                $options['verify_host'] = false;
+            } elseif ($verify === true) {
+                $options['verify_peer'] = true;
+                $options['verify_host'] = true;
+            } elseif (is_string($verify) && $verify !== '') {
+                if (is_dir($verify)) {
+                    $options['capath'] = $verify;
+                } else {
+                    $options['cafile'] = $verify;
+                }
+            }
+            unset($options['verify']);
+        }
+
+        unset(
+            $options['pause_handler'],
+            $options['retry_strategy'],
+            $options['max_retries'],
+            $options['max_retry_delay'],
+            $options['curl_stream'],
+            $options['stream']
+        );
+
+        return $options;
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function createDefaultRetryStrategy(array $options): GenericRetryStrategy
+    {
+        $maxRetryDelay = isset($options['max_retry_delay']) && is_numeric($options['max_retry_delay'])
+            ? (float) $options['max_retry_delay']
+            : self::DEFAULT_MAX_RETRY_DELAY_SECONDS;
+        $maxDelayMilliseconds = max(0, (int) round($maxRetryDelay * 1000));
+
+        return new GenericRetryStrategy(
+            [429, 503],
+            1000,
+            2.0,
+            $maxDelayMilliseconds,
+            0.1
+        );
     }
 }

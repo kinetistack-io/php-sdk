@@ -9,11 +9,13 @@ use KinetiStack\Sdk\Exception\ServiceUnavailableException;
 use KinetiStack\Sdk\Exception\TransportException;
 use KinetiStack\Sdk\KinetiClient;
 use KinetiStack\Sdk\Transport\SymfonyTransport;
+use KinetiStack\Sdk\Transport\SymfonyTransportResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
+use Symfony\Component\HttpClient\RetryableHttpClient;
 
 class SymfonyTransportTest extends TestCase
 {
@@ -113,6 +115,10 @@ class SymfonyTransportTest extends TestCase
             },
             'max_retries' => 1,
             'retry_strategy' => new GenericRetryStrategy([429, 503], 0),
+            'max_retry_delay' => 15.0,
+            'curl_stream' => true,
+            'stream' => true,
+            'verify' => false,
         ]);
 
         $this->assertSame(200, $response->getStatusCode());
@@ -122,6 +128,351 @@ class SymfonyTransportTest extends TestCase
         $this->assertArrayNotHasKey('pause_handler', $requestOptions);
         $this->assertArrayNotHasKey('retry_strategy', $requestOptions);
         $this->assertArrayNotHasKey('max_retries', $requestOptions);
+        $this->assertArrayNotHasKey('max_retry_delay', $requestOptions);
+        $this->assertArrayNotHasKey('curl_stream', $requestOptions);
+        $this->assertArrayNotHasKey('stream', $requestOptions);
+        $this->assertArrayNotHasKey('verify', $requestOptions);
+        $this->assertArrayHasKey('verify_peer', $requestOptions);
+        $this->assertFalse($requestOptions['verify_peer']);
+        $this->assertArrayHasKey('verify_host', $requestOptions);
+        $this->assertFalse($requestOptions['verify_host']);
+    }
+
+    public function testVerifyFalseTranslatesToVerifyPeerAndVerifyHostFalse(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
+
+        $response = $transport->request('GET', '/v1/test', ['verify' => false]);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayHasKey('verify_peer', $opts);
+        $this->assertFalse($opts['verify_peer']);
+        $this->assertArrayHasKey('verify_host', $opts);
+        $this->assertFalse($opts['verify_host']);
+    }
+
+    public function testVerifyFilePathTranslatesToCafile(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
+
+        $response = $transport->request('GET', '/v1/test', ['verify' => '/path/to/cert.pem']);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayHasKey('cafile', $opts);
+        $this->assertSame('/path/to/cert.pem', $opts['cafile']);
+        $this->assertArrayNotHasKey('capath', $opts);
+    }
+
+    public function testVerifyDirectoryPathTranslatesToCapath(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
+
+        $response = $transport->request('GET', '/v1/test', ['verify' => __DIR__]);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayHasKey('capath', $opts);
+        $this->assertSame(__DIR__, $opts['capath']);
+        $this->assertArrayNotHasKey('cafile', $opts);
+    }
+
+    public function testVerifyTrueTranslatesToVerifyPeerAndVerifyHostTrue(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient, [
+            'verify_peer' => false,
+            'verify_host' => false,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test', ['verify' => true]);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayHasKey('verify_peer', $opts);
+        $this->assertTrue($opts['verify_peer']);
+        $this->assertArrayHasKey('verify_host', $opts);
+        $this->assertTrue($opts['verify_host']);
+    }
+
+    public function testVerifyOptionTranslatedFromDefaultOptions(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient, [
+            'verify' => false,
+            'max_retry_delay' => 20.0,
+            'curl_stream' => false,
+            'stream' => false,
+        ]);
+
+        $response = $transport->request('GET', '/v1/test');
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayNotHasKey('max_retry_delay', $opts);
+        $this->assertArrayNotHasKey('curl_stream', $opts);
+        $this->assertArrayNotHasKey('stream', $opts);
+        $this->assertArrayHasKey('verify_peer', $opts);
+        $this->assertFalse($opts['verify_peer']);
+        $this->assertArrayHasKey('verify_host', $opts);
+        $this->assertFalse($opts['verify_host']);
+    }
+
+    public function testDefaultMaxRetryDelayConfiguresGenericRetryStrategy(): void
+    {
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            new MockHttpClient(),
+            ['max_retries' => 2]
+        );
+
+        $clientProp = new \ReflectionProperty(SymfonyTransport::class, 'client');
+        $client = $clientProp->getValue($transport);
+        $this->assertInstanceOf(RetryableHttpClient::class, $client);
+
+        $strategyProp = new \ReflectionProperty(RetryableHttpClient::class, 'strategy');
+        $strategy = $strategyProp->getValue($client);
+        $this->assertInstanceOf(GenericRetryStrategy::class, $strategy);
+
+        $maxDelayProp = new \ReflectionProperty(GenericRetryStrategy::class, 'maxDelayMs');
+        $this->assertSame(60000, $maxDelayProp->getValue($strategy));
+        $this->assertSame(60.0, SymfonyTransport::DEFAULT_MAX_RETRY_DELAY_SECONDS);
+    }
+
+    public function testCustomMaxRetryDelayConfiguresGenericRetryStrategy(): void
+    {
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            new MockHttpClient(),
+            [
+                'max_retries' => 2,
+                'max_retry_delay' => 15.0,
+            ]
+        );
+
+        $clientProp = new \ReflectionProperty(SymfonyTransport::class, 'client');
+        $client = $clientProp->getValue($transport);
+        $this->assertInstanceOf(RetryableHttpClient::class, $client);
+
+        $strategyProp = new \ReflectionProperty(RetryableHttpClient::class, 'strategy');
+        $strategy = $strategyProp->getValue($client);
+        $this->assertInstanceOf(GenericRetryStrategy::class, $strategy);
+
+        $maxDelayProp = new \ReflectionProperty(GenericRetryStrategy::class, 'maxDelayMs');
+        $this->assertSame(15000, $maxDelayProp->getValue($strategy));
+    }
+
+    public function testPerRequestMaxRetryDelayConfiguresGenericRetryStrategy(): void
+    {
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            new MockHttpClient()
+        );
+
+        $createStrategyMethod = new \ReflectionMethod(SymfonyTransport::class, 'createDefaultRetryStrategy');
+        /** @var GenericRetryStrategy $strategy */
+        $strategy = $createStrategyMethod->invoke($transport, ['max_retry_delay' => 25.5]);
+
+        $maxDelayProp = new \ReflectionProperty(GenericRetryStrategy::class, 'maxDelayMs');
+        $this->assertSame(25500, $maxDelayProp->getValue($strategy));
+    }
+
+    public function testMaxRetryDelayClampsNonPositiveValuesToZero(): void
+    {
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            new MockHttpClient()
+        );
+
+        $createStrategyMethod = new \ReflectionMethod(SymfonyTransport::class, 'createDefaultRetryStrategy');
+
+        /** @var GenericRetryStrategy $strategyZero */
+        $strategyZero = $createStrategyMethod->invoke($transport, ['max_retry_delay' => 0]);
+        $maxDelayProp = new \ReflectionProperty(GenericRetryStrategy::class, 'maxDelayMs');
+        $this->assertSame(0, $maxDelayProp->getValue($strategyZero));
+
+        /** @var GenericRetryStrategy $strategyNegative */
+        $strategyNegative = $createStrategyMethod->invoke($transport, ['max_retry_delay' => -5.0]);
+        $this->assertSame(0, $maxDelayProp->getValue($strategyNegative));
+    }
+
+    public function testVerifyEmptyStringDoesNotSetCafileOrCapath(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
+
+        $response = $transport->request('GET', '/v1/test', ['verify' => '']);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayNotHasKey('cafile', $opts);
+        $this->assertArrayNotHasKey('capath', $opts);
+    }
+
+    public function testPerRequestRetryStrategyAppliedWhenConstructorWrappedInRetryableHttpClient(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $mockClient,
+            ['max_retries' => 2]
+        );
+
+        $customStrategy = new GenericRetryStrategy([429], 500);
+
+        $response = $transport->request('GET', '/v1/test', [
+            'retry_strategy' => $customStrategy,
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+
+        $clientProp = new \ReflectionProperty(SymfonyTransportResponse::class, 'client');
+        $requestClient = $clientProp->getValue($response);
+        $this->assertInstanceOf(RetryableHttpClient::class, $requestClient);
+
+        $strategyProp = new \ReflectionProperty(RetryableHttpClient::class, 'strategy');
+        $this->assertSame($customStrategy, $strategyProp->getValue($requestClient));
+    }
+
+    public function testPerRequestMaxRetryDelayAppliedWhenConstructorWrappedInRetryableHttpClient(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $mockClient,
+            [
+                'max_retries' => 2,
+                'max_retry_delay' => 60.0,
+            ]
+        );
+
+        $response = $transport->request('GET', '/v1/test', [
+            'max_retry_delay' => 10.0,
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+
+        $clientProp = new \ReflectionProperty(SymfonyTransportResponse::class, 'client');
+        $requestClient = $clientProp->getValue($response);
+        $this->assertInstanceOf(RetryableHttpClient::class, $requestClient);
+
+        $strategyProp = new \ReflectionProperty(RetryableHttpClient::class, 'strategy');
+        $strategy = $strategyProp->getValue($requestClient);
+        $this->assertInstanceOf(GenericRetryStrategy::class, $strategy);
+
+        $maxDelayProp = new \ReflectionProperty(GenericRetryStrategy::class, 'maxDelayMs');
+        $this->assertSame(10000, $maxDelayProp->getValue($strategy));
+    }
+
+    public function testPerRequestMaxRetriesZeroDisablesRetriesWhenConstructorPreWrapped(): void
+    {
+        $mockResponse = new MockResponse('{"ok": true}', [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'application/json'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport(
+            'https://api.test',
+            'X-Kineti-Key',
+            'test-key',
+            $mockClient,
+            ['max_retries' => 2]
+        );
+
+        $response = $transport->request('GET', '/v1/test', [
+            'max_retries' => 0,
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+
+        $clientProp = new \ReflectionProperty(SymfonyTransportResponse::class, 'client');
+        $requestClient = $clientProp->getValue($response);
+        $this->assertSame($mockClient, $requestClient);
+    }
+
+    public function testRequestStreamStripsStreamAndCurlStreamOptions(): void
+    {
+        $mockResponse = new MockResponse("data: hello\n\n", [
+            'http_code' => 200,
+            'response_headers' => ['Content-Type' => 'text/event-stream'],
+        ]);
+        $mockClient = new MockHttpClient($mockResponse);
+        $transport = new SymfonyTransport('https://api.test', 'X-Kineti-Key', 'test-key', $mockClient);
+
+        $response = $transport->requestStream('GET', '/v1/stream', [
+            'stream' => true,
+            'curl_stream' => true,
+            'max_retry_delay' => 10.0,
+            'verify' => false,
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+
+        $opts = $mockResponse->getRequestOptions();
+        $this->assertArrayNotHasKey('stream', $opts);
+        $this->assertArrayNotHasKey('curl_stream', $opts);
+        $this->assertArrayNotHasKey('max_retry_delay', $opts);
+        $this->assertArrayNotHasKey('verify', $opts);
+        $this->assertArrayHasKey('buffer', $opts);
+        $this->assertFalse($opts['buffer']);
+        $this->assertArrayHasKey('verify_peer', $opts);
+        $this->assertFalse($opts['verify_peer']);
+        $this->assertArrayHasKey('verify_host', $opts);
+        $this->assertFalse($opts['verify_host']);
     }
 
     public function testPerRequestMaxRetriesOverridesDefaultZero(): void
@@ -449,6 +800,7 @@ class SymfonyTransportTest extends TestCase
         $debugInfo = $transport->__debugInfo();
 
         $this->assertSame(MockHttpClient::class, $debugInfo['client']);
+        $this->assertSame(MockHttpClient::class, $debugInfo['baseClient']);
         $this->assertIsArray($debugInfo['defaultOptions']);
         $this->assertIsArray($debugInfo['defaultOptions']['headers']);
         $this->assertSame('[REDACTED]', $debugInfo['defaultOptions']['headers']['Authorization']);
