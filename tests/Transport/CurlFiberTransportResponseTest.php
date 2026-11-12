@@ -668,6 +668,12 @@ final class CurlFiberTransportResponseTest extends TestCase
                 }
             } finally {
                 fclose($server);
+                if (function_exists('posix_kill')) {
+                    $childPid = getmypid();
+                    if ($childPid !== false) {
+                        posix_kill($childPid, SIGKILL);
+                    }
+                }
                 exit(0);
             }
         }

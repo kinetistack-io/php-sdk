@@ -19,12 +19,16 @@ env:
 
 jobs:
   matrix-tests:
-    name: PHPUnit (PHP ${{ matrix.php-version }})
+    name: PHPUnit (PHP ${{ matrix.php-version }}, ${{ matrix.dependencies }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php-version: ['8.2', '8.3', '8.4', '8.5']
+        dependencies: ['highest']
+        include:
+          - php-version: '8.2'
+            dependencies: 'lowest'
 
     steps:
       - name: Checkout code
@@ -50,7 +54,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: curl, intl, pcntl, zip
+          extensions: curl, intl, pcntl, posix, zip
           coverage: none
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -63,11 +67,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ matrix.php-version }}-${{ hashFiles('**/composer.json') }}
+          key: ${{ runner.os }}-composer-${{ matrix.php-version }}-${{ matrix.dependencies }}-${{ hashFiles('**/composer.json') }}
           restore-keys: |
-            ${{ runner.os }}-composer-${{ matrix.php-version }}-
+            ${{ runner.os }}-composer-${{ matrix.php-version }}-${{ matrix.dependencies }}-
 
-      - name: Install dependencies
+      - name: Install dependencies (prefer-lowest)
+        if: matrix.dependencies == 'lowest'
+        run: composer update --prefer-lowest --prefer-stable --prefer-dist --no-progress
+
+      - name: Install dependencies (highest)
+        if: matrix.dependencies == 'highest'
         run: composer update --prefer-dist --no-progress
 
       - name: Validate platform requirements
@@ -103,7 +112,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: curl, intl, pcntl, zip
+          extensions: curl, intl, pcntl, posix, zip
           coverage: none
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
